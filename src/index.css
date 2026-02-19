@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    /* Lawnly - Fresh Grass Green Theme */
+    /* Yardly - Fresh Grass Green Theme */
     --background: 120 20% 98%;
     --foreground: 150 30% 15%;
 
@@ -40,7 +40,7 @@
 
     --radius: 0.75rem;
 
-    /* Custom Lawnly tokens */
+    /* Custom Yardly tokens */
     --grass-light: 85 55% 75%;
     --grass-medium: 142 50% 45%;
     --grass-dark: 150 45% 30%;

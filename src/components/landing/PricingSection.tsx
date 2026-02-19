@@ -4,38 +4,55 @@ import { Link } from "react-router-dom";
 
 const pricingTiers = [
   {
-    name: "Small Yard",
-    size: "Up to 250 m²",
-    price: 45,
+    name: "Free",
+    description: "Get started at no cost",
+    price: 0,
     features: [
-      "Professional mowing",
-      "Edge trimming",
-      "Grass clippings cleanup",
-      "Same-week booking",
+      "Up to 10 clients",
+      "Job scheduling",
+      "Basic invoicing",
+      "Online payments (5% fee)",
     ],
     popular: false,
   },
   {
-    name: "Medium Yard",
-    size: "250 - 500 m²",
-    price: 75,
+    name: "Starter",
+    description: "For growing businesses",
+    price: 29,
     features: [
-      "Everything in Small Yard",
-      "Detailed edging",
-      "Flower bed cleanup",
-      "Priority scheduling",
+      "Up to 50 clients",
+      "Recurring job scheduling",
+      "Quotes & invoices",
+      "Online payments (3% fee)",
+      "Email notifications",
+    ],
+    popular: false,
+  },
+  {
+    name: "Pro",
+    description: "For established operators",
+    price: 59,
+    features: [
+      "Unlimited clients",
+      "Everything in Starter",
+      "Business website",
+      "Online payments (1% fee)",
+      "Priority support",
+      "Business insights",
     ],
     popular: true,
   },
   {
-    name: "Large Yard",
-    size: "500+ m²",
-    price: 120,
+    name: "Team",
+    description: "For multi-crew operations",
+    price: 99,
     features: [
-      "Everything in Medium Yard",
-      "Comprehensive service",
-      "Hedge trimming included",
-      "Dedicated contractor",
+      "Everything in Pro",
+      "Multiple team members",
+      "Crew scheduling",
+      "Online payments (1% fee)",
+      "Custom branding",
+      "Dedicated support",
     ],
     popular: false,
   },
@@ -50,16 +67,15 @@ const PricingSection = () => {
             Simple, Transparent <span className="gradient-text">Pricing</span>
           </h2>
           <p className="text-lg text-muted-foreground">
-            Pay only for what you need. No hidden fees, no surprises. Get 15%
-            off with recurring bookings.
+            Start free, upgrade as you grow. No lock-in contracts. Cancel anytime.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
           {pricingTiers.map((tier) => (
             <div
               key={tier.name}
-              className={`relative rounded-2xl p-8 transition-all duration-300 hover:-translate-y-2 ${
+              className={`relative rounded-2xl p-6 transition-all duration-300 hover:-translate-y-2 ${
                 tier.popular
                   ? "bg-primary text-primary-foreground shadow-large scale-105"
                   : "bg-card shadow-soft hover:shadow-medium"
@@ -73,9 +89,9 @@ const PricingSection = () => {
                 </div>
               )}
 
-              <div className="text-center mb-8">
+              <div className="text-center mb-6">
                 <h3
-                  className={`font-display text-xl font-semibold mb-2 ${
+                  className={`font-display text-xl font-semibold mb-1 ${
                     tier.popular ? "text-primary-foreground" : "text-foreground"
                   }`}
                 >
@@ -88,7 +104,7 @@ const PricingSection = () => {
                       : "text-muted-foreground"
                   }`}
                 >
-                  {tier.size}
+                  {tier.description}
                 </p>
                 <div className="flex items-baseline justify-center gap-1">
                   <span
@@ -105,12 +121,12 @@ const PricingSection = () => {
                         : "text-muted-foreground"
                     }
                   >
-                    /visit
+                    /mo
                   </span>
                 </div>
               </div>
 
-              <ul className="space-y-4 mb-8">
+              <ul className="space-y-3 mb-6">
                 {tier.features.map((feature) => (
                   <li key={feature} className="flex items-start gap-3">
                     <div
@@ -139,13 +155,13 @@ const PricingSection = () => {
                 ))}
               </ul>
 
-              <Link to="/auth?mode=signup">
+              <Link to="/contractor-auth?mode=signup">
                 <Button
                   className="w-full"
                   variant={tier.popular ? "secondary" : "default"}
                   size="lg"
                 >
-                  Get Started
+                  {tier.price === 0 ? "Start Free" : "Get Started"}
                 </Button>
               </Link>
             </div>
@@ -153,8 +169,7 @@ const PricingSection = () => {
         </div>
 
         <p className="text-center text-muted-foreground text-sm mt-8">
-          *Final pricing based on verified property size. Recurring customers
-          save 15%.
+          All plans include secure data storage and Australian support. Transaction fees apply to online payments only.
         </p>
       </div>
     </section>
