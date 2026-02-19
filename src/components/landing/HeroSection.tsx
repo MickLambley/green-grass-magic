@@ -16,32 +16,31 @@ const HeroSection = () => {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 bg-grass-light/30 text-grass-dark px-4 py-2 rounded-full text-sm font-medium mb-8 animate-fade-in">
             <Star className="w-4 h-4 fill-sunshine text-sunshine" />
-            <span>Trusted by 10,000+ homeowners</span>
+            <span>Built for Australian lawn care pros</span>
           </div>
 
           {/* Headline */}
           <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-6 animate-slide-up">
-            Your Lawn, <span className="gradient-text">Perfectly Maintained</span>
+            Run Your Lawn Care Business <span className="gradient-text">Smarter</span>
           </h1>
 
           {/* Subheadline */}
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 animate-slide-up" style={{ animationDelay: "0.1s" }}>
-            Professional lawn mowing services at your fingertips. Book online,
-            track your service, and enjoy a pristine lawn without lifting a
-            finger.
+            Manage clients, schedule jobs, send quotes & invoices, and get paid online — 
+            all from one simple platform built for tradies.
           </p>
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12 animate-slide-up" style={{ animationDelay: "0.2s" }}>
-            <Link to="/auth?mode=signup">
+            <Link to="/contractor-auth?mode=signup">
               <Button variant="hero" size="xl">
-                Get Started Free
+                Start Free Today
                 <ArrowRight className="w-5 h-5" />
               </Button>
             </Link>
-            <Link to="/about">
+            <Link to="/#pricing">
               <Button variant="heroOutline" size="xl">
-                Learn More
+                See Pricing
               </Button>
             </Link>
           </div>
@@ -49,9 +48,9 @@ const HeroSection = () => {
           {/* Trust Points */}
           <div className="flex flex-wrap justify-center gap-6 md:gap-10 text-sm text-muted-foreground animate-slide-up" style={{ animationDelay: "0.3s" }}>
             {[
-              "No contracts required",
-              "Instant online booking",
-              "Verified professionals",
+              "Free plan available",
+              "No lock-in contracts",
+              "Get paid faster",
             ].map((point) => (
               <div key={point} className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
@@ -70,11 +69,11 @@ const HeroSection = () => {
             <div className="relative z-10 text-center p-8">
               <div className="w-24 h-24 mx-auto mb-6 rounded-full gradient-hero flex items-center justify-center shadow-large">
                 <svg className="w-12 h-12 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
                 </svg>
               </div>
               <p className="text-lg font-display font-semibold text-foreground">
-                Beautiful lawns, happy homeowners
+                Your business dashboard — clients, jobs, invoices, all in one place
               </p>
             </div>
           </div>

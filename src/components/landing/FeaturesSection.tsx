@@ -1,41 +1,41 @@
-import { Calendar, MapPin, Clock, Shield, Star, Repeat } from "lucide-react";
+import { Users, Calendar, FileText, CreditCard, Globe, BarChart3 } from "lucide-react";
 
 const features = [
   {
+    icon: Users,
+    title: "Client Management",
+    description:
+      "Keep all your customers in one place. Store contact details, property notes, and service history for every client.",
+  },
+  {
     icon: Calendar,
-    title: "Easy Online Booking",
+    title: "Job Scheduling",
     description:
-      "Book your lawn service in minutes. Choose your date, time, and service preferences with just a few clicks.",
+      "Schedule one-off or recurring jobs with ease. Set up weekly, fortnightly, or monthly mowing rounds in seconds.",
   },
   {
-    icon: MapPin,
-    title: "Address Verification",
+    icon: FileText,
+    title: "Quotes & Invoices",
     description:
-      "We verify each property to ensure accurate pricing based on your lawn's exact size and requirements.",
+      "Create professional quotes and invoices in a few taps. Send them directly to your clients via email.",
   },
   {
-    icon: Clock,
-    title: "Flexible Scheduling",
+    icon: CreditCard,
+    title: "Online Payments",
     description:
-      "One-time or recurring services. Weekly, bi-weekly, or monthly – you choose what works best for you.",
+      "Let clients pay online via card. Funds go straight to your bank account — no chasing payments.",
   },
   {
-    icon: Shield,
-    title: "Verified Professionals",
+    icon: Globe,
+    title: "Your Own Website",
     description:
-      "All our contractors are thoroughly vetted, insured, and trained to deliver top-quality service.",
+      "Get a professional booking website for your business. Clients can book and pay online 24/7.",
   },
   {
-    icon: Star,
-    title: "Quality Guaranteed",
+    icon: BarChart3,
+    title: "Business Insights",
     description:
-      "Not satisfied? We'll make it right. Your satisfaction is our top priority.",
-  },
-  {
-    icon: Repeat,
-    title: "Recurring Discounts",
-    description:
-      "Save more with recurring bookings. The more you book, the more you save on every visit.",
+      "Track revenue, job completion rates, and client growth. Know exactly how your business is performing.",
   },
 ];
 
@@ -45,11 +45,10 @@ const FeaturesSection = () => {
       <div className="container mx-auto px-4">
         <div className="max-w-3xl mx-auto text-center mb-16">
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Everything You Need for a <span className="gradient-text">Perfect Lawn</span>
+            Everything You Need to <span className="gradient-text">Grow Your Business</span>
           </h2>
           <p className="text-lg text-muted-foreground">
-            Professional lawn care made simple with features designed to make
-            your life easier.
+            Stop juggling spreadsheets, texts, and paper invoices. Yardly brings it all together.
           </p>
         </div>
 

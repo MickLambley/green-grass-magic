@@ -9,8 +9,8 @@ const Navbar = () => {
 
   const navLinks = [
     { name: "Home", href: "/" },
-    { name: "About", href: "/about" },
-    { name: "Contractors", href: "/contractors" },
+    { name: "Features", href: "/#services" },
+    { name: "Pricing", href: "/#pricing" },
   ];
 
   const isActive = (href: string) => location.pathname === href;
@@ -25,7 +25,7 @@ const Navbar = () => {
               <Leaf className="w-5 h-5 text-primary-foreground" />
             </div>
             <span className="text-xl font-display font-bold text-foreground">
-              Lawnly
+              Yardly
             </span>
           </Link>
 
@@ -46,13 +46,13 @@ const Navbar = () => {
 
           {/* Auth Buttons */}
           <div className="hidden md:flex items-center gap-3">
-            <Link to="/auth">
+            <Link to="/contractor-auth">
               <Button variant="ghost" size="sm">
                 Sign In
               </Button>
             </Link>
-            <Link to="/auth?mode=signup">
-              <Button size="sm">Get Started</Button>
+            <Link to="/contractor-auth?mode=signup">
+              <Button size="sm">Start Free</Button>
             </Link>
           </div>
 
@@ -85,13 +85,13 @@ const Navbar = () => {
                 </Link>
               ))}
               <div className="flex flex-col gap-2 pt-4 border-t border-border/50">
-                <Link to="/auth" onClick={() => setIsOpen(false)}>
+                <Link to="/contractor-auth" onClick={() => setIsOpen(false)}>
                   <Button variant="outline" className="w-full">
                     Sign In
                   </Button>
                 </Link>
-                <Link to="/auth?mode=signup" onClick={() => setIsOpen(false)}>
-                  <Button className="w-full">Get Started</Button>
+                <Link to="/contractor-auth?mode=signup" onClick={() => setIsOpen(false)}>
+                  <Button className="w-full">Start Free</Button>
                 </Link>
               </div>
             </div>

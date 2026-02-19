@@ -266,7 +266,7 @@ const ContractorAuth = () => {
             </div>
             <div>
               <span className="text-xl font-display font-bold text-foreground">
-                Lawnly
+                Yardly
               </span>
               <span className="ml-2 text-sm text-muted-foreground">Contractors</span>
             </div>
@@ -279,7 +279,7 @@ const ContractorAuth = () => {
             </h1>
             <p className="text-muted-foreground">
               {isSignUp
-                ? "Start earning with Lawnly lawn care services"
+                ? "Start earning with Yardly"
                 : "Sign in to your contractor account"}
             </p>
           </div>
@@ -422,11 +422,11 @@ const ContractorAuth = () => {
             <Leaf className="w-12 h-12" />
           </div>
           <h2 className="font-display text-3xl font-bold mb-4">
-            Grow Your Business with Lawnly
+            Grow Your Business with Yardly
           </h2>
           <p className="text-primary-foreground/80 text-lg leading-relaxed">
-            Join our network of professional contractors. Set your own schedule,
-            choose your service areas, and earn competitive rates on every job.
+            Manage your clients, schedule jobs, send invoices, and get paid — 
+            all from one simple platform built for lawn care pros.
           </p>
         </div>
       </div>

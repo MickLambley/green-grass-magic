@@ -159,7 +159,7 @@ const Auth = () => {
               <Leaf className="w-5 h-5 text-primary-foreground" />
             </div>
             <span className="text-xl font-display font-bold text-foreground">
-              Lawnly
+              Yardly
             </span>
           </Link>
 
@@ -170,8 +170,8 @@ const Auth = () => {
             </h1>
             <p className="text-muted-foreground">
               {isSignUp
-                ? "Start managing your lawn care today"
-                : "Sign in to your Lawnly account"}
+                ? "Start managing your lawn care business"
+                : "Sign in to your Yardly account"}
             </p>
           </div>
 
@@ -307,11 +307,11 @@ const Auth = () => {
             <Leaf className="w-12 h-12" />
           </div>
           <h2 className="font-display text-3xl font-bold mb-4">
-            Beautiful Lawns Made Simple
+            Grow Your Lawn Care Business
           </h2>
           <p className="text-primary-foreground/80 text-lg leading-relaxed">
-            Join thousands of homeowners who trust Lawnly for professional lawn
-            care. Book easily, track your service, and enjoy a pristine lawn.
+            Join hundreds of contractors who trust Yardly to manage clients, 
+            schedule jobs, and get paid faster.
           </p>
         </div>
       </div>
