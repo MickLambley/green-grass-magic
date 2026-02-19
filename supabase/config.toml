@@ -10,7 +10,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.generate-website-copy]
-verify_jwt = true
+verify_jwt = false
 
 [functions.auto-generate-recurring-jobs]
 verify_jwt = false
