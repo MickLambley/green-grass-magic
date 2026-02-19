@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.generate-website-copy]
 verify_jwt = true
+
+[functions.auto-generate-recurring-jobs]
+verify_jwt = false
