@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,10 +15,11 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Pencil, Loader2, Calendar, CheckCircle, Clock } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
-import type { Tables } from "@/integrations/supabase/types";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, endOfWeek, isToday } from "date-fns";
+import type { Tables, Json } from "@/integrations/supabase/types";
 
 type Job = Tables<"jobs">;
 type Client = Tables<"clients">;
@@ -32,7 +33,16 @@ const statusColors: Record<string, string> = {
   in_progress: "bg-sunshine/20 text-sunshine border-sunshine/30",
   completed: "bg-primary/20 text-primary border-primary/30",
   cancelled: "bg-destructive/20 text-destructive border-destructive/30",
+  pending_confirmation: "bg-muted text-muted-foreground",
 };
+
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+interface RecurrenceRule {
+  frequency: "weekly" | "fortnightly" | "monthly";
+  interval: number;
+  count?: number;
+}
 
 const JobsTab = ({ contractorId }: JobsTabProps) => {
   const [jobs, setJobs] = useState<(Job & { client_name?: string })[]>([]);
@@ -43,6 +53,8 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("calendar");
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const [form, setForm] = useState({
     title: "Lawn Mowing",
@@ -54,6 +66,9 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
     total_price: "",
     notes: "",
     status: "scheduled",
+    is_recurring: false,
+    recurrence_frequency: "weekly" as "weekly" | "fortnightly" | "monthly",
+    recurrence_count: "4",
   });
 
   useEffect(() => {
@@ -68,7 +83,6 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
     ]);
 
     if (clientsRes.data) setClients(clientsRes.data);
-
     if (jobsRes.data && clientsRes.data) {
       const clientMap = new Map(clientsRes.data.map((c) => [c.id, c.name]));
       setJobs(jobsRes.data.map((j) => ({ ...j, client_name: clientMap.get(j.client_id) || "Unknown" })));
@@ -76,24 +90,28 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
     setIsLoading(false);
   };
 
-  const openCreateDialog = () => {
+  const openCreateDialog = (dateOverride?: string) => {
     setEditingJob(null);
     setForm({
       title: "Lawn Mowing",
       client_id: clients.length > 0 ? clients[0].id : "",
       description: "",
-      scheduled_date: new Date().toISOString().split("T")[0],
+      scheduled_date: dateOverride || new Date().toISOString().split("T")[0],
       scheduled_time: "09:00",
       duration_minutes: "60",
       total_price: "",
       notes: "",
       status: "scheduled",
+      is_recurring: false,
+      recurrence_frequency: "weekly",
+      recurrence_count: "4",
     });
     setDialogOpen(true);
   };
 
   const openEditDialog = (job: Job) => {
     setEditingJob(job);
+    const recurrence = job.recurrence_rule as unknown as RecurrenceRule | null;
     setForm({
       title: job.title,
       client_id: job.client_id,
@@ -104,21 +122,27 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
       total_price: job.total_price?.toString() || "",
       notes: job.notes || "",
       status: job.status,
+      is_recurring: !!recurrence,
+      recurrence_frequency: recurrence?.frequency || "weekly",
+      recurrence_count: recurrence?.count?.toString() || "4",
     });
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
-    if (!form.client_id) {
-      toast.error("Please select a client");
-      return;
-    }
-    if (!form.scheduled_date) {
-      toast.error("Please select a date");
-      return;
-    }
+    if (!form.client_id) { toast.error("Please select a client"); return; }
+    if (!form.scheduled_date) { toast.error("Please select a date"); return; }
 
     setIsSaving(true);
+
+    const recurrenceRule: RecurrenceRule | null = form.is_recurring
+      ? {
+          frequency: form.recurrence_frequency,
+          interval: form.recurrence_frequency === "fortnightly" ? 2 : 1,
+          count: parseInt(form.recurrence_count) || 4,
+        }
+      : null;
+
     const payload = {
       contractor_id: contractorId,
       client_id: form.client_id,
@@ -131,26 +155,50 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
       notes: form.notes.trim() || null,
       status: form.status,
       completed_at: form.status === "completed" ? new Date().toISOString() : null,
+      recurrence_rule: recurrenceRule as unknown as Json,
     };
 
     if (editingJob) {
       const { error } = await supabase.from("jobs").update(payload).eq("id", editingJob.id);
-      if (error) {
-        toast.error("Failed to update job");
-      } else {
-        toast.success("Job updated");
-        setDialogOpen(false);
-        fetchData();
-      }
+      if (error) toast.error("Failed to update job");
+      else { toast.success("Job updated"); setDialogOpen(false); fetchData(); }
     } else {
+      // Create the initial job
       const { error } = await supabase.from("jobs").insert(payload);
-      if (error) {
-        toast.error("Failed to create job");
+      if (error) { toast.error("Failed to create job"); setIsSaving(false); return; }
+
+      // If recurring, create additional jobs
+      if (form.is_recurring) {
+        const count = parseInt(form.recurrence_count) || 4;
+        const baseDate = new Date(form.scheduled_date);
+        const additionalJobs = [];
+
+        for (let i = 1; i < count; i++) {
+          const nextDate = new Date(baseDate);
+          if (form.recurrence_frequency === "weekly") {
+            nextDate.setDate(baseDate.getDate() + i * 7);
+          } else if (form.recurrence_frequency === "fortnightly") {
+            nextDate.setDate(baseDate.getDate() + i * 14);
+          } else {
+            nextDate.setMonth(baseDate.getMonth() + i);
+          }
+          additionalJobs.push({
+            ...payload,
+            scheduled_date: nextDate.toISOString().split("T")[0],
+          });
+        }
+
+        if (additionalJobs.length > 0) {
+          const { error: batchError } = await supabase.from("jobs").insert(additionalJobs);
+          if (batchError) toast.error("Some recurring jobs failed to create");
+        }
+        toast.success(`Created ${count} recurring jobs`);
       } else {
         toast.success("Job created");
-        setDialogOpen(false);
-        fetchData();
       }
+
+      setDialogOpen(false);
+      fetchData();
     }
     setIsSaving(false);
   };
@@ -163,31 +211,40 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
     return matchesSearch && matchesStatus;
   });
 
+  // Calendar data
+  const calendarDays = useMemo(() => {
+    const monthStart = startOfMonth(currentMonth);
+    const monthEnd = endOfMonth(currentMonth);
+    const calStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const calEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+    return eachDayOfInterval({ start: calStart, end: calEnd });
+  }, [currentMonth]);
+
+  const jobsByDate = useMemo(() => {
+    const map = new Map<string, typeof filtered>();
+    filtered.forEach((job) => {
+      const key = job.scheduled_date;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(job);
+    });
+    return map;
+  }, [filtered]);
+
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
-      </div>
-    );
+    return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
   }
 
   return (
     <div className="space-y-4">
+      {/* Toolbar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-1">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search jobs..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
+            <Input placeholder="Search jobs..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
+            <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="scheduled">Scheduled</SelectItem>
@@ -197,81 +254,154 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
             </SelectContent>
           </Select>
         </div>
-        <Button onClick={openCreateDialog} disabled={clients.length === 0}>
-          <Plus className="w-4 h-4 mr-2" /> New Job
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center border border-border rounded-lg overflow-hidden">
+            <Button variant={viewMode === "calendar" ? "default" : "ghost"} size="sm" className="rounded-none" onClick={() => setViewMode("calendar")}>
+              <LayoutGrid className="w-4 h-4" />
+            </Button>
+            <Button variant={viewMode === "list" ? "default" : "ghost"} size="sm" className="rounded-none" onClick={() => setViewMode("list")}>
+              <List className="w-4 h-4" />
+            </Button>
+          </div>
+          <Button onClick={() => openCreateDialog()} disabled={clients.length === 0}>
+            <Plus className="w-4 h-4 mr-2" /> New Job
+          </Button>
+        </div>
       </div>
 
       {clients.length === 0 && (
+        <Card><CardContent className="py-8 text-center"><p className="text-muted-foreground text-sm">Add a client first before creating jobs.</p></CardContent></Card>
+      )}
+
+      {/* Calendar View */}
+      {viewMode === "calendar" && clients.length > 0 && (
         <Card>
-          <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground text-sm">Add a client first before creating jobs.</p>
+          <CardContent className="p-4">
+            {/* Month navigation */}
+            <div className="flex items-center justify-between mb-4">
+              <Button variant="ghost" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <h3 className="font-display font-semibold text-lg text-foreground">
+                {format(currentMonth, "MMMM yyyy")}
+              </h3>
+              <Button variant="ghost" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* Weekday headers */}
+            <div className="grid grid-cols-7 gap-px mb-1">
+              {WEEKDAYS.map((day) => (
+                <div key={day} className="text-center text-xs font-medium text-muted-foreground py-2">{day}</div>
+              ))}
+            </div>
+
+            {/* Calendar grid */}
+            <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
+              {calendarDays.map((day) => {
+                const dateKey = format(day, "yyyy-MM-dd");
+                const dayJobs = jobsByDate.get(dateKey) || [];
+                const inMonth = isSameMonth(day, currentMonth);
+                const today = isToday(day);
+
+                return (
+                  <div
+                    key={dateKey}
+                    className={`min-h-[80px] md:min-h-[100px] p-1 cursor-pointer transition-colors hover:bg-muted/50 ${
+                      inMonth ? "bg-card" : "bg-muted/30"
+                    } ${today ? "ring-2 ring-primary ring-inset" : ""}`}
+                    onClick={() => openCreateDialog(dateKey)}
+                  >
+                    <span className={`text-xs font-medium ${inMonth ? "text-foreground" : "text-muted-foreground/50"} ${today ? "text-primary font-bold" : ""}`}>
+                      {format(day, "d")}
+                    </span>
+                    <div className="mt-1 space-y-0.5">
+                      {dayJobs.slice(0, 3).map((job) => (
+                        <div
+                          key={job.id}
+                          className={`text-[10px] md:text-xs px-1 py-0.5 rounded truncate cursor-pointer ${statusColors[job.status] || "bg-muted"}`}
+                          onClick={(e) => { e.stopPropagation(); openEditDialog(job); }}
+                          title={`${job.title} - ${job.client_name}`}
+                        >
+                          {job.scheduled_time && <span className="font-medium">{job.scheduled_time} </span>}
+                          {job.client_name}
+                        </div>
+                      ))}
+                      {dayJobs.length > 3 && (
+                        <div className="text-[10px] text-muted-foreground px-1">+{dayJobs.length - 3} more</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {clients.length > 0 && filtered.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <Calendar className="w-12 h-12 text-muted-foreground/50 mb-4" />
-            <h3 className="font-display font-semibold text-lg text-foreground mb-1">
-              {jobs.length === 0 ? "No jobs yet" : "No matches"}
-            </h3>
-            <p className="text-muted-foreground text-sm mb-4">
-              {jobs.length === 0 ? "Schedule your first job to get started." : "Try different filters."}
-            </p>
-            {jobs.length === 0 && (
-              <Button onClick={openCreateDialog} size="sm">
-                <Plus className="w-4 h-4 mr-1" /> New Job
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : clients.length > 0 ? (
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Job</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead className="hidden md:table-cell">Date</TableHead>
-                <TableHead className="hidden md:table-cell">Price</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-[80px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((job) => (
-                <TableRow key={job.id}>
-                  <TableCell className="font-medium">{job.title}</TableCell>
-                  <TableCell className="text-muted-foreground">{job.client_name}</TableCell>
-                  <TableCell className="hidden md:table-cell text-muted-foreground">
-                    {format(new Date(job.scheduled_date), "dd MMM yyyy")}
-                    {job.scheduled_time && ` ${job.scheduled_time}`}
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell text-muted-foreground">
-                    {job.total_price ? `$${Number(job.total_price).toFixed(2)}` : "—"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={statusColors[job.status] || ""}>
-                      {job.status === "in_progress" ? "In Progress" : job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => openEditDialog(job)}>
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                  </TableCell>
+      {/* List View */}
+      {viewMode === "list" && clients.length > 0 && (
+        filtered.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <Calendar className="w-12 h-12 text-muted-foreground/50 mb-4" />
+              <h3 className="font-display font-semibold text-lg text-foreground mb-1">
+                {jobs.length === 0 ? "No jobs yet" : "No matches"}
+              </h3>
+              <p className="text-muted-foreground text-sm mb-4">
+                {jobs.length === 0 ? "Schedule your first job to get started." : "Try different filters."}
+              </p>
+              {jobs.length === 0 && <Button onClick={() => openCreateDialog()} size="sm"><Plus className="w-4 h-4 mr-1" /> New Job</Button>}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Job</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead className="hidden md:table-cell">Date</TableHead>
+                  <TableHead className="hidden md:table-cell">Price</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-[80px]">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
-      ) : null}
+              </TableHeader>
+              <TableBody>
+                {filtered.map((job) => (
+                  <TableRow key={job.id}>
+                    <TableCell className="font-medium">
+                      {job.title}
+                      {job.recurrence_rule && <Badge variant="outline" className="ml-2 text-[10px]">Recurring</Badge>}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{job.client_name}</TableCell>
+                    <TableCell className="hidden md:table-cell text-muted-foreground">
+                      {format(new Date(job.scheduled_date), "dd MMM yyyy")}
+                      {job.scheduled_time && ` ${job.scheduled_time}`}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell text-muted-foreground">
+                      {job.total_price ? `$${Number(job.total_price).toFixed(2)}` : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={statusColors[job.status] || ""}>
+                        {job.status === "in_progress" ? "In Progress" : job.status === "pending_confirmation" ? "Pending" : job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="icon" onClick={() => openEditDialog(job)}><Pencil className="w-4 h-4" /></Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        )
+      )}
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingJob ? "Edit Job" : "New Job"}</DialogTitle>
           </DialogHeader>
@@ -279,13 +409,9 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
             <div className="space-y-2">
               <Label>Client *</Label>
               <Select value={form.client_id} onValueChange={(v) => setForm({ ...form, client_id: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select client" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
                 <SelectContent>
-                  {clients.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
+                  {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -313,13 +439,45 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
                 <Input type="number" value={form.duration_minutes} onChange={(e) => setForm({ ...form, duration_minutes: e.target.value })} placeholder="60" />
               </div>
             </div>
+
+            {/* Recurrence */}
+            {!editingJob && (
+              <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={form.is_recurring}
+                    onCheckedChange={(checked) => setForm({ ...form, is_recurring: !!checked })}
+                    id="recurring"
+                  />
+                  <Label htmlFor="recurring" className="text-sm cursor-pointer">Recurring job</Label>
+                </div>
+                {form.is_recurring && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Frequency</Label>
+                      <Select value={form.recurrence_frequency} onValueChange={(v: "weekly" | "fortnightly" | "monthly") => setForm({ ...form, recurrence_frequency: v })}>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="fortnightly">Fortnightly</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Occurrences</Label>
+                      <Input type="number" min="2" max="52" value={form.recurrence_count} onChange={(e) => setForm({ ...form, recurrence_count: e.target.value })} className="h-8 text-sm" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {editingJob && (
               <div className="space-y-2">
                 <Label>Status</Label>
                 <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="scheduled">Scheduled</SelectItem>
                     <SelectItem value="in_progress">In Progress</SelectItem>
@@ -337,7 +495,7 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingJob ? "Save Changes" : "Create Job"}
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingJob ? "Save Changes" : form.is_recurring ? `Create ${form.recurrence_count} Jobs` : "Create Job"}
             </Button>
           </DialogFooter>
         </DialogContent>
