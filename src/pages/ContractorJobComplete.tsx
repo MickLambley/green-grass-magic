@@ -435,7 +435,7 @@ const ContractorJobComplete = () => {
       setPhotos((prev) => [...prev, item]);
 
       const timestamp = Date.now();
-      const filePath = `${bookingId}/${type}-${timestamp}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+      const filePath = `${contractor.id}/${bookingId}/${type}-${timestamp}-${Math.random().toString(36).slice(2, 8)}.jpg`;
 
       photoLogger.info("Uploading to storage...", {
         filePath,

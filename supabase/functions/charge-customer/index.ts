@@ -82,6 +82,26 @@ serve(async (req) => {
 
     logStep("Booking fetched", { bookingId, totalPrice: booking.total_price, paymentMethodId: booking.payment_method_id });
 
+    // ── Determine booking source to decide if application fee applies ──
+    // Check if this booking originated from a website_booking (via jobs table or booking metadata)
+    let bookingSource: string | null = null;
+
+    // Check if there's a linked job with source = website_booking
+    const { data: linkedJob } = await supabase
+      .from("jobs")
+      .select("source")
+      .eq("contractor_id", contractor.id)
+      .eq("scheduled_date", booking.scheduled_date)
+      .eq("status", "pending_confirmation")
+      .limit(1)
+      .maybeSingle();
+
+    if (linkedJob?.source) {
+      bookingSource = linkedJob.source;
+    }
+
+    logStep("Booking source determined", { bookingSource });
+
     // Find the Stripe customer for the booking owner
     const { data: customerAuth } = await supabase.auth.admin.getUserById(booking.user_id);
     const customerEmail = customerAuth?.user?.email;
@@ -96,13 +116,14 @@ serve(async (req) => {
     logStep("Stripe customer found", { customerId });
 
     // ── Direct charge on the contractor's connected account ──
-    // The charge is created directly on the contractor's Stripe account.
-    // Yardly collects an application_fee based on the contractor's subscription tier.
+    // Yardly only collects an application_fee on website_booking source payments.
+    // Contractor's own CRM jobs (manual source) are fee-free.
     const amountInCents = Math.round(Number(booking.total_price) * 100);
-    const feePercent = getApplicationFeePercent(contractor.subscription_tier || "free");
+    const isWebsiteBooking = bookingSource === "website_booking";
+    const feePercent = isWebsiteBooking ? getApplicationFeePercent(contractor.subscription_tier || "free") : 0;
     const applicationFee = Math.floor(amountInCents * feePercent);
 
-    logStep("Fee calculation", { amountInCents, feePercent, applicationFee, subscriptionTier: contractor.subscription_tier });
+    logStep("Fee calculation", { amountInCents, feePercent, applicationFee, subscriptionTier: contractor.subscription_tier, isWebsiteBooking });
 
     // Clone the customer's payment method to the connected account
     const paymentMethod = await stripe.paymentMethods.create(
