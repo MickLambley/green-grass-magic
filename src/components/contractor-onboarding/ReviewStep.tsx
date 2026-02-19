@@ -7,7 +7,7 @@ import type {
   OperationalRulesData, 
   GeographicData, 
   ExperienceData 
-} from "@/pages/ContractorOnboarding";
+} from "./types";
 
 interface ReviewStepProps {
   identityData: IdentityBusinessData;
