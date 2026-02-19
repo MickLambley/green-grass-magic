@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Pencil, Loader2, FileText, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, FileText, Trash2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import type { Tables, Json } from "@/integrations/supabase/types";
@@ -47,6 +47,7 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isConverting, setIsConverting] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     client_id: "",
@@ -127,6 +128,34 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
     setIsSaving(false);
   };
 
+  /** Convert an accepted quote into a new job */
+  const convertToJob = async (quote: Quote) => {
+    setIsConverting(quote.id);
+    try {
+      const items = Array.isArray(quote.line_items) ? (quote.line_items as unknown as LineItem[]) : [];
+      const description = items.map((li) => `${li.description} (x${li.quantity})`).join(", ");
+
+      const { error } = await supabase.from("jobs").insert({
+        contractor_id: contractorId,
+        client_id: quote.client_id,
+        title: items[0]?.description || "Job from Quote",
+        description,
+        scheduled_date: new Date().toISOString().split("T")[0],
+        total_price: Number(quote.total),
+        status: "scheduled",
+        source: "manual",
+      });
+
+      if (error) throw error;
+
+      toast.success("Job created from quote!");
+      fetchData();
+    } catch {
+      toast.error("Failed to create job from quote");
+    }
+    setIsConverting(null);
+  };
+
   const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
     const updated = [...lineItems];
     updated[index] = { ...updated[index], [field]: value };
@@ -152,9 +181,7 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
             <FileText className="w-12 h-12 text-muted-foreground/50 mb-4" />
             <h3 className="font-display font-semibold text-lg text-foreground mb-1">No quotes yet</h3>
             <p className="text-muted-foreground text-sm mb-4">Create your first quote for a client.</p>
-            {clients.length > 0 && (
-              <Button onClick={openCreateDialog} size="sm"><Plus className="w-4 h-4 mr-1" /> New Quote</Button>
-            )}
+            {clients.length > 0 && <Button onClick={openCreateDialog} size="sm"><Plus className="w-4 h-4 mr-1" /> New Quote</Button>}
           </CardContent>
         </Card>
       ) : (
@@ -166,7 +193,7 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
                 <TableHead className="hidden md:table-cell">Date</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-[80px]">Actions</TableHead>
+                <TableHead className="w-[120px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -183,9 +210,22 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => openEditDialog(quote)}>
-                      <Pencil className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openEditDialog(quote)}>
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      {quote.status === "accepted" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => convertToJob(quote)}
+                          disabled={isConverting === quote.id}
+                          title="Convert to Job"
+                        >
+                          {isConverting === quote.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4 text-primary" />}
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -196,7 +236,7 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingQuote ? "Edit Quote" : "New Quote"}</DialogTitle>
           </DialogHeader>
@@ -237,27 +277,9 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
               <div className="space-y-2">
                 {lineItems.map((li, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <Input
-                      value={li.description}
-                      onChange={(e) => updateLineItem(i, "description", e.target.value)}
-                      placeholder="Description"
-                      className="flex-1"
-                    />
-                    <Input
-                      type="number"
-                      value={li.quantity}
-                      onChange={(e) => updateLineItem(i, "quantity", parseInt(e.target.value) || 0)}
-                      className="w-16"
-                      min={1}
-                    />
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={li.unit_price}
-                      onChange={(e) => updateLineItem(i, "unit_price", parseFloat(e.target.value) || 0)}
-                      className="w-24"
-                      placeholder="$0.00"
-                    />
+                    <Input value={li.description} onChange={(e) => updateLineItem(i, "description", e.target.value)} placeholder="Description" className="flex-1" />
+                    <Input type="number" value={li.quantity} onChange={(e) => updateLineItem(i, "quantity", parseInt(e.target.value) || 0)} className="w-16" min={1} />
+                    <Input type="number" step="0.01" value={li.unit_price} onChange={(e) => updateLineItem(i, "unit_price", parseFloat(e.target.value) || 0)} className="w-24" placeholder="$0.00" />
                     {lineItems.length > 1 && (
                       <Button variant="ghost" size="icon" onClick={() => setLineItems(lineItems.filter((_, idx) => idx !== i))}>
                         <Trash2 className="w-4 h-4 text-destructive" />

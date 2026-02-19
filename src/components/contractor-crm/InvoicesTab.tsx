@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Loader2, Receipt, Trash2 } from "lucide-react";
+import { Plus, Pencil, Loader2, Receipt, Trash2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import type { Tables, Json } from "@/integrations/supabase/types";
@@ -41,12 +41,13 @@ const statusColors: Record<string, string> = {
 };
 
 const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
-  const [invoices, setInvoices] = useState<(Invoice & { client_name?: string })[]>([]);
+  const [invoices, setInvoices] = useState<(Invoice & { client_name?: string; client_email?: string })[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [sendingId, setSendingId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     client_id: "",
@@ -70,8 +71,12 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
 
     if (clientsRes.data) setClients(clientsRes.data);
     if (invoicesRes.data && clientsRes.data) {
-      const clientMap = new Map(clientsRes.data.map((c) => [c.id, c.name]));
-      setInvoices(invoicesRes.data.map((inv) => ({ ...inv, client_name: clientMap.get(inv.client_id) || "Unknown" })));
+      const clientMap = new Map(clientsRes.data.map((c) => [c.id, { name: c.name, email: c.email }]));
+      setInvoices(invoicesRes.data.map((inv) => ({
+        ...inv,
+        client_name: clientMap.get(inv.client_id)?.name || "Unknown",
+        client_email: clientMap.get(inv.client_id)?.email || undefined,
+      })));
     }
     setIsLoading(false);
   };
@@ -137,6 +142,26 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
     setIsSaving(false);
   };
 
+  const handleSendInvoice = async (invoiceId: string, clientEmail?: string) => {
+    if (!clientEmail) {
+      toast.error("Client has no email address. Add an email first.");
+      return;
+    }
+
+    setSendingId(invoiceId);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-invoice", {
+        body: { invoiceId },
+      });
+
+      if (error) throw error;
+      toast.success(`Invoice sent to ${clientEmail}`);
+    } catch (err) {
+      toast.error("Failed to send invoice");
+    }
+    setSendingId(null);
+  };
+
   const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
     const updated = [...lineItems];
     updated[index] = { ...updated[index], [field]: value };
@@ -162,9 +187,7 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
             <Receipt className="w-12 h-12 text-muted-foreground/50 mb-4" />
             <h3 className="font-display font-semibold text-lg text-foreground mb-1">No invoices yet</h3>
             <p className="text-muted-foreground text-sm mb-4">Create your first invoice for a client.</p>
-            {clients.length > 0 && (
-              <Button onClick={openCreateDialog} size="sm"><Plus className="w-4 h-4 mr-1" /> New Invoice</Button>
-            )}
+            {clients.length > 0 && <Button onClick={openCreateDialog} size="sm"><Plus className="w-4 h-4 mr-1" /> New Invoice</Button>}
           </CardContent>
         </Card>
       ) : (
@@ -178,7 +201,7 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
                 <TableHead className="hidden md:table-cell">Due</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-[80px]">Actions</TableHead>
+                <TableHead className="w-[120px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -199,9 +222,20 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => openEditDialog(inv)}>
-                      <Pencil className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openEditDialog(inv)}>
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleSendInvoice(inv.id, inv.client_email)}
+                        disabled={sendingId === inv.id}
+                        title={inv.client_email ? `Send to ${inv.client_email}` : "No client email"}
+                      >
+                        {sendingId === inv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 text-primary" />}
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -212,7 +246,7 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingInvoice ? "Edit Invoice" : "New Invoice"}</DialogTitle>
           </DialogHeader>
@@ -258,27 +292,9 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
               <div className="space-y-2">
                 {lineItems.map((li, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <Input
-                      value={li.description}
-                      onChange={(e) => updateLineItem(i, "description", e.target.value)}
-                      placeholder="Description"
-                      className="flex-1"
-                    />
-                    <Input
-                      type="number"
-                      value={li.quantity}
-                      onChange={(e) => updateLineItem(i, "quantity", parseInt(e.target.value) || 0)}
-                      className="w-16"
-                      min={1}
-                    />
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={li.unit_price}
-                      onChange={(e) => updateLineItem(i, "unit_price", parseFloat(e.target.value) || 0)}
-                      className="w-24"
-                      placeholder="$0.00"
-                    />
+                    <Input value={li.description} onChange={(e) => updateLineItem(i, "description", e.target.value)} placeholder="Description" className="flex-1" />
+                    <Input type="number" value={li.quantity} onChange={(e) => updateLineItem(i, "quantity", parseInt(e.target.value) || 0)} className="w-16" min={1} />
+                    <Input type="number" step="0.01" value={li.unit_price} onChange={(e) => updateLineItem(i, "unit_price", parseFloat(e.target.value) || 0)} className="w-24" placeholder="$0.00" />
                     {lineItems.length > 1 && (
                       <Button variant="ghost" size="icon" onClick={() => setLineItems(lineItems.filter((_, idx) => idx !== i))}>
                         <Trash2 className="w-4 h-4 text-destructive" />

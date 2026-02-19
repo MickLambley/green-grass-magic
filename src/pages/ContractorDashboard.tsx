@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Leaf, LogOut, Users, Calendar, FileText, Receipt, LayoutDashboard, Loader2 } from "lucide-react";
+import { Leaf, LogOut, Users, Calendar, FileText, Receipt, LayoutDashboard, Settings, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -13,6 +13,7 @@ import ClientsTab from "@/components/contractor-crm/ClientsTab";
 import JobsTab from "@/components/contractor-crm/JobsTab";
 import QuotesTab from "@/components/contractor-crm/QuotesTab";
 import InvoicesTab from "@/components/contractor-crm/InvoicesTab";
+import ProfileSettingsTab from "@/components/contractor-crm/ProfileSettingsTab";
 
 type Contractor = Tables<"contractors">;
 
@@ -36,7 +37,6 @@ const ContractorDashboard = () => {
 
     setUser(user);
 
-    // Check contractor role
     const { data: roles } = await supabase
       .from("user_roles")
       .select("role")
@@ -49,7 +49,6 @@ const ContractorDashboard = () => {
       return;
     }
 
-    // Get contractor profile
     const { data: contractorData } = await supabase
       .from("contractors")
       .select("*")
@@ -62,7 +61,6 @@ const ContractorDashboard = () => {
       return;
     }
 
-    // Check onboarding
     if (!contractorData.abn) {
       navigate("/contractor-onboarding");
       return;
@@ -122,7 +120,6 @@ const ContractorDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b border-border bg-background/80 backdrop-blur-lg sticky top-0 z-50">
         <div className="container mx-auto px-4 flex items-center justify-between h-16">
           <div className="flex items-center gap-3">
@@ -139,9 +136,7 @@ const ContractorDashboard = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground hidden md:block">
-              {user?.email}
-            </span>
+            <span className="text-sm text-muted-foreground hidden md:block">{user?.email}</span>
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="w-4 h-4 mr-2" /> Sign Out
             </Button>
@@ -149,7 +144,6 @@ const ContractorDashboard = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="bg-muted/50 p-1">
@@ -173,26 +167,29 @@ const ContractorDashboard = () => {
               <Receipt className="w-4 h-4" />
               <span className="hidden sm:inline">Invoices</span>
             </TabsTrigger>
+            <TabsTrigger value="settings" className="gap-2">
+              <Settings className="w-4 h-4" />
+              <span className="hidden sm:inline">Settings</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
             <DashboardOverview contractorId={contractor.id} />
           </TabsContent>
-
           <TabsContent value="clients">
             <ClientsTab contractorId={contractor.id} />
           </TabsContent>
-
           <TabsContent value="jobs">
             <JobsTab contractorId={contractor.id} />
           </TabsContent>
-
           <TabsContent value="quotes">
             <QuotesTab contractorId={contractor.id} />
           </TabsContent>
-
           <TabsContent value="invoices">
             <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} />
+          </TabsContent>
+          <TabsContent value="settings">
+            <ProfileSettingsTab contractor={contractor} onUpdate={setContractor} />
           </TabsContent>
         </Tabs>
       </main>
