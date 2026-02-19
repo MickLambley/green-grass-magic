@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.subscription-webhook]
 verify_jwt = false
+
+[functions.public-booking]
+verify_jwt = false
+
+[functions.generate-website-copy]
+verify_jwt = true

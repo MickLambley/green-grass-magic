@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Leaf, LogOut, Users, Calendar, FileText, Receipt, LayoutDashboard, Settings, Loader2 } from "lucide-react";
+import { Leaf, LogOut, Users, Calendar, FileText, Receipt, LayoutDashboard, Settings, Globe, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -14,6 +14,7 @@ import JobsTab from "@/components/contractor-crm/JobsTab";
 import QuotesTab from "@/components/contractor-crm/QuotesTab";
 import InvoicesTab from "@/components/contractor-crm/InvoicesTab";
 import ProfileSettingsTab from "@/components/contractor-crm/ProfileSettingsTab";
+import WebsiteBuilderTab from "@/components/contractor-crm/WebsiteBuilderTab";
 
 type Contractor = Tables<"contractors">;
 
@@ -167,6 +168,10 @@ const ContractorDashboard = () => {
               <Receipt className="w-4 h-4" />
               <span className="hidden sm:inline">Invoices</span>
             </TabsTrigger>
+            <TabsTrigger value="website" className="gap-2">
+              <Globe className="w-4 h-4" />
+              <span className="hidden sm:inline">Website</span>
+            </TabsTrigger>
             <TabsTrigger value="settings" className="gap-2">
               <Settings className="w-4 h-4" />
               <span className="hidden sm:inline">Settings</span>
@@ -187,6 +192,9 @@ const ContractorDashboard = () => {
           </TabsContent>
           <TabsContent value="invoices">
             <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} />
+          </TabsContent>
+          <TabsContent value="website">
+            <WebsiteBuilderTab contractor={contractor} onUpdate={setContractor} />
           </TabsContent>
           <TabsContent value="settings">
             <ProfileSettingsTab contractor={contractor} onUpdate={setContractor} />
