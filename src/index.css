@@ -1,0 +1,211 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+
+@layer base {
+  :root {
+    /* Lawnly - Fresh Grass Green Theme */
+    --background: 120 20% 98%;
+    --foreground: 150 30% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 150 30% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 150 30% 15%;
+
+    /* Fresh grass green */
+    --primary: 142 55% 42%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Warm earth tone */
+    --secondary: 35 30% 94%;
+    --secondary-foreground: 150 30% 20%;
+
+    --muted: 120 15% 95%;
+    --muted-foreground: 150 10% 45%;
+
+    /* Bright spring accent */
+    --accent: 85 60% 50%;
+    --accent-foreground: 150 40% 15%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 120 15% 88%;
+    --input: 120 15% 88%;
+    --ring: 142 55% 42%;
+
+    --radius: 0.75rem;
+
+    /* Custom Lawnly tokens */
+    --grass-light: 85 55% 75%;
+    --grass-medium: 142 50% 45%;
+    --grass-dark: 150 45% 30%;
+    --earth: 35 40% 35%;
+    --earth-light: 35 35% 92%;
+    --sunshine: 45 95% 55%;
+    --sky: 200 80% 55%;
+
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(142, 55%, 42%) 0%, hsl(85, 60%, 50%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0, 0%, 100%) 0%, hsl(120, 20%, 98%) 100%);
+    --gradient-cta: linear-gradient(135deg, hsl(142, 60%, 38%) 0%, hsl(142, 55%, 50%) 100%);
+
+    /* Shadows */
+    --shadow-soft: 0 4px 20px -2px hsl(142 55% 42% / 0.12);
+    --shadow-medium: 0 8px 30px -4px hsl(142 55% 42% / 0.18);
+    --shadow-large: 0 20px 50px -10px hsl(142 55% 42% / 0.25);
+
+    --sidebar-background: 120 20% 98%;
+    --sidebar-foreground: 150 30% 15%;
+    --sidebar-primary: 142 55% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 85 60% 95%;
+    --sidebar-accent-foreground: 150 30% 15%;
+    --sidebar-border: 120 15% 88%;
+    --sidebar-ring: 142 55% 42%;
+  }
+
+  .dark {
+    --background: 150 30% 8%;
+    --foreground: 120 20% 95%;
+
+    --card: 150 25% 12%;
+    --card-foreground: 120 20% 95%;
+
+    --popover: 150 25% 12%;
+    --popover-foreground: 120 20% 95%;
+
+    --primary: 142 55% 50%;
+    --primary-foreground: 150 30% 8%;
+
+    --secondary: 150 20% 18%;
+    --secondary-foreground: 120 20% 90%;
+
+    --muted: 150 20% 18%;
+    --muted-foreground: 120 15% 60%;
+
+    --accent: 85 50% 45%;
+    --accent-foreground: 120 20% 95%;
+
+    --destructive: 0 70% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 150 20% 20%;
+    --input: 150 20% 20%;
+    --ring: 142 55% 50%;
+
+    --grass-light: 85 40% 35%;
+    --grass-medium: 142 45% 40%;
+    --grass-dark: 150 40% 25%;
+
+    --sidebar-background: 150 30% 8%;
+    --sidebar-foreground: 120 20% 95%;
+    --sidebar-primary: 142 55% 50%;
+    --sidebar-primary-foreground: 150 30% 8%;
+    --sidebar-accent: 150 20% 18%;
+    --sidebar-accent-foreground: 120 20% 95%;
+    --sidebar-border: 150 20% 20%;
+    --sidebar-ring: 142 55% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-bold tracking-tight;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-md border border-white/50 shadow-soft;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-hero);
+  }
+
+  .btn-hero {
+    @apply bg-primary text-primary-foreground font-semibold px-8 py-4 rounded-xl shadow-medium hover:shadow-large transition-all duration-300 hover:-translate-y-0.5;
+  }
+
+  .btn-hero-outline {
+    @apply border-2 border-primary text-primary font-semibold px-8 py-4 rounded-xl hover:bg-primary hover:text-primary-foreground transition-all duration-300;
+  }
+
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+
+  .shadow-medium {
+    box-shadow: var(--shadow-medium);
+  }
+
+  .shadow-large {
+    box-shadow: var(--shadow-large);
+  }
+
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  .gradient-cta {
+    background: var(--gradient-cta);
+  }
+}
+
+@layer utilities {
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.6s ease-out forwards;
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-20px);
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

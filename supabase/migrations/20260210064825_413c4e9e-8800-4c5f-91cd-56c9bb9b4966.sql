@@ -1,0 +1,1 @@
+ALTER TABLE public.bookings ADD COLUMN stripe_payout_id text;
