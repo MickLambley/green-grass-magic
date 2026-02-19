@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import TestModeBanner from "@/components/test-mode/TestModeBanner";
 import Index from "./pages/Index";
+import ContractorWebsite from "./pages/ContractorWebsite";
 import CustomerVerifyJob from "./pages/CustomerVerifyJob";
 import About from "./pages/About";
 import Contractors from "./pages/Contractors";
@@ -68,6 +69,7 @@ const App = () => (
               <CustomerVerifyJob />
             </ProtectedRoute>
           } />
+          <Route path="/site/:slug" element={<ContractorWebsite />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />

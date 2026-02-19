@@ -366,6 +366,8 @@ export type Database = {
           total_revenue: number
           updated_at: string
           user_id: string
+          website_copy: Json | null
+          website_published: boolean
         }
         Insert: {
           abn?: string | null
@@ -413,6 +415,8 @@ export type Database = {
           total_revenue?: number
           updated_at?: string
           user_id: string
+          website_copy?: Json | null
+          website_published?: boolean
         }
         Update: {
           abn?: string | null
@@ -460,6 +464,8 @@ export type Database = {
           total_revenue?: number
           updated_at?: string
           user_id?: string
+          website_copy?: Json | null
+          website_published?: boolean
         }
         Relationships: []
       }
