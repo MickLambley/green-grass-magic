@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Leaf, LogOut, Users, Calendar, FileText, Receipt, LayoutDashboard, Settings, Globe, Loader2 } from "lucide-react";
+import {
+  Leaf, LogOut, Users, Calendar, FileText, Receipt,
+  LayoutDashboard, Settings, Globe, Loader2, Menu, X,
+  Bell,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -18,56 +21,72 @@ import WebsiteBuilderTab from "@/components/contractor-crm/WebsiteBuilderTab";
 
 type Contractor = Tables<"contractors">;
 
+const NAV_ITEMS = [
+  { key: "overview", label: "Home", icon: LayoutDashboard },
+  { key: "jobs", label: "Jobs", icon: Calendar },
+  { key: "clients", label: "Clients", icon: Users },
+  { key: "quotes", label: "Quotes", icon: FileText },
+  { key: "invoices", label: "Invoices", icon: Receipt },
+  { key: "website", label: "Website", icon: Globe },
+  { key: "settings", label: "Settings", icon: Settings },
+] as const;
+
+// Bottom nav shows max 5 items on mobile
+const MOBILE_NAV = ["overview", "jobs", "clients", "invoices", "settings"] as const;
+
 const ContractorDashboard = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") || "overview";
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [user, setUser] = useState<User | null>(null);
   const [contractor, setContractor] = useState<Contractor | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
 
   useEffect(() => {
     checkAccess();
   }, []);
 
+  useEffect(() => {
+    // Keep URL in sync
+    if (activeTab !== "overview") {
+      setSearchParams({ tab: activeTab }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  }, [activeTab]);
+
   const checkAccess = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      navigate("/contractor-auth");
-      return;
-    }
-
+    if (!user) { navigate("/contractor-auth"); return; }
     setUser(user);
 
     const { data: roles } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("role", "contractor");
-
-    if (!roles || roles.length === 0) {
-      toast.error("You don't have contractor access");
-      navigate("/contractor-auth");
-      return;
-    }
+      .from("user_roles").select("role")
+      .eq("user_id", user.id).eq("role", "contractor");
+    if (!roles || roles.length === 0) { toast.error("No contractor access"); navigate("/contractor-auth"); return; }
 
     const { data: contractorData } = await supabase
-      .from("contractors")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
+      .from("contractors").select("*")
+      .eq("user_id", user.id).single();
+    if (!contractorData) { toast.error("Profile not found"); navigate("/contractor-auth"); return; }
 
-    if (!contractorData) {
-      toast.error("Contractor profile not found");
-      navigate("/contractor-auth");
-      return;
-    }
-
-    if (!contractorData.abn) {
+    // Check if setup wizard needed
+    if (!contractorData.business_name && !contractorData.abn) {
       navigate("/contractor-onboarding");
       return;
     }
 
     setContractor(contractorData);
+
+    // Unread notifications
+    const { count } = await supabase
+      .from("notifications").select("id", { count: "exact", head: true })
+      .eq("user_id", user.id).eq("is_read", false);
+    setUnreadNotifs(count || 0);
+
     setIsLoading(false);
   };
 
@@ -76,10 +95,20 @@ const ContractorDashboard = () => {
     navigate("/");
   };
 
+  const switchTab = (key: string) => {
+    setActiveTab(key);
+    setSidebarOpen(false);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl gradient-hero flex items-center justify-center animate-pulse">
+            <Leaf className="w-6 h-6 text-primary-foreground" />
+          </div>
+          <p className="text-sm text-muted-foreground">Loading your dashboard...</p>
+        </div>
       </div>
     );
   }
@@ -87,13 +116,13 @@ const ContractorDashboard = () => {
   if (!contractor) return null;
 
   // Pending approval state
-  if (contractor.approval_status !== "approved") {
+  if (contractor.approval_status === "pending") {
     return (
       <div className="min-h-screen bg-background">
-        <header className="border-b border-border bg-background/80 backdrop-blur-lg sticky top-0 z-50">
-          <div className="container mx-auto px-4 flex items-center justify-between h-16">
+        <header className="border-b border-border bg-card sticky top-0 z-50">
+          <div className="px-4 sm:px-6 flex items-center justify-between h-14">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center">
+              <div className="w-8 h-8 rounded-xl gradient-hero flex items-center justify-center">
                 <Leaf className="w-4 h-4 text-primary-foreground" />
               </div>
               <span className="font-display font-bold text-foreground">Yardly</span>
@@ -103,15 +132,14 @@ const ContractorDashboard = () => {
             </Button>
           </div>
         </header>
-        <div className="container mx-auto px-4 py-20 text-center">
-          <div className="max-w-md mx-auto">
+        <div className="flex items-center justify-center px-4 py-20">
+          <div className="max-w-sm text-center">
             <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-sunshine/20 flex items-center justify-center">
-              <Loader2 className="w-8 h-8 text-sunshine" />
+              <Loader2 className="w-8 h-8 text-sunshine animate-spin" />
             </div>
             <h1 className="font-display text-2xl font-bold text-foreground mb-3">Application Under Review</h1>
-            <p className="text-muted-foreground">
-              Your contractor application is being reviewed. We'll notify you once it's been approved.
-              This usually takes 1-2 business days.
+            <p className="text-muted-foreground text-sm">
+              Your contractor application is being reviewed. We'll notify you once approved. This usually takes 1–2 business days.
             </p>
           </div>
         </div>
@@ -119,88 +147,167 @@ const ContractorDashboard = () => {
     );
   }
 
+  const currentNav = NAV_ITEMS.find((n) => n.key === activeTab) || NAV_ITEMS[0];
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-background/80 backdrop-blur-lg sticky top-0 z-50">
-        <div className="container mx-auto px-4 flex items-center justify-between h-16">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center">
-              <Leaf className="w-4 h-4 text-primary-foreground" />
-            </div>
-            <div>
-              <span className="font-display font-bold text-foreground">Yardly</span>
-              {contractor.business_name && (
-                <span className="text-sm text-muted-foreground ml-2 hidden sm:inline">
-                  — {contractor.business_name}
-                </span>
-              )}
-            </div>
+    <div className="min-h-screen bg-background flex">
+      {/* ── Desktop Sidebar ── */}
+      <aside className="hidden md:flex md:flex-col md:w-64 border-r border-border bg-card fixed inset-y-0 left-0 z-40">
+        {/* Brand */}
+        <div className="flex items-center gap-2.5 px-5 h-16 border-b border-border">
+          <div className="w-9 h-9 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
+            <Leaf className="w-5 h-5 text-primary-foreground" />
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground hidden md:block">{user?.email}</span>
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
-              <LogOut className="w-4 h-4 mr-2" /> Sign Out
+          <div className="flex flex-col min-w-0">
+            <span className="font-display font-bold text-foreground text-sm leading-tight">Yardly</span>
+            {contractor.business_name && (
+              <span className="text-[11px] text-muted-foreground truncate leading-tight">{contractor.business_name}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          {NAV_ITEMS.map((item) => {
+            const isActive = activeTab === item.key;
+            return (
+              <button
+                key={item.key}
+                onClick={() => switchTab(item.key)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                  isActive
+                    ? "bg-primary/10 text-primary shadow-sm"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <item.icon className="w-5 h-5 flex-shrink-0" />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* User footer */}
+        <div className="border-t border-border p-3">
+          <div className="flex items-center gap-3 px-2 py-2">
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-display font-bold text-xs">
+              {(user?.email?.[0] || "U").toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-foreground truncate">{user?.email}</p>
+            </div>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={handleLogout}>
+              <LogOut className="w-4 h-4" />
             </Button>
           </div>
         </div>
-      </header>
+      </aside>
 
-      <main className="container mx-auto px-4 py-6">
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="bg-muted/50 p-1">
-            <TabsTrigger value="overview" className="gap-2">
-              <LayoutDashboard className="w-4 h-4" />
-              <span className="hidden sm:inline">Overview</span>
-            </TabsTrigger>
-            <TabsTrigger value="clients" className="gap-2">
-              <Users className="w-4 h-4" />
-              <span className="hidden sm:inline">Clients</span>
-            </TabsTrigger>
-            <TabsTrigger value="jobs" className="gap-2">
-              <Calendar className="w-4 h-4" />
-              <span className="hidden sm:inline">Jobs</span>
-            </TabsTrigger>
-            <TabsTrigger value="quotes" className="gap-2">
-              <FileText className="w-4 h-4" />
-              <span className="hidden sm:inline">Quotes</span>
-            </TabsTrigger>
-            <TabsTrigger value="invoices" className="gap-2">
-              <Receipt className="w-4 h-4" />
-              <span className="hidden sm:inline">Invoices</span>
-            </TabsTrigger>
-            <TabsTrigger value="website" className="gap-2">
-              <Globe className="w-4 h-4" />
-              <span className="hidden sm:inline">Website</span>
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="gap-2">
-              <Settings className="w-4 h-4" />
-              <span className="hidden sm:inline">Settings</span>
-            </TabsTrigger>
-          </TabsList>
+      {/* ── Mobile Sidebar Overlay ── */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+          <aside className="absolute left-0 top-0 bottom-0 w-72 bg-card border-r border-border shadow-large flex flex-col animate-slide-in-right">
+            <div className="flex items-center justify-between px-4 h-14 border-b border-border">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl gradient-hero flex items-center justify-center">
+                  <Leaf className="w-4 h-4 text-primary-foreground" />
+                </div>
+                <span className="font-display font-bold text-foreground text-sm">Yardly</span>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            <nav className="flex-1 px-3 py-4 space-y-1">
+              {NAV_ITEMS.map((item) => {
+                const isActive = activeTab === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => switchTab(item.key)}
+                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all ${
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    <item.icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="border-t border-border p-4">
+              <Button variant="ghost" className="w-full justify-start gap-2 text-muted-foreground" onClick={handleLogout}>
+                <LogOut className="w-4 h-4" /> Sign Out
+              </Button>
+            </div>
+          </aside>
+        </div>
+      )}
 
-          <TabsContent value="overview">
-            <DashboardOverview contractorId={contractor.id} />
-          </TabsContent>
-          <TabsContent value="clients">
-            <ClientsTab contractorId={contractor.id} />
-          </TabsContent>
-          <TabsContent value="jobs">
-            <JobsTab contractorId={contractor.id} />
-          </TabsContent>
-          <TabsContent value="quotes">
-            <QuotesTab contractorId={contractor.id} />
-          </TabsContent>
-          <TabsContent value="invoices">
-            <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} />
-          </TabsContent>
-          <TabsContent value="website">
-            <WebsiteBuilderTab contractor={contractor} onUpdate={setContractor} />
-          </TabsContent>
-          <TabsContent value="settings">
-            <ProfileSettingsTab contractor={contractor} onUpdate={setContractor} />
-          </TabsContent>
-        </Tabs>
-      </main>
+      {/* ── Main Content ── */}
+      <div className="flex-1 md:ml-64 flex flex-col min-h-screen pb-20 md:pb-0">
+        {/* Top bar */}
+        <header className="sticky top-0 z-30 bg-card/80 backdrop-blur-lg border-b border-border">
+          <div className="flex items-center justify-between px-4 sm:px-6 h-14">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="icon" className="md:hidden h-9 w-9" onClick={() => setSidebarOpen(true)}>
+                <Menu className="w-5 h-5" />
+              </Button>
+              <h1 className="font-display font-bold text-lg text-foreground">{currentNav.label}</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" className="relative h-9 w-9" onClick={() => switchTab("overview")}>
+                <Bell className="w-5 h-5 text-muted-foreground" />
+                {unreadNotifs > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
+                    {unreadNotifs > 9 ? "9+" : unreadNotifs}
+                  </span>
+                )}
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 px-4 sm:px-6 py-5">
+          {activeTab === "overview" && <DashboardOverview contractorId={contractor.id} />}
+          {activeTab === "clients" && <ClientsTab contractorId={contractor.id} />}
+          {activeTab === "jobs" && <JobsTab contractorId={contractor.id} />}
+          {activeTab === "quotes" && <QuotesTab contractorId={contractor.id} />}
+          {activeTab === "invoices" && <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} />}
+          {activeTab === "website" && <WebsiteBuilderTab contractor={contractor} onUpdate={setContractor} />}
+          {activeTab === "settings" && <ProfileSettingsTab contractor={contractor} onUpdate={setContractor} />}
+        </main>
+      </div>
+
+      {/* ── Mobile Bottom Nav ── */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-card border-t border-border">
+        <div className="flex items-center justify-around h-16 px-1">
+          {MOBILE_NAV.map((key) => {
+            const item = NAV_ITEMS.find((n) => n.key === key)!;
+            const isActive = activeTab === key;
+            return (
+              <button
+                key={key}
+                onClick={() => switchTab(key)}
+                className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-colors min-w-0 ${
+                  isActive ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                <item.icon className={`w-5 h-5 ${isActive ? "text-primary" : ""}`} />
+                <span className={`text-[10px] font-medium truncate ${isActive ? "text-primary" : ""}`}>
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {/* Safe area padding for iOS */}
+        <div className="h-safe-area-inset-bottom bg-card" />
+      </nav>
     </div>
   );
 };

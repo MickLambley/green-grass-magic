@@ -8,7 +8,7 @@ import { ArrowRight, ArrowLeft, MapPin, Loader2, Navigation, X } from "lucide-re
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { GeographicData, IdentityBusinessData } from "@/pages/ContractorOnboarding";
+import type { GeographicData, IdentityBusinessData } from "./types";
 
 interface GeographicReachStepProps {
   data: GeographicData;

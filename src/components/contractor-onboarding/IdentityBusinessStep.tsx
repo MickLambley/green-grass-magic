@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import type { IdentityBusinessData } from "@/pages/ContractorOnboarding";
+import type { IdentityBusinessData } from "./types";
 
 interface IdentityBusinessStepProps {
   data: IdentityBusinessData;

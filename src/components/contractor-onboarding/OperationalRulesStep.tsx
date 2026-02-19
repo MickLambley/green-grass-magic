@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowRight, ArrowLeft, ClipboardCheck, Wallet } from "lucide-react";
-import type { OperationalRulesData } from "@/pages/ContractorOnboarding";
+import type { OperationalRulesData } from "./types";
 
 interface OperationalRulesStepProps {
   data: OperationalRulesData;
