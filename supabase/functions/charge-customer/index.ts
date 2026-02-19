@@ -12,6 +12,20 @@ const logStep = (step: string, details?: Record<string, unknown>) => {
   console.log(`[CHARGE-CUSTOMER] ${step}${detailsStr}`);
 };
 
+/** Return the Yardly application fee percentage based on the contractor's subscription tier */
+function getApplicationFeePercent(subscriptionTier: string): number {
+  switch (subscriptionTier) {
+    case "pro":
+    case "team":
+      return 0.01; // 1%
+    case "starter":
+      return 0.03; // 3%
+    case "free":
+    default:
+      return 0.05; // 5%
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -25,7 +39,6 @@ serve(async (req) => {
     const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeSecretKey) throw new Error("STRIPE_SECRET_KEY is not configured");
 
-    // Authenticate the contractor
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("No authorization header provided");
 
@@ -41,7 +54,7 @@ serve(async (req) => {
     // Verify user is an approved contractor
     const { data: contractor, error: contractorError } = await supabase
       .from("contractors")
-      .select("id, stripe_account_id, stripe_onboarding_complete, user_id, tier")
+      .select("id, stripe_account_id, stripe_onboarding_complete, user_id, tier, subscription_tier")
       .eq("user_id", userId)
       .single();
 
@@ -50,9 +63,8 @@ serve(async (req) => {
       throw new Error("Stripe setup not complete. Please complete your payment setup first.");
     }
 
-    logStep("Contractor verified", { contractorId: contractor.id, stripeAccountId: contractor.stripe_account_id });
+    logStep("Contractor verified", { contractorId: contractor.id, stripeAccountId: contractor.stripe_account_id, subscriptionTier: contractor.subscription_tier });
 
-    // Parse request
     const { bookingId } = await req.json();
     if (!bookingId) throw new Error("Missing required field: bookingId");
 
@@ -70,26 +82,6 @@ serve(async (req) => {
 
     logStep("Booking fetched", { bookingId, totalPrice: booking.total_price, paymentMethodId: booking.payment_method_id });
 
-    // Tier-based restrictions
-    const tier = (contractor as any).tier || "probation";
-    if (tier === "probation" || tier === "standard") {
-      const maxJobs = tier === "probation" ? 3 : 10;
-      const { count: activeJobs } = await supabase
-        .from("bookings")
-        .select("id", { count: "exact", head: true })
-        .eq("contractor_id", contractor.id)
-        .in("status", ["confirmed", "pending"]);
-
-      if ((activeJobs ?? 0) >= maxJobs) {
-        throw new Error(`You've reached your maximum of ${maxJobs} concurrent jobs for your tier. Complete existing jobs to accept new ones.`);
-      }
-
-      if (tier === "probation" && booking.total_price && Number(booking.total_price) > 150) {
-        throw new Error("As a new contractor, you cannot accept jobs over $150. Complete more jobs to unlock higher-value work.");
-      }
-    }
-    logStep("Tier check passed", { tier });
-
     // Find the Stripe customer for the booking owner
     const { data: customerAuth } = await supabase.auth.admin.getUserById(booking.user_id);
     const customerEmail = customerAuth?.user?.email;
@@ -103,31 +95,69 @@ serve(async (req) => {
 
     logStep("Stripe customer found", { customerId });
 
-    // Create PaymentIntent with destination charge
+    // ── Direct charge on the contractor's connected account ──
+    // The charge is created directly on the contractor's Stripe account.
+    // Yardly collects an application_fee based on the contractor's subscription tier.
     const amountInCents = Math.round(Number(booking.total_price) * 100);
-    const applicationFee = Math.floor(amountInCents * 0.15); // 15% platform fee
+    const feePercent = getApplicationFeePercent(contractor.subscription_tier || "free");
+    const applicationFee = Math.floor(amountInCents * feePercent);
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountInCents,
-      currency: "aud",
-      customer: customerId,
-      payment_method: booking.payment_method_id,
-      off_session: true,
-      confirm: true,
-      application_fee_amount: applicationFee,
-      transfer_data: {
-        destination: contractor.stripe_account_id,
-      },
-      
-      statement_descriptor_suffix: "LAWNLY",
-      metadata: {
-        booking_id: booking.id,
-        contractor_id: contractor.id,
-        customer_id: booking.user_id,
-      },
-    });
+    logStep("Fee calculation", { amountInCents, feePercent, applicationFee, subscriptionTier: contractor.subscription_tier });
 
-    logStep("PaymentIntent created", {
+    // Clone the customer's payment method to the connected account
+    const paymentMethod = await stripe.paymentMethods.create(
+      {
+        customer: customerId,
+        payment_method: booking.payment_method_id,
+      },
+      { stripeAccount: contractor.stripe_account_id }
+    );
+
+    // Create or find customer on connected account
+    let connectedCustomerId: string;
+    const connectedCustomers = await stripe.customers.list(
+      { email: customerEmail, limit: 1 },
+      { stripeAccount: contractor.stripe_account_id }
+    );
+    if (connectedCustomers.data.length > 0) {
+      connectedCustomerId = connectedCustomers.data[0].id;
+    } else {
+      const newConnectedCustomer = await stripe.customers.create(
+        { email: customerEmail },
+        { stripeAccount: contractor.stripe_account_id }
+      );
+      connectedCustomerId = newConnectedCustomer.id;
+    }
+
+    // Attach payment method to connected customer
+    await stripe.paymentMethods.attach(
+      paymentMethod.id,
+      { customer: connectedCustomerId },
+      { stripeAccount: contractor.stripe_account_id }
+    );
+
+    // Create PaymentIntent as a direct charge on the connected account
+    const paymentIntent = await stripe.paymentIntents.create(
+      {
+        amount: amountInCents,
+        currency: "aud",
+        customer: connectedCustomerId,
+        payment_method: paymentMethod.id,
+        off_session: true,
+        confirm: true,
+        application_fee_amount: applicationFee,
+        statement_descriptor_suffix: "YARDLY",
+        metadata: {
+          booking_id: booking.id,
+          contractor_id: contractor.id,
+          customer_id: booking.user_id,
+          yardly_fee_percent: String(feePercent * 100),
+        },
+      },
+      { stripeAccount: contractor.stripe_account_id }
+    );
+
+    logStep("Direct charge PaymentIntent created", {
       paymentIntentId: paymentIntent.id,
       amount: amountInCents,
       applicationFee,
@@ -138,9 +168,22 @@ serve(async (req) => {
       throw new Error(`Payment failed with status: ${paymentIntent.status}`);
     }
 
-    // Update booking: mark as captured and confirmed, assign contractor
+    // Record transaction fee
+    const stripeFeeEstimate = Math.round(amountInCents * 0.0175 + 30); // ~1.75% + 30c AU
+    const contractorPayout = amountInCents - applicationFee - stripeFeeEstimate;
+    await supabase.from("transaction_fees").insert({
+      contractor_id: contractor.id,
+      job_id: null, // bookings table, not jobs
+      payment_amount: Number(booking.total_price),
+      stripe_fee: stripeFeeEstimate / 100,
+      yardly_fee: applicationFee / 100,
+      yardly_fee_percentage: feePercent * 100,
+      contractor_payout: contractorPayout / 100,
+    });
+
+    // Update booking
     const now = new Date().toISOString();
-    const { error: updateError } = await supabase
+    await supabase
       .from("bookings")
       .update({
         payment_status: "captured",
@@ -152,13 +195,9 @@ serve(async (req) => {
       })
       .eq("id", bookingId);
 
-    if (updateError) {
-      logStep("WARNING: Failed to update booking after successful charge", { error: updateError.message });
-    }
-
     logStep("Booking updated successfully");
 
-    // Fetch address and profile for emails
+    // Fetch address and profile for notifications
     const [addressResult, profileResult, contractorProfileResult] = await Promise.all([
       supabase.from("addresses").select("street_address, city, state").eq("id", booking.address_id).single(),
       supabase.from("profiles").select("full_name").eq("user_id", booking.user_id).single(),
@@ -171,94 +210,52 @@ serve(async (req) => {
     const dateFormatted = new Date(booking.scheduled_date).toLocaleDateString("en-AU", {
       weekday: "long", year: "numeric", month: "long", day: "numeric",
     });
-    const timeDisplay = booking.scheduled_time || booking.time_slot;
-    const payoutAmount = ((amountInCents - applicationFee) / 100).toFixed(2);
+    const payoutAmountStr = (contractorPayout / 100).toFixed(2);
 
-    // Send notification to customer
-    await supabase.from("notifications").insert({
-      user_id: booking.user_id,
-      title: "Booking Confirmed!",
-      message: `Great news! ${contractorName} has accepted your job. Payment of $${Number(booking.total_price).toFixed(2)} has been processed. They will arrive on ${dateFormatted}.`,
-      type: "success",
-      booking_id: bookingId,
-    });
+    // Send notifications
+    await Promise.all([
+      supabase.from("notifications").insert({
+        user_id: booking.user_id,
+        title: "Booking Confirmed!",
+        message: `Great news! ${contractorName} has accepted your job. Payment of $${Number(booking.total_price).toFixed(2)} has been processed.`,
+        type: "success",
+        booking_id: bookingId,
+      }),
+      supabase.from("notifications").insert({
+        user_id: userId,
+        title: "Job Accepted!",
+        message: `You've accepted a job at ${address?.street_address || "the customer's address"}. Payment of $${Number(booking.total_price).toFixed(2)} is secured. Your payout will be ~$${payoutAmountStr} after the ${feePercent * 100}% Yardly fee.`,
+        type: "success",
+        booking_id: bookingId,
+      }),
+    ]);
 
-    // Send notification to contractor
-    await supabase.from("notifications").insert({
-      user_id: userId,
-      title: "Job Accepted!",
-      message: `You've accepted a job at ${address?.street_address || "the customer's address"}. Payment of $${Number(booking.total_price).toFixed(2)} is secured. Your payout will be $${payoutAmount} after the platform fee.`,
-      type: "success",
-      booking_id: bookingId,
-    });
-
-    // Try sending emails (non-blocking)
+    // Emails (non-blocking)
     try {
-      // Customer email
       const resendApiKey = Deno.env.get("RESEND_API_KEY");
       if (resendApiKey && customerEmail) {
-        const emailRes = await fetch("https://api.resend.com/emails", {
+        const timeDisplay = booking.scheduled_time || booking.time_slot;
+        await fetch("https://api.resend.com/emails", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${resendApiKey}`,
-          },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
           body: JSON.stringify({
-            from: "Lawn Care <onboarding@resend.dev>",
+            from: "Yardly <onboarding@resend.dev>",
             to: [customerEmail],
-            subject: "Your Lawn Mowing Booking is Confirmed! ✓",
-            html: `
-              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h1 style="color: #16a34a;">Booking Confirmed! ✅</h1>
-                <p>Hi ${customerName},</p>
-                <p>Great news! Your booking is confirmed. Payment of <strong>$${Number(booking.total_price).toFixed(2)}</strong> has been processed.</p>
-                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <p style="margin: 5px 0;"><strong>Contractor:</strong> ${contractorName}</p>
-                  <p style="margin: 5px 0;"><strong>Address:</strong> ${address?.street_address}, ${address?.city}, ${address?.state}</p>
-                  <p style="margin: 5px 0;"><strong>Date:</strong> ${dateFormatted}</p>
-                  <p style="margin: 5px 0;"><strong>Time:</strong> ${timeDisplay}</p>
-                  <p style="margin: 5px 0;"><strong>Amount Charged:</strong> $${Number(booking.total_price).toFixed(2)}</p>
-                </div>
-                <p>${contractorName} will arrive during your selected time slot. Please ensure access to your lawn.</p>
-                <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawnly Team</p>
+            subject: "Your Booking is Confirmed! ✓",
+            html: `<div style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h1 style="color: #16a34a;">Booking Confirmed! ✅</h1>
+              <p>Hi ${customerName},</p>
+              <p>Your booking is confirmed. Payment of <strong>$${Number(booking.total_price).toFixed(2)}</strong> has been processed.</p>
+              <div style="background:#f8f9fa;padding:20px;border-radius:8px;margin:20px 0;">
+                <p><strong>Contractor:</strong> ${contractorName}</p>
+                <p><strong>Address:</strong> ${address?.street_address}, ${address?.city}, ${address?.state}</p>
+                <p><strong>Date:</strong> ${dateFormatted}</p>
+                <p><strong>Time:</strong> ${timeDisplay}</p>
               </div>
-            `,
+              <p style="color:#666;margin-top:30px;">Best regards,<br>The Yardly Team</p>
+            </div>`,
           }),
         });
-        logStep("Customer email sent", { status: emailRes.status });
-      }
-
-      // Contractor email
-      if (resendApiKey && userData.user.email) {
-        const emailRes = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${resendApiKey}`,
-          },
-          body: JSON.stringify({
-            from: "Lawn Care <onboarding@resend.dev>",
-            to: [userData.user.email],
-            subject: "You've Accepted a Job! 🌿",
-            html: `
-              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h1 style="color: #16a34a;">Job Accepted! 🎉</h1>
-                <p>Hi ${contractorName},</p>
-                <p>You've accepted a job! Payment of <strong>$${Number(booking.total_price).toFixed(2)}</strong> is secured.</p>
-                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <p style="margin: 5px 0;"><strong>Customer:</strong> ${customerName}</p>
-                  <p style="margin: 5px 0;"><strong>Address:</strong> ${address?.street_address}, ${address?.city}, ${address?.state}</p>
-                  <p style="margin: 5px 0;"><strong>Date:</strong> ${dateFormatted}</p>
-                  <p style="margin: 5px 0;"><strong>Time:</strong> ${timeDisplay}</p>
-                  <p style="margin: 5px 0;"><strong>Your Payout:</strong> $${payoutAmount} (after 15% platform fee)</p>
-                </div>
-                <p>Complete the job and upload photos to receive your payout.</p>
-                <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawnly Team</p>
-              </div>
-            `,
-          }),
-        });
-        logStep("Contractor email sent", { status: emailRes.status });
       }
     } catch (emailError) {
       logStep("Email sending failed (non-blocking)", { error: String(emailError) });
@@ -271,17 +268,9 @@ serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
-
-    // Check if it's a card decline - return specific error info
-    const isCardError = error instanceof Error && 
-      ('type' in error && (error as any).type === 'StripeCardError');
-
+    const isCardError = error instanceof Error && ('type' in error && (error as any).type === 'StripeCardError');
     return new Response(
-      JSON.stringify({ 
-        error: errorMessage, 
-        isCardError,
-        code: isCardError ? (error as any).code : undefined,
-      }),
+      JSON.stringify({ error: errorMessage, isCardError, code: isCardError ? (error as any).code : undefined }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
     );
   }

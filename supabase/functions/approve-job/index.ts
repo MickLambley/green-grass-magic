@@ -143,7 +143,7 @@ serve(async (req) => {
             Authorization: `Bearer ${resendApiKey}`,
           },
           body: JSON.stringify({
-            from: "Lawn Care <onboarding@resend.dev>",
+            from: "Yardly <onboarding@resend.dev>",
             to: [contractorEmail],
             subject: "Payment Approved! 💰",
             html: `
@@ -156,7 +156,7 @@ serve(async (req) => {
                   <p style="margin: 5px 0;"><strong>Rating:</strong> ${rating ? `${rating}/5 stars` : "Not rated"}</p>
                 </div>
                 <p>Funds will arrive in your bank account in 1-2 business days.</p>
-                <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawnly Team</p>
+                <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
               </div>
             `,
           }),
