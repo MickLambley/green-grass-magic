@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Leaf, Phone, MapPin, Mail, ChevronRight, Loader2 } from "lucide-react";
+import { Leaf, Phone, MapPin, Mail, ChevronRight, Loader2, User } from "lucide-react";
 import PublicBookingForm from "@/components/contractor-website/PublicBookingForm";
 
 interface WebsiteCopy {
@@ -43,9 +43,17 @@ const DEFAULT_COPY: WebsiteCopy = {
 
 const ContractorWebsite = () => {
   const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
   const [contractor, setContractor] = useState<ContractorSite | null>(null);
   const [loading, setLoading] = useState(true);
   const [showBooking, setShowBooking] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsLoggedIn(!!session?.user);
+    });
+  }, []);
 
   useEffect(() => {
     if (slug) loadContractor();
@@ -111,6 +119,15 @@ const ContractorWebsite = () => {
               <a href={`tel:${contractor.phone}`} className="text-sm text-muted-foreground hover:text-foreground hidden sm:flex items-center gap-1">
                 <Phone className="w-3.5 h-3.5" /> {contractor.phone}
               </a>
+            )}
+            {isLoggedIn ? (
+              <Button size="sm" variant="outline" onClick={() => navigate(`/site/${slug}/dashboard`)}>
+                <User className="w-3.5 h-3.5 mr-1" /> My Dashboard
+              </Button>
+            ) : (
+              <Button size="sm" variant="ghost" onClick={() => navigate(`/site/${slug}/auth`)}>
+                <User className="w-3.5 h-3.5 mr-1" /> Login
+              </Button>
             )}
             <Button size="sm" onClick={() => setShowBooking(true)}>
               Book Now
