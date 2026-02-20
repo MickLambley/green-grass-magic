@@ -67,7 +67,13 @@ type Booking = Database["public"]["Tables"]["bookings"]["Row"] & {
   } | null;
 };
 
-const Dashboard = () => {
+export interface DashboardProps {
+  contractorSlug?: string;
+  contractorName?: string;
+  contractorLogoUrl?: string | null;
+}
+
+const Dashboard = ({ contractorSlug, contractorName, contractorLogoUrl }: DashboardProps = {}) => {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -88,6 +94,9 @@ const Dashboard = () => {
   const [contractorProfiles, setContractorProfiles] = useState<Record<string, string>>({});
   const [alternativeSuggestions, setAlternativeSuggestions] = useState<Record<string, AlternativeSuggestion[]>>({});
 
+  const authRedirect = contractorSlug ? `/site/${contractorSlug}/auth` : "/auth";
+  const brandName = contractorName || "Lawnly";
+
   useEffect(() => {
     const {
       data: { subscription },
@@ -95,7 +104,7 @@ const Dashboard = () => {
       setUser(session?.user ?? null);
       setIsLoading(false);
       if (!session?.user) {
-        navigate("/auth");
+        navigate(authRedirect);
       } else {
         setTimeout(() => {
           fetchUserData(session.user.id);
@@ -108,7 +117,7 @@ const Dashboard = () => {
       setUser(session?.user ?? null);
       setIsLoading(false);
       if (!session?.user) {
-        navigate("/auth");
+        navigate(authRedirect);
       } else {
         fetchUserData(session.user.id);
         checkAdminStatus(session.user.id);
@@ -238,7 +247,7 @@ const Dashboard = () => {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     toast.success("Signed out successfully");
-    navigate("/");
+    navigate(contractorSlug ? `/site/${contractorSlug}` : "/");
   };
 
   const handleTabChange = (tab: "overview" | "bookings") => {
@@ -406,10 +415,14 @@ const Dashboard = () => {
       {/* Mobile Header */}
       <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center">
-            <Leaf className="w-4 h-4 text-primary-foreground" />
-          </div>
-          <span className="text-lg font-display font-bold text-foreground">Lawnly</span>
+          {contractorLogoUrl ? (
+            <img src={contractorLogoUrl} alt={brandName} className="w-8 h-8 rounded-lg object-cover" />
+          ) : (
+            <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center">
+              <Leaf className="w-4 h-4 text-primary-foreground" />
+            </div>
+          )}
+          <span className="text-lg font-display font-bold text-foreground">{brandName}</span>
         </div>
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -433,10 +446,14 @@ const Dashboard = () => {
       >
         {/* Logo */}
         <div className="flex items-center gap-2 mb-8 mt-12 md:mt-0">
-          <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
-            <Leaf className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <span className="text-xl font-display font-bold text-foreground">Lawnly</span>
+          {contractorLogoUrl ? (
+            <img src={contractorLogoUrl} alt={brandName} className="w-10 h-10 rounded-xl object-cover shadow-soft" />
+          ) : (
+            <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
+              <Leaf className="w-5 h-5 text-primary-foreground" />
+            </div>
+          )}
+          <span className="text-xl font-display font-bold text-foreground">{brandName}</span>
         </div>
 
         {/* Navigation */}
@@ -467,13 +484,15 @@ const Dashboard = () => {
 
         {/* Bottom Actions */}
         <div className="space-y-2 pt-4 border-t border-border">
-          <button
-            onClick={() => navigate("/settings")}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <Settings className="w-5 h-5" />
-            <span className="font-medium">Settings</span>
-          </button>
+          {!contractorSlug && (
+            <button
+              onClick={() => navigate("/settings")}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <Settings className="w-5 h-5" />
+              <span className="font-medium">Settings</span>
+            </button>
+          )}
           <button
             onClick={handleSignOut}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
@@ -490,7 +509,7 @@ const Dashboard = () => {
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="font-display text-xl md:text-2xl font-bold text-foreground">Welcome back, {userName}!</h1>
-            <p className="text-muted-foreground text-sm md:text-base">Manage your lawn care services</p>
+            <p className="text-muted-foreground text-sm md:text-base">Manage your {contractorSlug ? `services with ${brandName}` : "lawn care services"}</p>
           </div>
           <div className="flex items-center gap-3">
             {user && <NotificationsPopover userId={user.id} />}
