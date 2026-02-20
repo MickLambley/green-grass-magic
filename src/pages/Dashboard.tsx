@@ -12,6 +12,7 @@ import {
   Clock,
   Plus,
   LogOut,
+  ExternalLink,
   Home,
   Settings,
   ChevronRight,
@@ -484,6 +485,15 @@ const Dashboard = ({ contractorSlug, contractorName, contractorLogoUrl }: Dashbo
 
         {/* Bottom Actions */}
         <div className="space-y-2 pt-4 border-t border-border">
+          {contractorSlug && (
+            <button
+              onClick={() => navigate(`/site/${contractorSlug}`)}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <ExternalLink className="w-5 h-5" />
+              <span className="font-medium">Back to website</span>
+            </button>
+          )}
           {!contractorSlug && (
             <button
               onClick={() => navigate("/settings")}
