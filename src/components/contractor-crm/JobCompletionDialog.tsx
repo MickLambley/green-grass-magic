@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, Receipt, Link2, Copy, ExternalLink, DollarSign } from "lucide-react";
+import { Loader2, CheckCircle2, Receipt, Link2, Copy, ExternalLink, Camera, X, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 
 interface JobCompletionDialogProps {
@@ -31,12 +31,78 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
 
+  // Photo upload state
+  const [beforePhotos, setBeforePhotos] = useState<File[]>([]);
+  const [afterPhotos, setAfterPhotos] = useState<File[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const beforeInputRef = useRef<HTMLInputElement>(null);
+  const afterInputRef = useRef<HTMLInputElement>(null);
+
+  const addPhotos = (files: FileList | null, type: "before" | "after") => {
+    if (!files) return;
+    const arr = Array.from(files);
+    if (type === "before") setBeforePhotos(prev => [...prev, ...arr].slice(0, 5));
+    else setAfterPhotos(prev => [...prev, ...arr].slice(0, 5));
+  };
+
+  const removePhoto = (type: "before" | "after", index: number) => {
+    if (type === "before") setBeforePhotos(prev => prev.filter((_, i) => i !== index));
+    else setAfterPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadPhotos = async () => {
+    if (!job || (beforePhotos.length === 0 && afterPhotos.length === 0)) return;
+
+    setUploadingPhotos(true);
+    try {
+      // Get contractor id
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: contractor } = await supabase.from("contractors").select("id").eq("user_id", user.id).single();
+      if (!contractor) return;
+
+      const uploadBatch = async (photos: File[], photoType: string) => {
+        for (const file of photos) {
+          const ext = file.name.split(".").pop() || "jpg";
+          const path = `${contractor.id}/${job.id}/${photoType}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+          
+          const { error: uploadError } = await supabase.storage.from("job-photos").upload(path, file);
+          if (uploadError) {
+            console.error("Upload error:", uploadError);
+            continue;
+          }
+
+          await supabase.from("job_photos").insert({
+            contractor_id: contractor.id,
+            job_id: job.id,
+            photo_type: photoType,
+            photo_url: path,
+          });
+        }
+      };
+
+      await Promise.all([
+        uploadBatch(beforePhotos, "before"),
+        uploadBatch(afterPhotos, "after"),
+      ]);
+    } catch (err) {
+      console.error("Photo upload error:", err);
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
+
   const handleComplete = async () => {
     if (!job) return;
     setStep("completing");
     setIsProcessing(true);
 
     try {
+      // Upload photos first if any
+      if (beforePhotos.length > 0 || afterPhotos.length > 0) {
+        await uploadPhotos();
+      }
+
       const { data, error } = await supabase.functions.invoke("complete-job-v2", {
         body: { jobId: job.id, action: "complete" },
       });
@@ -45,11 +111,9 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
       if (data?.error) throw new Error(data.error);
 
       if (data.path === "website_booking") {
-        // Auto-charged — show success
         setResult("Payment processed automatically. Invoice and receipt sent.");
         setStep("done");
       } else if (data.path === "manual") {
-        // Show invoice options
         setStep("options");
       }
     } catch (err: any) {
@@ -67,7 +131,6 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
         body: { jobId: job.id, action: "generate_invoice" },
       });
       if (error || data?.error) throw new Error(data?.error || error?.message);
-
       setInvoiceNumber(data.invoice_number);
       setResult(`Invoice ${data.invoice_number} created for $${Number(data.total).toFixed(2)}. You can email it from the Invoices tab.`);
       setStep("done");
@@ -85,7 +148,6 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
         body: { jobId: job.id, action: "send_payment_link" },
       });
       if (error || data?.error) throw new Error(data?.error || error?.message);
-
       setPaymentLinkUrl(data.payment_link_url);
       setResult("Payment link created. Share it with your client.");
       setStep("done");
@@ -107,11 +169,53 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
     setPaymentLinkUrl(null);
     setInvoiceNumber(null);
     setResult(null);
+    setBeforePhotos([]);
+    setAfterPhotos([]);
     onOpenChange(false);
     onCompleted();
   };
 
   if (!job) return null;
+
+  const PhotoSection = ({ type, photos, inputRef, onAdd, onRemove }: {
+    type: string;
+    photos: File[];
+    inputRef: React.RefObject<HTMLInputElement>;
+    onAdd: (files: FileList | null) => void;
+    onRemove: (i: number) => void;
+  }) => (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-muted-foreground capitalize">{type} Photos</p>
+        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => inputRef.current?.click()}>
+          <ImagePlus className="w-3 h-3 mr-1" /> Add
+        </Button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => onAdd(e.target.files)}
+        />
+      </div>
+      {photos.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          {photos.map((file, i) => (
+            <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border">
+              <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
+              <button
+                onClick={() => onRemove(i)}
+                className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
@@ -149,6 +253,28 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
                 </div>
               </div>
 
+              {/* Optional Photo Upload */}
+              <div className="p-3 rounded-lg border border-border space-y-3">
+                <div className="flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-muted-foreground" />
+                  <p className="text-sm font-medium text-foreground">Photos (optional)</p>
+                </div>
+                <PhotoSection
+                  type="before"
+                  photos={beforePhotos}
+                  inputRef={beforeInputRef as React.RefObject<HTMLInputElement>}
+                  onAdd={(files) => addPhotos(files, "before")}
+                  onRemove={(i) => removePhoto("before", i)}
+                />
+                <PhotoSection
+                  type="after"
+                  photos={afterPhotos}
+                  inputRef={afterInputRef as React.RefObject<HTMLInputElement>}
+                  onAdd={(files) => addPhotos(files, "after")}
+                  onRemove={(i) => removePhoto("after", i)}
+                />
+              </div>
+
               {job.source === "website_booking" && (
                 <p className="text-sm text-muted-foreground">
                   The customer's saved payment method will be charged automatically upon completion.
@@ -163,7 +289,8 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                 <Button onClick={handleComplete}>
-                  <CheckCircle2 className="w-4 h-4 mr-2" /> Complete Job
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  {job.source === "website_booking" ? "Complete & Charge" : "Complete Job"}
                 </Button>
               </div>
             </div>
@@ -176,7 +303,11 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
             <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
             <p className="text-foreground font-medium">Processing completion...</p>
             <p className="text-sm text-muted-foreground mt-1">
-              {job.source === "website_booking" ? "Charging customer and generating invoice..." : "Marking job as complete..."}
+              {uploadingPhotos
+                ? "Uploading photos..."
+                : job.source === "website_booking"
+                ? "Charging customer and generating invoice..."
+                : "Marking job as complete..."}
             </p>
           </div>
         )}
@@ -202,7 +333,7 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
                 <div>
                   <h4 className="font-medium text-foreground text-sm">Generate Invoice</h4>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Create a professional invoice you can email or download. Mark as paid when the client pays you directly.
+                    Create an invoice you can email or download. Mark as paid when the client pays you directly.
                   </p>
                 </div>
               </button>

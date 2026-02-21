@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Loader2, Receipt, Trash2, Send } from "lucide-react";
+import { Plus, Pencil, Loader2, Receipt, Trash2, Send, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import type { Tables, Json } from "@/integrations/supabase/types";
@@ -162,6 +162,15 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
     setSendingId(null);
   };
 
+  const handleMarkInvoicePaid = async (invoiceId: string) => {
+    const { error } = await supabase.from("invoices").update({
+      status: "paid",
+      paid_at: new Date().toISOString(),
+    }).eq("id", invoiceId);
+    if (error) toast.error("Failed to update invoice");
+    else { toast.success("Invoice marked as paid"); fetchData(); }
+  };
+
   const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
     const updated = [...lineItems];
     updated[index] = { ...updated[index], [field]: value };
@@ -226,6 +235,16 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
                       <Button variant="ghost" size="icon" onClick={() => openEditDialog(inv)}>
                         <Pencil className="w-4 h-4" />
                       </Button>
+                      {inv.status === "unpaid" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleMarkInvoicePaid(inv.id)}
+                          title="Mark as Paid"
+                        >
+                          <DollarSign className="w-4 h-4 text-primary" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
