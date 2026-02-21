@@ -40,7 +40,7 @@ const ContractorSiteAuth = () => {
   const checkExistingSession = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      navigate(`/site/${slug}/dashboard`, { replace: true });
+      navigate(`/site/${slug}/portal`, { replace: true });
     }
     setCheckingAuth(false);
   };
@@ -56,7 +56,7 @@ const ContractorSiteAuth = () => {
           password,
           options: {
             data: { full_name: fullName },
-            emailRedirectTo: `${window.location.origin}/site/${slug}/dashboard`,
+            emailRedirectTo: `${window.location.origin}/site/${slug}/portal`,
           },
         });
         if (error) throw error;
@@ -64,7 +64,44 @@ const ContractorSiteAuth = () => {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate(`/site/${slug}/dashboard`);
+        
+        // Check if the user has a client relationship with this contractor
+        const { data: contractorData } = await supabase
+          .from("contractors")
+          .select("id")
+          .eq("subdomain", slug)
+          .single();
+        
+        if (contractorData) {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (authUser) {
+            // Check if client record exists by email or user_id
+            const { data: clientRecord } = await supabase
+              .from("clients")
+              .select("id")
+              .eq("contractor_id", contractorData.id)
+              .or(`email.eq.${email},user_id.eq.${authUser.id}`)
+              .maybeSingle();
+            
+            if (!clientRecord) {
+              await supabase.auth.signOut();
+              toast.error("No account found with this business. Please book a service first.");
+              setLoading(false);
+              return;
+            }
+            
+            // Link user_id to client record if not already linked
+            if (clientRecord) {
+              await supabase
+                .from("clients")
+                .update({ user_id: authUser.id })
+                .eq("id", clientRecord.id)
+                .is("user_id", null);
+            }
+          }
+        }
+        
+        navigate(`/site/${slug}/portal`);
       }
     } catch (error: any) {
       toast.error(error.message || "Authentication failed");

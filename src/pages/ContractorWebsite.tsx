@@ -121,7 +121,7 @@ const ContractorWebsite = () => {
               </a>
             )}
             {isLoggedIn ? (
-              <Button size="sm" variant="outline" onClick={() => navigate(`/site/${slug}/dashboard`)}>
+              <Button size="sm" variant="outline" onClick={() => navigate(`/site/${slug}/portal`)}>
                 <User className="w-3.5 h-3.5 mr-1" /> My Dashboard
               </Button>
             ) : (

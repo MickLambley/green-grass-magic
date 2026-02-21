@@ -286,6 +286,7 @@ export type Database = {
           phone: string | null
           property_notes: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           address?: Json | null
@@ -297,6 +298,7 @@ export type Database = {
           phone?: string | null
           property_notes?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           address?: Json | null
@@ -308,6 +310,7 @@ export type Database = {
           phone?: string | null
           property_notes?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -322,6 +325,7 @@ export type Database = {
       contractors: {
         Row: {
           abn: string | null
+          accent_color: string | null
           applied_at: string | null
           approval_status: string
           approved_at: string | null
@@ -346,9 +350,11 @@ export type Database = {
           is_active: boolean
           last_active_at: string | null
           phone: string | null
+          primary_color: string | null
           quality_reviews: Json
           quality_warnings: Json
           questionnaire_responses: Json | null
+          secondary_color: string | null
           service_areas: string[]
           service_center_lat: number | null
           service_center_lng: number | null
@@ -371,6 +377,7 @@ export type Database = {
         }
         Insert: {
           abn?: string | null
+          accent_color?: string | null
           applied_at?: string | null
           approval_status?: string
           approved_at?: string | null
@@ -395,9 +402,11 @@ export type Database = {
           is_active?: boolean
           last_active_at?: string | null
           phone?: string | null
+          primary_color?: string | null
           quality_reviews?: Json
           quality_warnings?: Json
           questionnaire_responses?: Json | null
+          secondary_color?: string | null
           service_areas?: string[]
           service_center_lat?: number | null
           service_center_lng?: number | null
@@ -420,6 +429,7 @@ export type Database = {
         }
         Update: {
           abn?: string | null
+          accent_color?: string | null
           applied_at?: string | null
           approval_status?: string
           approved_at?: string | null
@@ -444,9 +454,11 @@ export type Database = {
           is_active?: boolean
           last_active_at?: string | null
           phone?: string | null
+          primary_color?: string | null
           quality_reviews?: Json
           quality_warnings?: Json
           questionnaire_responses?: Json | null
+          secondary_color?: string | null
           service_areas?: string[]
           service_center_lat?: number | null
           service_center_lng?: number | null
