@@ -14,7 +14,7 @@ serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    const { contractor_slug, customer_name, customer_email, customer_phone, service_type, address, preferred_date, preferred_time, notes } = await req.json();
+    const { contractor_slug, customer_name, customer_email, customer_phone, service_type, address, preferred_date, preferred_time, notes, customer_user_id } = await req.json();
 
     if (!contractor_slug || !customer_name || !customer_email || !service_type || !preferred_date) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -52,6 +52,14 @@ serve(async (req) => {
 
     if (existingClient) {
       clientId = existingClient.id;
+      // Link user_id if provided and not already set
+      if (customer_user_id) {
+        await supabase
+          .from("clients")
+          .update({ user_id: customer_user_id })
+          .eq("id", existingClient.id)
+          .is("user_id", null);
+      }
     } else {
       const { data: newClient, error: clientErr } = await supabase
         .from("clients")
@@ -61,6 +69,7 @@ serve(async (req) => {
           email: customer_email,
           phone: customer_phone || null,
           address: address ? { street: address } : null,
+          user_id: customer_user_id || null,
         })
         .select("id")
         .single();

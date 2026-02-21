@@ -72,9 +72,15 @@ export interface DashboardProps {
   contractorSlug?: string;
   contractorName?: string;
   contractorLogoUrl?: string | null;
+  contractorId?: string;
+  themeColors?: {
+    primary: string;
+    secondary: string;
+    accent: string;
+  };
 }
 
-const Dashboard = ({ contractorSlug, contractorName, contractorLogoUrl }: DashboardProps = {}) => {
+const Dashboard = ({ contractorSlug, contractorName, contractorLogoUrl, contractorId, themeColors }: DashboardProps = {}) => {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -97,6 +103,7 @@ const Dashboard = ({ contractorSlug, contractorName, contractorLogoUrl }: Dashbo
 
   const authRedirect = contractorSlug ? `/site/${contractorSlug}/auth` : "/auth";
   const brandName = contractorName || "Lawnly";
+  const isPortal = !!contractorSlug;
 
   useEffect(() => {
     const {
@@ -411,8 +418,15 @@ const Dashboard = ({ contractorSlug, contractorName, contractorLogoUrl }: Dashbo
   const upcomingBookings = bookings.filter((b) => b.status === "pending" || b.status === "confirmed" || b.status === "pending_address_verification" || b.status === "price_change_pending");
   const completedBookings = bookings.filter((b) => b.status === "completed" || b.status === "completed_pending_verification" || b.status === "post_payment_dispute");
 
+  // Apply contractor theme colors as CSS custom properties
+  const portalStyle = themeColors ? {
+    '--portal-primary': themeColors.primary,
+    '--portal-secondary': themeColors.secondary,
+    '--portal-accent': themeColors.accent,
+  } as React.CSSProperties : undefined;
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" style={portalStyle}>
       {/* Mobile Header */}
       <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">

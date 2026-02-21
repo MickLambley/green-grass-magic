@@ -73,6 +73,8 @@ const App = () => (
           } />
           <Route path="/site/:slug" element={<ContractorWebsite />} />
           <Route path="/site/:slug/auth" element={<ContractorSiteAuth />} />
+          <Route path="/site/:slug/portal" element={<ContractorSiteDashboard />} />
+          {/* Legacy route redirect */}
           <Route path="/site/:slug/dashboard" element={<ContractorSiteDashboard />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/terms" element={<Terms />} />
