@@ -151,9 +151,6 @@ export type Database = {
           completed_at: string | null
           contractor_accepted_at: string | null
           contractor_id: string | null
-          contractor_issue_notes: string | null
-          contractor_issue_photos: string[] | null
-          contractor_issues: Json | null
           contractor_rating_response: string | null
           created_at: string
           customer_rating: number | null
@@ -162,15 +159,11 @@ export type Database = {
           is_public_holiday: boolean
           is_weekend: boolean
           notes: string | null
-          original_price: number | null
           payment_intent_id: string | null
           payment_method_id: string | null
           payment_status: string
           payout_released_at: string | null
           payout_status: string
-          preferred_contractor_id: string | null
-          price_change_notified_at: string | null
-          quote_breakdown: Json | null
           rating_comment: string | null
           rating_submitted_at: string | null
           scheduled_date: string
@@ -194,9 +187,6 @@ export type Database = {
           completed_at?: string | null
           contractor_accepted_at?: string | null
           contractor_id?: string | null
-          contractor_issue_notes?: string | null
-          contractor_issue_photos?: string[] | null
-          contractor_issues?: Json | null
           contractor_rating_response?: string | null
           created_at?: string
           customer_rating?: number | null
@@ -205,15 +195,11 @@ export type Database = {
           is_public_holiday?: boolean
           is_weekend?: boolean
           notes?: string | null
-          original_price?: number | null
           payment_intent_id?: string | null
           payment_method_id?: string | null
           payment_status?: string
           payout_released_at?: string | null
           payout_status?: string
-          preferred_contractor_id?: string | null
-          price_change_notified_at?: string | null
-          quote_breakdown?: Json | null
           rating_comment?: string | null
           rating_submitted_at?: string | null
           scheduled_date: string
@@ -237,9 +223,6 @@ export type Database = {
           completed_at?: string | null
           contractor_accepted_at?: string | null
           contractor_id?: string | null
-          contractor_issue_notes?: string | null
-          contractor_issue_photos?: string[] | null
-          contractor_issues?: Json | null
           contractor_rating_response?: string | null
           created_at?: string
           customer_rating?: number | null
@@ -248,15 +231,11 @@ export type Database = {
           is_public_holiday?: boolean
           is_weekend?: boolean
           notes?: string | null
-          original_price?: number | null
           payment_intent_id?: string | null
           payment_method_id?: string | null
           payment_status?: string
           payout_released_at?: string | null
           payout_status?: string
-          preferred_contractor_id?: string | null
-          price_change_notified_at?: string | null
-          quote_breakdown?: Json | null
           rating_comment?: string | null
           rating_submitted_at?: string | null
           scheduled_date?: string
@@ -274,13 +253,6 @@ export type Database = {
             columns: ["address_id"]
             isOneToOne: false
             referencedRelation: "addresses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bookings_preferred_contractor_id_fkey"
-            columns: ["preferred_contractor_id"]
-            isOneToOne: false
-            referencedRelation: "contractors"
             referencedColumns: ["id"]
           },
         ]
@@ -336,10 +308,6 @@ export type Database = {
         Row: {
           abn: string | null
           accent_color: string | null
-          applied_at: string | null
-          approval_status: string
-          approved_at: string | null
-          approved_by: string | null
           average_rating: number | null
           average_response_time_hours: number | null
           bank_account_number: string | null
@@ -361,8 +329,6 @@ export type Database = {
           last_active_at: string | null
           phone: string | null
           primary_color: string | null
-          quality_reviews: Json
-          quality_warnings: Json
           questionnaire_responses: Json | null
           secondary_color: string | null
           service_areas: string[]
@@ -377,7 +343,6 @@ export type Database = {
           suspended_at: string | null
           suspension_reason: string | null
           suspension_status: string
-          tier: Database["public"]["Enums"]["contractor_tier"]
           total_ratings_count: number | null
           total_revenue: number
           updated_at: string
@@ -388,10 +353,6 @@ export type Database = {
         Insert: {
           abn?: string | null
           accent_color?: string | null
-          applied_at?: string | null
-          approval_status?: string
-          approved_at?: string | null
-          approved_by?: string | null
           average_rating?: number | null
           average_response_time_hours?: number | null
           bank_account_number?: string | null
@@ -413,8 +374,6 @@ export type Database = {
           last_active_at?: string | null
           phone?: string | null
           primary_color?: string | null
-          quality_reviews?: Json
-          quality_warnings?: Json
           questionnaire_responses?: Json | null
           secondary_color?: string | null
           service_areas?: string[]
@@ -429,7 +388,6 @@ export type Database = {
           suspended_at?: string | null
           suspension_reason?: string | null
           suspension_status?: string
-          tier?: Database["public"]["Enums"]["contractor_tier"]
           total_ratings_count?: number | null
           total_revenue?: number
           updated_at?: string
@@ -440,10 +398,6 @@ export type Database = {
         Update: {
           abn?: string | null
           accent_color?: string | null
-          applied_at?: string | null
-          approval_status?: string
-          approved_at?: string | null
-          approved_by?: string | null
           average_rating?: number | null
           average_response_time_hours?: number | null
           bank_account_number?: string | null
@@ -465,8 +419,6 @@ export type Database = {
           last_active_at?: string | null
           phone?: string | null
           primary_color?: string | null
-          quality_reviews?: Json
-          quality_warnings?: Json
           questionnaire_responses?: Json | null
           secondary_color?: string | null
           service_areas?: string[]
@@ -481,7 +433,6 @@ export type Database = {
           suspended_at?: string | null
           suspension_reason?: string | null
           suspension_status?: string
-          tier?: Database["public"]["Enums"]["contractor_tier"]
           total_ratings_count?: number | null
           total_revenue?: number
           updated_at?: string
@@ -819,53 +770,6 @@ export type Database = {
           },
         ]
       }
-      lawn_area_revisions: {
-        Row: {
-          address_id: string
-          created_at: string
-          created_by: string
-          id: string
-          is_current: boolean
-          lawn_image_url: string | null
-          notes: string | null
-          polygon_data: Json | null
-          revision_number: number
-          square_meters: number | null
-        }
-        Insert: {
-          address_id: string
-          created_at?: string
-          created_by: string
-          id?: string
-          is_current?: boolean
-          lawn_image_url?: string | null
-          notes?: string | null
-          polygon_data?: Json | null
-          revision_number?: number
-          square_meters?: number | null
-        }
-        Update: {
-          address_id?: string
-          created_at?: string
-          created_by?: string
-          id?: string
-          is_current?: boolean
-          lawn_image_url?: string | null
-          notes?: string | null
-          polygon_data?: Json | null
-          revision_number?: number
-          square_meters?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "lawn_area_revisions_address_id_fkey"
-            columns: ["address_id"]
-            isOneToOne: false
-            referencedRelation: "addresses"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       notifications: {
         Row: {
           booking_id: string | null
@@ -906,33 +810,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      pricing_settings: {
-        Row: {
-          created_at: string
-          description: string | null
-          id: string
-          key: string
-          updated_at: string
-          value: number
-        }
-        Insert: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          key: string
-          updated_at?: string
-          value?: number
-        }
-        Update: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          key?: string
-          updated_at?: string
-          value?: number
-        }
-        Relationships: []
       }
       profiles: {
         Row: {
@@ -1008,54 +885,6 @@ export type Database = {
           },
           {
             foreignKeyName: "quotes_contractor_id_fkey"
-            columns: ["contractor_id"]
-            isOneToOne: false
-            referencedRelation: "contractors"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      reviews: {
-        Row: {
-          booking_id: string
-          comment: string | null
-          contractor_id: string
-          created_at: string
-          id: string
-          rating: number
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          booking_id: string
-          comment?: string | null
-          contractor_id: string
-          created_at?: string
-          id?: string
-          rating: number
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          booking_id?: string
-          comment?: string | null
-          contractor_id?: string
-          created_at?: string
-          id?: string
-          rating?: number
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reviews_booking_id_fkey"
-            columns: ["booking_id"]
-            isOneToOne: false
-            referencedRelation: "bookings"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reviews_contractor_id_fkey"
             columns: ["contractor_id"]
             isOneToOne: false
             referencedRelation: "contractors"
@@ -1192,13 +1021,9 @@ export type Database = {
         | "confirmed"
         | "completed"
         | "cancelled"
-        | "completed_pending_verification"
         | "disputed"
         | "post_payment_dispute"
         | "completed_with_issues"
-        | "pending_address_verification"
-        | "price_change_pending"
-      contractor_tier: "probation" | "standard" | "premium"
       slope_type: "flat" | "mild" | "steep"
     }
     CompositeTypes: {
@@ -1334,14 +1159,10 @@ export const Constants = {
         "confirmed",
         "completed",
         "cancelled",
-        "completed_pending_verification",
         "disputed",
         "post_payment_dispute",
         "completed_with_issues",
-        "pending_address_verification",
-        "price_change_pending",
       ],
-      contractor_tier: ["probation", "standard", "premium"],
       slope_type: ["flat", "mild", "steep"],
     },
   },

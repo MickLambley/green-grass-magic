@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { DollarSign, HardHat, TrendingUp, Users, Briefcase, Star } from "lucide-react";
 
 interface HealthData {
@@ -11,13 +11,12 @@ interface HealthData {
   totalCustomers: number;
   totalJobsCompleted: number;
   avgRating: number;
-  totalDisputes: number;
 }
 
 const AdminPlatformHealthCards = () => {
   const [data, setData] = useState<HealthData>({
     totalRevenue: 0, revenueThisWeek: 0, totalContractors: 0, activeContractors: 0,
-    totalCustomers: 0, totalJobsCompleted: 0, avgRating: 0, totalDisputes: 0,
+    totalCustomers: 0, totalJobsCompleted: 0, avgRating: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -35,17 +34,16 @@ const AdminPlatformHealthCards = () => {
 
     const [
       totalContractorRes, activeContractorRes, customersRes,
-      completedJobsRes, revenueAllRes, revenueWeekRes, avgRatingRes, disputesRes,
+      completedJobsRes, revenueAllRes, revenueWeekRes, avgRatingRes,
     ] = await Promise.all([
-      supabase.from("contractors").select("id", { count: "exact", head: true }).eq("approval_status", "approved"),
-      supabase.from("contractors").select("id", { count: "exact", head: true }).eq("approval_status", "approved").eq("is_active", true)
+      supabase.from("contractors").select("id", { count: "exact", head: true }).eq("is_active", true),
+      supabase.from("contractors").select("id", { count: "exact", head: true }).eq("is_active", true)
         .gte("last_active_at", new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()),
       supabase.from("clients").select("user_id", { count: "exact", head: true }),
       supabase.from("jobs").select("id", { count: "exact", head: true }).eq("status", "completed"),
       supabase.from("jobs").select("total_price").eq("status", "completed"),
       supabase.from("jobs").select("total_price").eq("status", "completed").gte("completed_at", weekStart.toISOString()),
-      supabase.from("contractors").select("average_rating").eq("approval_status", "approved").not("average_rating", "is", null),
-      supabase.from("disputes").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      supabase.from("contractors").select("average_rating").eq("is_active", true).not("average_rating", "is", null),
     ]);
 
     const totalRev = (revenueAllRes.data || []).reduce((s, j) => s + (Number(j.total_price) || 0), 0);
@@ -61,7 +59,6 @@ const AdminPlatformHealthCards = () => {
       totalCustomers: customersRes.count || 0,
       totalJobsCompleted: completedJobsRes.count || 0,
       avgRating: Math.round(avgR * 10) / 10,
-      totalDisputes: disputesRes.count || 0,
     });
     setLoading(false);
   };
@@ -69,7 +66,7 @@ const AdminPlatformHealthCards = () => {
   if (loading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {Array.from({ length: 8 }).map((_, i) => (
+        {Array.from({ length: 6 }).map((_, i) => (
           <Card key={i} className="animate-pulse"><CardContent className="pt-5 pb-4"><div className="h-16 bg-muted rounded" /></CardContent></Card>
         ))}
       </div>

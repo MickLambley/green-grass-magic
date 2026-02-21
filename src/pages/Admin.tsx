@@ -11,26 +11,7 @@ import ContractorApplicationsTab from "@/components/admin/ContractorApplications
 import UserManagementTab from "@/components/admin/UserManagementTab";
 import AdminPlatformHealthCards from "@/components/admin/AdminPlatformHealthCards";
 
-// Badge component for pending contractors
-const PendingContractorsBadge = () => {
-  const [count, setCount] = useState<number>(0);
-  
-  useEffect(() => {
-    const fetchPendingCount = async () => {
-      const { count: pendingCount } = await supabase
-        .from("contractors")
-        .select("*", { count: "exact", head: true })
-        .eq("approval_status", "pending");
-      
-      setCount(pendingCount || 0);
-    };
-    
-    fetchPendingCount();
-  }, []);
-  
-  if (count === 0) return null;
-  return <Badge variant="secondary" className="ml-1">{count}</Badge>;
-};
+// Removed legacy PendingContractorsBadge - no longer uses approval_status
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -119,7 +100,6 @@ const Admin = () => {
             <TabsTrigger value="contractors" className="flex items-center gap-2">
               <HardHat className="w-4 h-4" />
               Contractors
-              <PendingContractorsBadge />
             </TabsTrigger>
             <TabsTrigger value="users" className="flex items-center gap-2">
               <UserCog className="w-4 h-4" />

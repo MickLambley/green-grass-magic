@@ -117,7 +117,7 @@ const CustomerVerifyJob = () => {
     }
 
     // Allow access for completed_pending_verification, completed (within 7 days), disputed, post_payment_dispute
-    const allowedStatuses = ["completed_pending_verification", "completed", "disputed", "post_payment_dispute"];
+    const allowedStatuses = ["completed", "disputed", "post_payment_dispute"];
     if (!allowedStatuses.includes(bookingData.status)) {
       toast.error("This booking cannot be reviewed");
       navigate("/dashboard");
@@ -126,15 +126,16 @@ const CustomerVerifyJob = () => {
 
     setBooking(bookingData);
 
-    // Get contractor name
-    if (bookingData.contractor?.user_id) {
+    // Get contractor name - normalize array result from join
+    const contractor = Array.isArray(bookingData.contractor) ? bookingData.contractor[0] : bookingData.contractor;
+    if (contractor?.user_id) {
       const { data: profile } = await supabase
         .from("profiles")
         .select("full_name")
-        .eq("user_id", bookingData.contractor.user_id)
+        .eq("user_id", contractor.user_id)
         .single();
       setContractorName(
-        bookingData.contractor.business_name || profile?.full_name || "Contractor"
+        contractor.business_name || profile?.full_name || "Contractor"
       );
     }
 
@@ -181,16 +182,7 @@ const CustomerVerifyJob = () => {
         })
         .eq("id", bookingId!);
 
-      // Also save to reviews table for backwards compatibility
-      if (user && booking.contractor_id) {
-        await supabase.from("reviews").insert({
-          user_id: user.id,
-          contractor_id: booking.contractor_id,
-          booking_id: bookingId!,
-          rating,
-          comment: ratingComment || null,
-        });
-      }
+      // Rating saved to bookings table only (reviews table removed)
     } catch {
       // non-blocking
     } finally {

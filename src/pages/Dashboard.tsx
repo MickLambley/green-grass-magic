@@ -161,10 +161,15 @@ const Dashboard = ({ contractorSlug, contractorName, contractorLogoUrl, contract
       .order("scheduled_date", { ascending: false });
 
     if (bookingData) {
-      setBookings(bookingData as Booking[]);
+      // Normalize contractor from array to single object (Supabase returns array for joins)
+      const normalized = bookingData.map((b: any) => ({
+        ...b,
+        contractor: Array.isArray(b.contractor) ? b.contractor[0] || null : b.contractor,
+      }));
+      setBookings(normalized as Booking[]);
 
       // Fetch contractor profile names for bookings with contractors
-      const contractorUserIds = bookingData.filter((b) => b.contractor?.user_id).map((b) => b.contractor!.user_id);
+      const contractorUserIds = normalized.filter((b: any) => b.contractor?.user_id).map((b: any) => b.contractor!.user_id);
 
       if (contractorUserIds.length > 0) {
         const { data: profiles } = await supabase
@@ -415,8 +420,8 @@ const Dashboard = ({ contractorSlug, contractorName, contractorLogoUrl, contract
   const userName = user?.user_metadata?.full_name || "there";
   const verifiedAddresses = addresses.filter((a) => a.status === "verified");
   const pendingAddresses = addresses.filter((a) => a.status === "pending");
-  const upcomingBookings = bookings.filter((b) => b.status === "pending" || b.status === "confirmed" || b.status === "pending_address_verification" || b.status === "price_change_pending");
-  const completedBookings = bookings.filter((b) => b.status === "completed" || b.status === "completed_pending_verification" || b.status === "post_payment_dispute");
+  const upcomingBookings = bookings.filter((b) => b.status === "pending" || b.status === "confirmed");
+  const completedBookings = bookings.filter((b) => b.status === "completed" || b.status === "post_payment_dispute");
 
   // Apply contractor theme colors as CSS custom properties
   const portalStyle = themeColors ? {
@@ -854,31 +859,6 @@ const Dashboard = ({ contractorSlug, contractorName, contractorLogoUrl, contract
                             </Button>
                           </div>
                         )}
-                        {booking.status === "price_change_pending" && (
-                          <div className="mt-3 p-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700">
-                            <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">Price Updated - Action Required</p>
-                            <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
-                              Original: ${Number(booking.original_price || 0).toFixed(2)} → New: ${Number(booking.total_price || 0).toFixed(2)}
-                            </p>
-                            <div className="flex gap-2">
-                              <Button size="sm" onClick={() => handlePriceApproval(booking.id, true)}>
-                                Approve New Price
-                              </Button>
-                              <Button size="sm" variant="destructive" onClick={() => handlePriceApproval(booking.id, false)}>
-                                Cancel Booking
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                        {booking.status === "completed_pending_verification" && (
-                          <Button
-                            size="sm"
-                            className="bg-green-600 hover:bg-green-700 text-white"
-                            onClick={() => navigate(`/customer/bookings/${booking.id}/verify`)}
-                          >
-                            Review Job
-                          </Button>
-                        )}
                         {booking.status === "completed" && booking.completed_at && (() => {
                           const completedAt = new Date(booking.completed_at).getTime();
                           const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
@@ -903,7 +883,7 @@ const Dashboard = ({ contractorSlug, contractorName, contractorLogoUrl, contract
                           onSuggestionResponse={() => user && fetchUserData(user.id)}
                         />
                       )}
-                      {(booking.status === "completed_pending_verification" || booking.status === "completed" || booking.status === "post_payment_dispute") && (
+                      {(booking.status === "completed" || booking.status === "post_payment_dispute") && (
                         <JobPhotosGallery bookingId={booking.id} />
                       )}
                     </div>

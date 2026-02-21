@@ -118,7 +118,7 @@ const ContractorDashboard = () => {
 
   if (!contractor) return null;
 
-  if (contractor.approval_status === "pending") {
+  if (!contractor.is_active && !contractor.abn) {
     return (
       <div className="min-h-screen bg-background">
         <header className="border-b border-border bg-card sticky top-0 z-50">
@@ -139,9 +139,9 @@ const ContractorDashboard = () => {
             <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-sunshine/20 flex items-center justify-center">
               <Loader2 className="w-8 h-8 text-sunshine animate-spin" />
             </div>
-            <h1 className="font-display text-2xl font-bold text-foreground mb-3">Application Under Review</h1>
+            <h1 className="font-display text-2xl font-bold text-foreground mb-3">Complete Your Profile</h1>
             <p className="text-muted-foreground text-sm">
-              Your contractor application is being reviewed. We'll notify you once approved. This usually takes 1–2 business days.
+              Please complete your contractor onboarding to get started.
             </p>
           </div>
         </div>
