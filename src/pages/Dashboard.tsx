@@ -930,6 +930,7 @@ const Dashboard = ({ contractorSlug, contractorName, contractorLogoUrl, contract
         onSuccess={handleBookingSuccess}
         onAddressAdded={handleAddressAdded}
         editingBooking={editingBooking}
+        contractorId={contractorId}
       />
 
       {/* Completed Services Dialog */}

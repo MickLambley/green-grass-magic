@@ -11,6 +11,7 @@ interface QuoteRequest {
   selectedDate: string;
   grassLength: string;
   clippingsRemoval: boolean;
+  contractorId?: string; // Optional: use contractor-specific pricing
 }
 
 interface QuoteBreakdown {
@@ -35,7 +36,6 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     
-    // Create client with user's auth to verify they own the address
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { addressId, selectedDate, grassLength, clippingsRemoval }: QuoteRequest = await req.json();
+    const { addressId, selectedDate, grassLength, clippingsRemoval, contractorId }: QuoteRequest = await req.json();
 
     if (!addressId || !selectedDate || !grassLength) {
       return new Response(
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify user owns this address using their auth
+    // Verify user owns this address
     const { data: address, error: addressError } = await userClient
       .from("addresses")
       .select("id, square_meters, slope, tier_count, status")
@@ -79,7 +79,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Allow quotes for both verified and pending addresses
     if (address.status === "rejected") {
       return new Response(
         JSON.stringify({ error: "Address has been rejected" }),
@@ -96,57 +95,88 @@ Deno.serve(async (req) => {
 
     const isPreliminary = address.status !== "verified";
 
-    // Use service role to fetch pricing settings (hidden from clients)
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
-    
-    const { data: pricingData, error: pricingError } = await serviceClient
-      .from("pricing_settings")
-      .select("key, value");
 
-    if (pricingError || !pricingData) {
-      console.error("Error fetching pricing settings:", pricingError);
-      return new Response(
-        JSON.stringify({ error: "Unable to calculate quote" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Try contractor-specific pricing first
+    let settings: Record<string, number> = {};
+    let usedContractorPricing = false;
+
+    if (contractorId) {
+      const { data: contractor } = await serviceClient
+        .from("contractors")
+        .select("questionnaire_responses")
+        .eq("id", contractorId)
+        .single();
+
+      const pricing = (contractor?.questionnaire_responses as any)?.pricing;
+      if (pricing) {
+        usedContractorPricing = true;
+        // Map contractor pricing fields to the settings keys
+        settings.fixed_base_price = pricing.base_price ?? 50;
+        settings.base_price_per_sqm = pricing.price_per_sqm ?? 0.15;
+        settings.clipping_removal_cost = pricing.clippings_removal_fee ?? 20;
+        settings.grass_length_short = 0.9;
+        settings.grass_length_medium = 1;
+        settings.grass_length_long = 1.3;
+        settings.grass_length_very_long = 1.6;
+        settings.slope_mild_multiplier = 1.1;
+        settings.slope_steep_multiplier = 1.3;
+        settings.tier_multiplier = 0.05;
+        // Weekend surcharge from contractor settings
+        if (pricing.enable_weekend_surcharge) {
+          const pct = pricing.weekend_surcharge_pct ?? 15;
+          settings.saturday_surcharge = 1 + pct / 100;
+          settings.sunday_surcharge = 1 + pct / 100;
+        } else {
+          settings.saturday_surcharge = 1;
+          settings.sunday_surcharge = 1;
+        }
+      }
     }
 
-    // Build pricing settings object
-    const settings: Record<string, number> = {};
-    pricingData.forEach((row) => {
-      settings[row.key] = Number(row.value);
-    });
+    // Fall back to global pricing_settings if no contractor pricing
+    if (!usedContractorPricing) {
+      const { data: pricingData, error: pricingError } = await serviceClient
+        .from("pricing_settings")
+        .select("key, value");
 
-    // Calculate quote (logic hidden from client)
+      if (pricingError || !pricingData) {
+        console.error("Error fetching pricing settings:", pricingError);
+        return new Response(
+          JSON.stringify({ error: "Unable to calculate quote" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      pricingData.forEach((row) => {
+        settings[row.key] = Number(row.value);
+      });
+    }
+
+    // Calculate quote
     const basePrice = settings.fixed_base_price || 0;
     const areaPrice = Number(address.square_meters) * (settings.base_price_per_sqm || 0);
 
-    // Slope multiplier
     let slopeMultiplier = 1;
     if (address.slope === "mild") slopeMultiplier = settings.slope_mild_multiplier || 1;
     if (address.slope === "steep") slopeMultiplier = settings.slope_steep_multiplier || 1;
 
-    // Tier multiplier
     const tierMultiplier = 1 + (address.tier_count - 1) * (settings.tier_multiplier || 0);
 
-    // Grass length multiplier
     const grassLengthKey = `grass_length_${grassLength}`;
     const grassLengthMultiplier = settings[grassLengthKey] || 1;
 
-    // Clippings removal cost
     const clippingsCost = clippingsRemoval ? (settings.clipping_removal_cost || 0) : 0;
 
-    // Day surcharge based on selected date
     const date = new Date(selectedDate);
     const dayOfWeek = date.getDay();
     let daySurcharge = 1;
-    if (dayOfWeek === 6) daySurcharge = settings.saturday_surcharge || 1; // Saturday
-    if (dayOfWeek === 0) daySurcharge = settings.sunday_surcharge || 1; // Sunday
+    if (dayOfWeek === 6) daySurcharge = settings.saturday_surcharge || 1;
+    if (dayOfWeek === 0) daySurcharge = settings.sunday_surcharge || 1;
 
     const subtotal = (basePrice + areaPrice) * slopeMultiplier * tierMultiplier * grassLengthMultiplier;
     const total = Math.round(((subtotal * daySurcharge) + clippingsCost) * 100) / 100;
 
-    // Return quote breakdown without exposing raw pricing settings
     const quote: QuoteBreakdown = {
       basePrice,
       areaPrice: Math.round(areaPrice * 100) / 100,

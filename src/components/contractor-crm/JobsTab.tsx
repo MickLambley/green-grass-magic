@@ -41,6 +41,10 @@ const statusColors: Record<string, string> = {
   completed: "bg-primary/20 text-primary border-primary/30",
   cancelled: "bg-destructive/20 text-destructive border-destructive/30",
   pending_confirmation: "bg-sunshine/20 text-sunshine border-sunshine/30",
+  // Platform booking statuses
+  pending: "bg-sunshine/20 text-sunshine border-sunshine/30",
+  confirmed: "bg-sky/20 text-sky border-sky/30",
+  pending_address_verification: "bg-muted text-muted-foreground border-border",
 };
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -51,8 +55,32 @@ interface RecurrenceRule {
   count?: number;
 }
 
+// Unified item that can represent either a CRM job or a platform booking
+interface UnifiedJob {
+  id: string;
+  title: string;
+  status: string;
+  scheduled_date: string;
+  scheduled_time: string | null;
+  total_price: number | null;
+  client_name: string;
+  client_address?: ClientAddress | null;
+  description: string | null;
+  notes: string | null;
+  recurrence_rule: Json | null;
+  source: "crm" | "platform";
+  // CRM-only fields
+  client_id?: string;
+  duration_minutes?: number | null;
+  // Platform-only fields
+  address_street?: string;
+  address_city?: string;
+  address_state?: string;
+  customer_email?: string | null;
+}
+
 const JobsTab = ({ contractorId }: JobsTabProps) => {
-  const [jobs, setJobs] = useState<(Job & { client_name?: string; client_address?: ClientAddress | null; client_email?: string | null; client_phone?: string | null })[]>([]);
+  const [jobs, setJobs] = useState<UnifiedJob[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -84,25 +112,79 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
 
   const fetchData = async () => {
     setIsLoading(true);
-    const [jobsRes, clientsRes] = await Promise.all([
+    const [jobsRes, clientsRes, bookingsRes] = await Promise.all([
       supabase.from("jobs").select("*").eq("contractor_id", contractorId).order("scheduled_date", { ascending: false }),
       supabase.from("clients").select("*").eq("contractor_id", contractorId).order("name"),
+      // Fetch platform bookings assigned or preferred to this contractor
+      supabase.from("bookings").select(`
+        id, status, scheduled_date, scheduled_time, total_price, grass_length, notes, clippings_removal, user_id,
+        address:addresses(street_address, city, state, postal_code)
+      `).or(`contractor_id.eq.${contractorId},preferred_contractor_id.eq.${contractorId}`)
+        .order("scheduled_date", { ascending: false }),
     ]);
 
     if (clientsRes.data) setClients(clientsRes.data);
+
+    const unifiedJobs: UnifiedJob[] = [];
+
+    // Add CRM jobs
     if (jobsRes.data && clientsRes.data) {
       const clientMap = new Map(clientsRes.data.map((c) => [c.id, c]));
-      setJobs(jobsRes.data.map((j) => {
+      jobsRes.data.forEach((j) => {
         const client = clientMap.get(j.client_id);
-        return {
-          ...j,
+        unifiedJobs.push({
+          id: j.id,
+          title: j.title,
+          status: j.status,
+          scheduled_date: j.scheduled_date,
+          scheduled_time: j.scheduled_time,
+          total_price: j.total_price,
           client_name: client?.name || "Unknown",
           client_address: client?.address as ClientAddress | null,
-          client_email: client?.email || null,
-          client_phone: client?.phone || null,
-        };
-      }));
+          description: j.description,
+          notes: j.notes,
+          recurrence_rule: j.recurrence_rule,
+          source: "crm",
+          client_id: j.client_id,
+          duration_minutes: j.duration_minutes,
+        });
+      });
     }
+
+    // Add platform bookings (avoid duplicates by checking IDs)
+    if (bookingsRes.data) {
+      const existingIds = new Set(unifiedJobs.map((j) => j.id));
+      // Fetch profile names for booking users
+      const userIds = [...new Set(bookingsRes.data.map((b) => b.user_id))];
+      const { data: profiles } = await supabase.from("profiles").select("user_id, full_name").in("user_id", userIds);
+      const profileMap = new Map(profiles?.map((p) => [p.user_id, p.full_name]) || []);
+
+      bookingsRes.data.forEach((b) => {
+        if (existingIds.has(b.id)) return;
+        const addr = b.address as any;
+        unifiedJobs.push({
+          id: b.id,
+          title: `Lawn Mowing${b.clippings_removal ? " + Clippings" : ""}`,
+          status: b.status,
+          scheduled_date: b.scheduled_date,
+          scheduled_time: b.scheduled_time,
+          total_price: b.total_price,
+          client_name: profileMap.get(b.user_id) || "Customer",
+          client_address: addr ? { street: addr.street_address, city: addr.city, state: addr.state, postcode: addr.postal_code } : null,
+          description: null,
+          notes: b.notes,
+          recurrence_rule: null,
+          source: "platform",
+          address_street: addr?.street_address,
+          address_city: addr?.city,
+          address_state: addr?.state,
+        });
+      });
+    }
+
+    // Sort by date descending
+    unifiedJobs.sort((a, b) => b.scheduled_date.localeCompare(a.scheduled_date));
+    setJobs(unifiedJobs);
     setIsLoading(false);
   };
 
@@ -219,16 +301,33 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
     setIsSaving(false);
   };
 
-  const handleConfirmJob = async (jobId: string) => {
-    const { error } = await supabase.from("jobs").update({ status: "scheduled" }).eq("id", jobId);
-    if (error) toast.error("Failed to confirm job");
-    else { toast.success("Job confirmed"); fetchData(); }
+  const handleConfirmJob = async (jobId: string, source: "crm" | "platform") => {
+    if (source === "platform") {
+      // Accept a platform booking - set contractor_id and confirm
+      const { error } = await supabase.from("bookings").update({ 
+        contractor_id: contractorId, 
+        status: "confirmed" as any,
+        contractor_accepted_at: new Date().toISOString(),
+      }).eq("id", jobId);
+      if (error) toast.error("Failed to accept booking");
+      else { toast.success("Booking accepted"); fetchData(); }
+    } else {
+      const { error } = await supabase.from("jobs").update({ status: "scheduled" }).eq("id", jobId);
+      if (error) toast.error("Failed to confirm job");
+      else { toast.success("Job confirmed"); fetchData(); }
+    }
   };
 
-  const handleDeclineJob = async (jobId: string) => {
-    const { error } = await supabase.from("jobs").update({ status: "cancelled" }).eq("id", jobId);
-    if (error) toast.error("Failed to decline job");
-    else { toast.success("Job declined"); fetchData(); }
+  const handleDeclineJob = async (jobId: string, source: "crm" | "platform") => {
+    if (source === "platform") {
+      const { error } = await supabase.from("bookings").update({ status: "cancelled" as any }).eq("id", jobId);
+      if (error) toast.error("Failed to decline booking");
+      else { toast.success("Booking declined"); fetchData(); }
+    } else {
+      const { error } = await supabase.from("jobs").update({ status: "cancelled" }).eq("id", jobId);
+      if (error) toast.error("Failed to decline job");
+      else { toast.success("Job declined"); fetchData(); }
+    }
   };
 
   const filtered = jobs.filter((j) => {
@@ -350,7 +449,7 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
                         <div
                           key={job.id}
                           className={`text-[10px] md:text-xs px-1 py-0.5 rounded truncate cursor-pointer ${statusColors[job.status] || "bg-muted"}`}
-                          onClick={(e) => { e.stopPropagation(); openEditDialog(job); }}
+                          onClick={(e) => { e.stopPropagation(); if (job.source === "crm") openEditDialog(job as any); }}
                           title={`${job.title} - ${job.client_name}`}
                         >
                           {job.scheduled_time && <span className="font-medium">{job.scheduled_time} </span>}
@@ -424,22 +523,27 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={statusColors[job.status] || ""}>
-                        {job.status === "in_progress" ? "In Progress" : job.status === "pending_confirmation" ? "Pending" : job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+                        {job.source === "platform" && <span className="mr-1">🌐</span>}
+                        {job.status === "in_progress" ? "In Progress" 
+                          : job.status === "pending_confirmation" ? "Pending" 
+                          : job.status === "pending" ? "Awaiting Accept"
+                          : job.status === "pending_address_verification" ? "Needs Verification"
+                          : job.status.charAt(0).toUpperCase() + job.status.slice(1)}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        {job.status === "pending_confirmation" && (
+                        {(job.status === "pending_confirmation" || job.status === "pending") && (
                           <>
-                            <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={() => handleConfirmJob(job.id)} title="Accept">
+                            <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={() => handleConfirmJob(job.id, job.source)} title="Accept">
                               <Check className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeclineJob(job.id)} title="Decline">
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeclineJob(job.id, job.source)} title="Decline">
                               <X className="w-4 h-4" />
                             </Button>
                           </>
                         )}
-                        <Button variant="ghost" size="icon" onClick={() => openEditDialog(job)}><Pencil className="w-4 h-4" /></Button>
+                        {job.source === "crm" && <Button variant="ghost" size="icon" onClick={() => openEditDialog(job as any)}><Pencil className="w-4 h-4" /></Button>}
                       </div>
                     </TableCell>
                   </TableRow>

@@ -46,6 +46,7 @@ interface BookingDialogProps {
   onSuccess: () => void;
   onAddressAdded?: () => void;
   editingBooking?: Booking | null;
+  contractorId?: string; // For contractor-specific pricing in portal context
 }
 
 interface PricingSettings {
@@ -91,7 +92,7 @@ const timeSlots = [
   { value: "2pm-5pm", label: "2:00 PM - 5:00 PM", description: "Afternoon" },
 ];
 
-const BookingDialog = ({ open, onOpenChange, addresses, defaultAddressId, onSuccess, onAddressAdded, editingBooking }: BookingDialogProps) => {
+const BookingDialog = ({ open, onOpenChange, addresses, defaultAddressId, onSuccess, onAddressAdded, editingBooking, contractorId: portalContractorId }: BookingDialogProps) => {
   const [step, setStep] = useState<"form" | "quote">("form");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -240,6 +241,7 @@ const BookingDialog = ({ open, onOpenChange, addresses, defaultAddressId, onSucc
           selectedDate: selectedDate.toISOString(),
           grassLength,
           clippingsRemoval,
+          contractorId: portalContractorId || (selectSpecificContractor && selectedContractorId ? selectedContractorId : undefined),
         },
       });
 
@@ -292,7 +294,7 @@ const BookingDialog = ({ open, onOpenChange, addresses, defaultAddressId, onSucc
             is_weekend: isWeekend(selectedDate),
             total_price: totalWithGst,
             quote_breakdown: JSON.parse(JSON.stringify(quote)),
-            preferred_contractor_id: selectSpecificContractor && selectedContractorId ? selectedContractorId : null,
+            preferred_contractor_id: portalContractorId || (selectSpecificContractor && selectedContractorId ? selectedContractorId : null),
           })
           .eq("id", editingBooking.id);
 
@@ -318,7 +320,7 @@ const BookingDialog = ({ open, onOpenChange, addresses, defaultAddressId, onSucc
           quote_breakdown: JSON.parse(JSON.stringify(quote)),
           status: "pending_address_verification" as any,
           payment_status: "unpaid",
-          preferred_contractor_id: selectSpecificContractor && selectedContractorId ? selectedContractorId : null,
+          preferred_contractor_id: portalContractorId || (selectSpecificContractor && selectedContractorId ? selectedContractorId : null),
         }]).select().single();
 
         if (error) throw error;
@@ -347,7 +349,7 @@ const BookingDialog = ({ open, onOpenChange, addresses, defaultAddressId, onSucc
           quote_breakdown: JSON.parse(JSON.stringify(quote)),
           status: "pending" as const,
           payment_status: "pending",
-          preferred_contractor_id: selectSpecificContractor && selectedContractorId ? selectedContractorId : null,
+          preferred_contractor_id: portalContractorId || (selectSpecificContractor && selectedContractorId ? selectedContractorId : null),
         }]).select().single();
 
         if (error) throw error;
