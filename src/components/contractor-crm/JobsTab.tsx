@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import PlatformBookingDetailDialog from "./PlatformBookingDetailDialog";
 import JobCompletionDialog from "./JobCompletionDialog";
+import SuggestTimeDialog from "./SuggestTimeDialog";
+import MarkPaidDialog from "./MarkPaidDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -97,6 +99,14 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
   const [completionJob, setCompletionJob] = useState<{
     id: string; title: string; source: string; total_price: number | null; client_name: string; payment_status: string;
+  } | null>(null);
+  const [suggestTimeOpen, setSuggestTimeOpen] = useState(false);
+  const [suggestTimeJob, setSuggestTimeJob] = useState<{
+    id: string; title: string; client_name: string; scheduled_date: string; source: "crm" | "platform";
+  } | null>(null);
+  const [markPaidOpen, setMarkPaidOpen] = useState(false);
+  const [markPaidJob, setMarkPaidJob] = useState<{
+    id: string; title: string; client_name: string; total_price: number | null;
   } | null>(null);
 
   const [form, setForm] = useState({
@@ -338,6 +348,27 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
     }
   };
 
+  const handleSuggestTime = (job: UnifiedJob) => {
+    setSuggestTimeJob({
+      id: job.id,
+      title: job.title,
+      client_name: job.client_name,
+      scheduled_date: job.scheduled_date,
+      source: job.source,
+    });
+    setSuggestTimeOpen(true);
+  };
+
+  const handleOpenMarkPaid = (job: UnifiedJob) => {
+    setMarkPaidJob({
+      id: job.id,
+      title: job.title,
+      client_name: job.client_name,
+      total_price: job.total_price,
+    });
+    setMarkPaidOpen(true);
+  };
+
   const handleStartCompletion = (job: UnifiedJob) => {
     setCompletionJob({
       id: job.id,
@@ -350,19 +381,6 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
     setCompletionDialogOpen(true);
   };
 
-  const handleMarkPaid = async (jobId: string) => {
-    try {
-      const { data, error } = await supabase.functions.invoke("complete-job-v2", {
-        body: { jobId, action: "mark_paid" },
-      });
-      if (error || data?.error) throw new Error(data?.error || error?.message);
-      toast.success("Job marked as paid");
-      fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to mark as paid");
-    }
-  };
-
   const filtered = jobs.filter((j) => {
     const matchesSearch =
       j.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -370,6 +388,9 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
     const matchesStatus = statusFilter === "all" || j.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // Pending confirmation jobs for the hero section
+  const pendingJobs = jobs.filter(j => j.status === "pending_confirmation" || j.status === "pending");
 
   // Calendar data
   const calendarDays = useMemo(() => {
@@ -434,7 +455,53 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
         <Card><CardContent className="py-8 text-center"><p className="text-muted-foreground text-sm">Add a client first before creating jobs.</p></CardContent></Card>
       )}
 
-      {/* Calendar View */}
+      {/* Pending Confirmation Section */}
+      {pendingJobs.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-sunshine animate-pulse" />
+            Pending Confirmation ({pendingJobs.length})
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {pendingJobs.map((job) => (
+              <Card key={job.id} className="border-sunshine/30 bg-sunshine/5">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-medium text-foreground text-sm">{job.title}</p>
+                      <p className="text-xs text-muted-foreground">{job.client_name}</p>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] bg-sunshine/20 text-sunshine border-sunshine/30">
+                      {job.source === "platform" ? "🌐 Website" : "Manual"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      {format(new Date(job.scheduled_date), "dd MMM yyyy")}
+                    </span>
+                    {job.total_price && (
+                      <span className="font-medium text-foreground">${Number(job.total_price).toFixed(2)}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" className="flex-1" onClick={() => handleConfirmJob(job.id, job.source)}>
+                      <Check className="w-3.5 h-3.5 mr-1" /> Confirm
+                    </Button>
+                    <Button size="sm" variant="outline" className="flex-1" onClick={() => handleSuggestTime(job)}>
+                      <Calendar className="w-3.5 h-3.5 mr-1" /> Reschedule
+                    </Button>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDeclineJob(job.id, job.source)}>
+                      <X className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       {viewMode === "calendar" && clients.length > 0 && (
         <Card>
           <CardContent className="p-4">
@@ -571,6 +638,9 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
                             <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleConfirmJob(job.id, job.source); }} title="Accept">
                               <Check className="w-4 h-4" />
                             </Button>
+                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); handleSuggestTime(job); }} title="Suggest New Time">
+                              <Calendar className="w-4 h-4" />
+                            </Button>
                             <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDeclineJob(job.id, job.source); }} title="Decline">
                               <X className="w-4 h-4" />
                             </Button>
@@ -582,7 +652,7 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
                           </Button>
                         )}
                         {job.status === "completed" && (job as any).payment_status === "invoiced" && (
-                          <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleMarkPaid(job.id); }} title="Mark as Paid">
+                          <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleOpenMarkPaid(job); }} title="Mark as Paid">
                             <DollarSign className="w-4 h-4" />
                           </Button>
                         )}
@@ -714,6 +784,23 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
         onOpenChange={setCompletionDialogOpen}
         job={completionJob}
         onCompleted={fetchData}
+      />
+
+      {/* Suggest Alternative Time Dialog */}
+      <SuggestTimeDialog
+        open={suggestTimeOpen}
+        onOpenChange={setSuggestTimeOpen}
+        job={suggestTimeJob}
+        contractorId={contractorId}
+        onSuggested={fetchData}
+      />
+
+      {/* Mark as Paid Dialog */}
+      <MarkPaidDialog
+        open={markPaidOpen}
+        onOpenChange={setMarkPaidOpen}
+        job={markPaidJob}
+        onMarked={fetchData}
       />
     </div>
   );
