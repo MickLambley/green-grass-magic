@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.auto-generate-recurring-jobs]
 verify_jwt = false
+
+[functions.stripe-payment-link-webhook]
+verify_jwt = false

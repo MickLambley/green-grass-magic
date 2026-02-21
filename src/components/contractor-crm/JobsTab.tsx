@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import PlatformBookingDetailDialog from "./PlatformBookingDetailDialog";
+import JobCompletionDialog from "./JobCompletionDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,7 +18,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, endOfWeek, isToday } from "date-fns";
 import type { Tables, Json } from "@/integrations/supabase/types";
@@ -93,6 +94,10 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [platformDetailOpen, setPlatformDetailOpen] = useState(false);
   const [selectedPlatformBookingId, setSelectedPlatformBookingId] = useState<string | null>(null);
+  const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
+  const [completionJob, setCompletionJob] = useState<{
+    id: string; title: string; source: string; total_price: number | null; client_name: string; payment_status: string;
+  } | null>(null);
 
   const [form, setForm] = useState({
     title: "Lawn Mowing",
@@ -333,6 +338,31 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
     }
   };
 
+  const handleStartCompletion = (job: UnifiedJob) => {
+    setCompletionJob({
+      id: job.id,
+      title: job.title,
+      source: job.source === "platform" ? "website_booking" : "manual",
+      total_price: job.total_price,
+      client_name: job.client_name,
+      payment_status: "unpaid",
+    });
+    setCompletionDialogOpen(true);
+  };
+
+  const handleMarkPaid = async (jobId: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("complete-job-v2", {
+        body: { jobId, action: "mark_paid" },
+      });
+      if (error || data?.error) throw new Error(data?.error || error?.message);
+      toast.success("Job marked as paid");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to mark as paid");
+    }
+  };
+
   const filtered = jobs.filter((j) => {
     const matchesSearch =
       j.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -546,6 +576,16 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
                             </Button>
                           </>
                         )}
+                        {(job.status === "scheduled" || job.status === "in_progress" || job.status === "confirmed") && (
+                          <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleStartCompletion(job); }} title="Complete Job">
+                            <CheckCircle2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {job.status === "completed" && (job as any).payment_status === "invoiced" && (
+                          <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleMarkPaid(job.id); }} title="Mark as Paid">
+                            <DollarSign className="w-4 h-4" />
+                          </Button>
+                        )}
                         {job.source === "crm" && <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEditDialog(job as any); }}><Pencil className="w-4 h-4" /></Button>}
                       </div>
                     </TableCell>
@@ -666,6 +706,14 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
         bookingId={selectedPlatformBookingId}
         contractorId={contractorId}
         onUpdated={fetchData}
+      />
+
+      {/* Job Completion Dialog */}
+      <JobCompletionDialog
+        open={completionDialogOpen}
+        onOpenChange={setCompletionDialogOpen}
+        job={completionJob}
+        onCompleted={fetchData}
       />
     </div>
   );
