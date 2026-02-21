@@ -16,7 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, endOfWeek, isToday } from "date-fns";
 import type { Tables, Json } from "@/integrations/supabase/types";
@@ -33,7 +33,7 @@ const statusColors: Record<string, string> = {
   in_progress: "bg-sunshine/20 text-sunshine border-sunshine/30",
   completed: "bg-primary/20 text-primary border-primary/30",
   cancelled: "bg-destructive/20 text-destructive border-destructive/30",
-  pending_confirmation: "bg-muted text-muted-foreground",
+  pending_confirmation: "bg-sunshine/20 text-sunshine border-sunshine/30",
 };
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -203,6 +203,18 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
     setIsSaving(false);
   };
 
+  const handleConfirmJob = async (jobId: string) => {
+    const { error } = await supabase.from("jobs").update({ status: "scheduled" }).eq("id", jobId);
+    if (error) toast.error("Failed to confirm job");
+    else { toast.success("Job confirmed"); fetchData(); }
+  };
+
+  const handleDeclineJob = async (jobId: string) => {
+    const { error } = await supabase.from("jobs").update({ status: "cancelled" }).eq("id", jobId);
+    if (error) toast.error("Failed to decline job");
+    else { toast.success("Job declined"); fetchData(); }
+  };
+
   const filtered = jobs.filter((j) => {
     const matchesSearch =
       j.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -247,6 +259,7 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
             <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="pending_confirmation">Pending</SelectItem>
               <SelectItem value="scheduled">Scheduled</SelectItem>
               <SelectItem value="in_progress">In Progress</SelectItem>
               <SelectItem value="completed">Completed</SelectItem>
@@ -389,7 +402,19 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => openEditDialog(job)}><Pencil className="w-4 h-4" /></Button>
+                      <div className="flex items-center gap-1">
+                        {job.status === "pending_confirmation" && (
+                          <>
+                            <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={() => handleConfirmJob(job.id)} title="Accept">
+                              <Check className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeclineJob(job.id)} title="Decline">
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </>
+                        )}
+                        <Button variant="ghost" size="icon" onClick={() => openEditDialog(job)}><Pencil className="w-4 h-4" /></Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

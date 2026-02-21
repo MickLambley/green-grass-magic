@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Leaf, LogOut, Users, Calendar, FileText, Receipt,
   LayoutDashboard, Settings, Globe, Loader2, Menu, X,
-  Bell,
+  Bell, DollarSign,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
@@ -18,6 +18,7 @@ import QuotesTab from "@/components/contractor-crm/QuotesTab";
 import InvoicesTab from "@/components/contractor-crm/InvoicesTab";
 import ProfileSettingsTab from "@/components/contractor-crm/ProfileSettingsTab";
 import WebsiteBuilderTab from "@/components/contractor-crm/WebsiteBuilderTab";
+import ContractorPricingTab from "@/components/contractor-crm/ContractorPricingTab";
 
 type Contractor = Tables<"contractors">;
 
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { key: "clients", label: "Clients", icon: Users },
   { key: "quotes", label: "Quotes", icon: FileText },
   { key: "invoices", label: "Invoices", icon: Receipt },
+  { key: "pricing", label: "Pricing", icon: DollarSign },
   { key: "website", label: "Website", icon: Globe },
   { key: "settings", label: "Settings", icon: Settings },
 ] as const;
@@ -278,6 +280,7 @@ const ContractorDashboard = () => {
           {activeTab === "jobs" && <JobsTab contractorId={contractor.id} />}
           {activeTab === "quotes" && <QuotesTab contractorId={contractor.id} />}
           {activeTab === "invoices" && <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} />}
+          {activeTab === "pricing" && <ContractorPricingTab contractor={contractor} onUpdate={setContractor} />}
           {activeTab === "website" && <WebsiteBuilderTab contractor={contractor} onUpdate={setContractor} />}
           {activeTab === "settings" && <ProfileSettingsTab contractor={contractor} onUpdate={setContractor} />}
         </main>
