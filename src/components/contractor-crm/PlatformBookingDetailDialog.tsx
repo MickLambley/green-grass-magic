@@ -50,15 +50,12 @@ interface PlatformBooking {
   scheduled_time: string | null;
   time_slot: string;
   total_price: number | null;
-  original_price: number | null;
   grass_length: string;
   clippings_removal: boolean;
   notes: string | null;
   user_id: string;
   address_id: string;
   contractor_id: string | null;
-  preferred_contractor_id: string | null;
-  quote_breakdown: Json | null;
   created_at: string;
 }
 

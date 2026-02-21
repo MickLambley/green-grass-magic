@@ -10,7 +10,6 @@ import ContractorSiteAuth from "./pages/ContractorSiteAuth";
 import ContractorSiteDashboard from "./pages/ContractorSiteDashboard";
 import CustomerVerifyJob from "./pages/CustomerVerifyJob";
 import About from "./pages/About";
-import Contractors from "./pages/Contractors";
 import Auth from "./pages/Auth";
 import ContractorAuth from "./pages/ContractorAuth";
 import ContractorOnboarding from "./pages/ContractorOnboarding";
@@ -37,7 +36,6 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/about" element={<About />} />
-          <Route path="/contractors" element={<Contractors />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/contractor-auth" element={<ContractorAuth />} />
           <Route path="/contractor-onboarding" element={<ContractorOnboarding />} />
@@ -74,12 +72,10 @@ const App = () => (
           <Route path="/site/:slug" element={<ContractorWebsite />} />
           <Route path="/site/:slug/auth" element={<ContractorSiteAuth />} />
           <Route path="/site/:slug/portal" element={<ContractorSiteDashboard />} />
-          {/* Legacy route redirect */}
           <Route path="/site/:slug/dashboard" element={<ContractorSiteDashboard />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

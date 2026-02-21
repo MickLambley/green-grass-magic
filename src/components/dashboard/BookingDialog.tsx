@@ -137,8 +137,8 @@ const BookingDialog = ({ open, onOpenChange, addresses, defaultAddressId, onSucc
         setGrassLength(editingBooking.grass_length || "medium");
         setClippingsRemoval(editingBooking.clippings_removal || false);
         setTimeSlot(editingBooking.time_slot || "10am-2pm");
-        setSelectSpecificContractor(!!editingBooking.preferred_contractor_id);
-        setSelectedContractorId(editingBooking.preferred_contractor_id || "");
+        setSelectSpecificContractor(false);
+        setSelectedContractorId("");
       } else {
         setSelectedDate(undefined);
         setGrassLength("medium");
@@ -188,8 +188,7 @@ const BookingDialog = ({ open, onOpenChange, addresses, defaultAddressId, onSucc
     const { data: contractorsData } = await supabase
       .from("contractors")
       .select("id, business_name, user_id, service_areas")
-      .eq("is_active", true)
-      .eq("approval_status", "approved");
+      .eq("is_active", true);
 
     if (contractorsData) {
       const filteredContractors = contractorsData.filter(c => 
@@ -293,8 +292,6 @@ const BookingDialog = ({ open, onOpenChange, addresses, defaultAddressId, onSucc
             time_slot: timeSlot,
             is_weekend: isWeekend(selectedDate),
             total_price: totalWithGst,
-            quote_breakdown: JSON.parse(JSON.stringify(quote)),
-            preferred_contractor_id: portalContractorId || (selectSpecificContractor && selectedContractorId ? selectedContractorId : null),
           })
           .eq("id", editingBooking.id);
 
@@ -317,10 +314,8 @@ const BookingDialog = ({ open, onOpenChange, addresses, defaultAddressId, onSucc
           is_weekend: isWeekend(selectedDate),
           is_public_holiday: false,
           total_price: totalWithGst,
-          quote_breakdown: JSON.parse(JSON.stringify(quote)),
-          status: "pending_address_verification" as any,
+          status: "pending" as const,
           payment_status: "unpaid",
-          preferred_contractor_id: portalContractorId || (selectSpecificContractor && selectedContractorId ? selectedContractorId : null),
         }]).select().single();
 
         if (error) throw error;
@@ -346,10 +341,8 @@ const BookingDialog = ({ open, onOpenChange, addresses, defaultAddressId, onSucc
           is_weekend: isWeekend(selectedDate),
           is_public_holiday: false,
           total_price: totalWithGst,
-          quote_breakdown: JSON.parse(JSON.stringify(quote)),
           status: "pending" as const,
           payment_status: "pending",
-          preferred_contractor_id: portalContractorId || (selectSpecificContractor && selectedContractorId ? selectedContractorId : null),
         }]).select().single();
 
         if (error) throw error;

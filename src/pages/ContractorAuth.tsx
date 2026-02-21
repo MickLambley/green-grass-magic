@@ -72,7 +72,6 @@ const ContractorAuth = () => {
                 business_name: null,
                 service_areas: [],
                 is_active: false,
-                approval_status: "pending",
               });
             }
 
@@ -194,7 +193,6 @@ const ContractorAuth = () => {
                   business_name: null,
                   service_areas: [],
                   is_active: false,
-                  approval_status: "pending",
                 });
               }
 
@@ -217,7 +215,6 @@ const ContractorAuth = () => {
             business_name: null,
             service_areas: [],
             is_active: false,
-            approval_status: "pending",
           });
 
           toast.success("Account created! Please complete your contractor profile.");
