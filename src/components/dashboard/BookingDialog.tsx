@@ -302,7 +302,7 @@ const BookingDialog = ({ open, onOpenChange, addresses, defaultAddressId, onSucc
         onSuccess();
         onOpenChange(false);
       } else if (isUnverifiedAddress) {
-        // For unverified addresses: create booking with pending_address_verification status, NO payment yet
+        // For unverified addresses: create booking with pending status
         const { data, error } = await supabase.from("bookings").insert([{
           user_id: user.id,
           address_id: selectedAddress.id,

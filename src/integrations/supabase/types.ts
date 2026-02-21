@@ -669,11 +669,14 @@ export type Database = {
           duration_minutes: number | null
           id: string
           notes: string | null
+          original_scheduled_date: string | null
+          original_time_slot: string | null
           payment_intent_id: string | null
           payment_method_id: string | null
           payment_status: string
           quote_breakdown: Json | null
           recurrence_rule: Json | null
+          route_optimization_locked: boolean
           scheduled_date: string
           scheduled_time: string | null
           source: string
@@ -682,6 +685,7 @@ export type Database = {
           stripe_invoice_id: string | null
           stripe_payment_link_id: string | null
           stripe_payment_link_url: string | null
+          time_flexibility: string
           title: string
           total_price: number | null
           updated_at: string
@@ -699,11 +703,14 @@ export type Database = {
           duration_minutes?: number | null
           id?: string
           notes?: string | null
+          original_scheduled_date?: string | null
+          original_time_slot?: string | null
           payment_intent_id?: string | null
           payment_method_id?: string | null
           payment_status?: string
           quote_breakdown?: Json | null
           recurrence_rule?: Json | null
+          route_optimization_locked?: boolean
           scheduled_date: string
           scheduled_time?: string | null
           source?: string
@@ -712,6 +719,7 @@ export type Database = {
           stripe_invoice_id?: string | null
           stripe_payment_link_id?: string | null
           stripe_payment_link_url?: string | null
+          time_flexibility?: string
           title?: string
           total_price?: number | null
           updated_at?: string
@@ -729,11 +737,14 @@ export type Database = {
           duration_minutes?: number | null
           id?: string
           notes?: string | null
+          original_scheduled_date?: string | null
+          original_time_slot?: string | null
           payment_intent_id?: string | null
           payment_method_id?: string | null
           payment_status?: string
           quote_breakdown?: Json | null
           recurrence_rule?: Json | null
+          route_optimization_locked?: boolean
           scheduled_date?: string
           scheduled_time?: string | null
           source?: string
@@ -742,6 +753,7 @@ export type Database = {
           stripe_invoice_id?: string | null
           stripe_payment_link_id?: string | null
           stripe_payment_link_url?: string | null
+          time_flexibility?: string
           title?: string
           total_price?: number | null
           updated_at?: string
@@ -885,6 +897,95 @@ export type Database = {
           },
           {
             foreignKeyName: "quotes_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      route_optimization_suggestions: {
+        Row: {
+          current_date_val: string
+          current_time_slot: string
+          customer_approval_status: string
+          id: string
+          job_id: string
+          requires_customer_approval: boolean
+          route_optimization_id: string
+          suggested_date: string
+          suggested_time_slot: string
+        }
+        Insert: {
+          current_date_val: string
+          current_time_slot: string
+          customer_approval_status?: string
+          id?: string
+          job_id: string
+          requires_customer_approval?: boolean
+          route_optimization_id: string
+          suggested_date: string
+          suggested_time_slot: string
+        }
+        Update: {
+          current_date_val?: string
+          current_time_slot?: string
+          customer_approval_status?: string
+          id?: string
+          job_id?: string
+          requires_customer_approval?: boolean
+          route_optimization_id?: string
+          suggested_date?: string
+          suggested_time_slot?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_optimization_suggestions_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_optimization_suggestions_route_optimization_id_fkey"
+            columns: ["route_optimization_id"]
+            isOneToOne: false
+            referencedRelation: "route_optimizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      route_optimizations: {
+        Row: {
+          contractor_id: string
+          created_at: string
+          id: string
+          level: number
+          optimization_date: string
+          status: string
+          time_saved_minutes: number
+        }
+        Insert: {
+          contractor_id: string
+          created_at?: string
+          id?: string
+          level: number
+          optimization_date: string
+          status?: string
+          time_saved_minutes: number
+        }
+        Update: {
+          contractor_id?: string
+          created_at?: string
+          id?: string
+          level?: number
+          optimization_date?: string
+          status?: string
+          time_saved_minutes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_optimizations_contractor_id_fkey"
             columns: ["contractor_id"]
             isOneToOne: false
             referencedRelation: "contractors"

@@ -48,7 +48,7 @@ const statusColors: Record<string, string> = {
   // Platform booking statuses
   pending: "bg-sunshine/20 text-sunshine border-sunshine/30",
   confirmed: "bg-sky/20 text-sky border-sky/30",
-  pending_address_verification: "bg-muted text-muted-foreground border-border",
+  
 };
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -137,7 +137,7 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
       supabase.from("bookings").select(`
         id, status, scheduled_date, scheduled_time, total_price, grass_length, notes, clippings_removal, user_id,
         address:addresses(street_address, city, state, postal_code)
-      `).or(`contractor_id.eq.${contractorId},preferred_contractor_id.eq.${contractorId}`)
+      `).eq("contractor_id", contractorId)
         .order("scheduled_date", { ascending: false }),
     ]);
 
@@ -627,7 +627,6 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
                         {job.status === "in_progress" ? "In Progress" 
                           : job.status === "pending_confirmation" ? "Pending" 
                           : job.status === "pending" ? "Awaiting Accept"
-                          : job.status === "pending_address_verification" ? "Needs Verification"
                           : job.status.charAt(0).toUpperCase() + job.status.slice(1)}
                       </Badge>
                     </TableCell>

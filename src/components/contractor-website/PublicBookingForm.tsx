@@ -228,6 +228,17 @@ const BookingFormContent = ({ contractorSlug, contractorName, onClose }: PublicB
                   </Select>
                 </div>
               </div>
+              <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="time-flexible"
+                  className="h-4 w-4 rounded border-primary text-primary focus:ring-primary"
+                  onChange={(e) => setForm({ ...form, notes: e.target.checked ? (form.notes ? form.notes + "\n[TIME_FLEXIBLE]" : "[TIME_FLEXIBLE]") : form.notes.replace(/\n?\[TIME_FLEXIBLE\]/, "") })}
+                />
+                <Label htmlFor="time-flexible" className="text-sm cursor-pointer">
+                  I'm flexible with the exact time of my booking
+                </Label>
+              </div>
               <div className="space-y-2">
                 <Label>Notes</Label>
                 <Textarea
@@ -417,6 +428,17 @@ const BookingFormFallback = ({ contractorSlug, contractorName, onClose }: Public
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+              <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="time-flexible-fb"
+                  className="h-4 w-4 rounded border-primary text-primary focus:ring-primary"
+                  onChange={(e) => setForm({ ...form, notes: e.target.checked ? (form.notes ? form.notes + "\n[TIME_FLEXIBLE]" : "[TIME_FLEXIBLE]") : form.notes.replace(/\n?\[TIME_FLEXIBLE\]/, "") })}
+                />
+                <Label htmlFor="time-flexible-fb" className="text-sm cursor-pointer">
+                  I'm flexible with the exact time of my booking
+                </Label>
               </div>
               <div className="space-y-2">
                 <Label>Notes</Label>
