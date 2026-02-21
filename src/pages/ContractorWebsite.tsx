@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Leaf, Phone, MapPin, Mail, ChevronRight, Loader2, User } from "lucide-react";
-import PublicBookingForm from "@/components/contractor-website/PublicBookingForm";
+
 
 interface WebsiteCopy {
   hero_headline: string;
@@ -46,7 +46,6 @@ const ContractorWebsite = () => {
   const navigate = useNavigate();
   const [contractor, setContractor] = useState<ContractorSite | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showBooking, setShowBooking] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
@@ -54,6 +53,14 @@ const ContractorWebsite = () => {
       setIsLoggedIn(!!session?.user);
     });
   }, []);
+
+  const handleBookNow = () => {
+    if (isLoggedIn) {
+      navigate(`/site/${slug}/portal`);
+    } else {
+      navigate(`/site/${slug}/auth?redirect=portal&action=book`);
+    }
+  };
 
   useEffect(() => {
     if (slug) loadContractor();
@@ -129,7 +136,7 @@ const ContractorWebsite = () => {
                 <User className="w-3.5 h-3.5 mr-1" /> Login
               </Button>
             )}
-            <Button size="sm" onClick={() => setShowBooking(true)}>
+            <Button size="sm" onClick={handleBookNow}>
               Book Now
             </Button>
           </div>
@@ -147,7 +154,7 @@ const ContractorWebsite = () => {
               {copy.hero_subheadline}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center animate-fade-in">
-              <Button size="lg" variant="heroOutline" className="border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary" onClick={() => setShowBooking(true)}>
+              <Button size="lg" variant="heroOutline" className="border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary" onClick={handleBookNow}>
                 Get a Free Quote <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
               {contractor.phone && (
@@ -200,7 +207,7 @@ const ContractorWebsite = () => {
         <div className="max-w-5xl mx-auto px-4 text-center">
           <h2 className="font-display text-3xl font-bold text-foreground mb-4">{copy.cta_headline}</h2>
           <p className="text-muted-foreground text-lg mb-8">{copy.cta_text}</p>
-          <Button size="xl" onClick={() => setShowBooking(true)}>
+          <Button size="xl" onClick={handleBookNow}>
             Book Online Now <ChevronRight className="w-5 h-5 ml-1" />
           </Button>
         </div>
@@ -231,14 +238,6 @@ const ContractorWebsite = () => {
         </div>
       </footer>
 
-      {/* Booking Dialog */}
-      {showBooking && (
-        <PublicBookingForm
-          contractorSlug={slug!}
-          contractorName={name}
-          onClose={() => setShowBooking(false)}
-        />
-      )}
     </div>
   );
 };
