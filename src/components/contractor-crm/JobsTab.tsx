@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import PlatformBookingDetailDialog from "./PlatformBookingDetailDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -90,6 +91,8 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "calendar">("calendar");
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [platformDetailOpen, setPlatformDetailOpen] = useState(false);
+  const [selectedPlatformBookingId, setSelectedPlatformBookingId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     title: "Lawn Mowing",
@@ -449,7 +452,7 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
                         <div
                           key={job.id}
                           className={`text-[10px] md:text-xs px-1 py-0.5 rounded truncate cursor-pointer ${statusColors[job.status] || "bg-muted"}`}
-                          onClick={(e) => { e.stopPropagation(); if (job.source === "crm") openEditDialog(job as any); }}
+                          onClick={(e) => { e.stopPropagation(); if (job.source === "crm") openEditDialog(job as any); else { setSelectedPlatformBookingId(job.id); setPlatformDetailOpen(true); } }}
                           title={`${job.title} - ${job.client_name}`}
                         >
                           {job.scheduled_time && <span className="font-medium">{job.scheduled_time} </span>}
@@ -498,7 +501,7 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
               </TableHeader>
               <TableBody>
                 {filtered.map((job) => (
-                  <TableRow key={job.id}>
+                  <TableRow key={job.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { if (job.source === "platform") { setSelectedPlatformBookingId(job.id); setPlatformDetailOpen(true); } else { openEditDialog(job as any); } }}>
                     <TableCell className="font-medium">
                       {job.title}
                       {job.recurrence_rule && <Badge variant="outline" className="ml-2 text-[10px]">Recurring</Badge>}
@@ -535,15 +538,15 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
                       <div className="flex items-center gap-1">
                         {(job.status === "pending_confirmation" || job.status === "pending") && (
                           <>
-                            <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={() => handleConfirmJob(job.id, job.source)} title="Accept">
+                            <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleConfirmJob(job.id, job.source); }} title="Accept">
                               <Check className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeclineJob(job.id, job.source)} title="Decline">
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDeclineJob(job.id, job.source); }} title="Decline">
                               <X className="w-4 h-4" />
                             </Button>
                           </>
                         )}
-                        {job.source === "crm" && <Button variant="ghost" size="icon" onClick={() => openEditDialog(job as any)}><Pencil className="w-4 h-4" /></Button>}
+                        {job.source === "crm" && <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEditDialog(job as any); }}><Pencil className="w-4 h-4" /></Button>}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -655,6 +658,15 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Platform Booking Detail Dialog */}
+      <PlatformBookingDetailDialog
+        open={platformDetailOpen}
+        onOpenChange={setPlatformDetailOpen}
+        bookingId={selectedPlatformBookingId}
+        contractorId={contractorId}
+        onUpdated={fetchData}
+      />
     </div>
   );
 };
