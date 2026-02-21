@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Leaf, LogOut, Users, Calendar, FileText, Receipt,
   LayoutDashboard, Settings, Globe, Loader2, Menu, X,
-  Bell, DollarSign,
+  Bell, DollarSign, AlertTriangle, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
@@ -19,6 +19,8 @@ import InvoicesTab from "@/components/contractor-crm/InvoicesTab";
 import ProfileSettingsTab from "@/components/contractor-crm/ProfileSettingsTab";
 import WebsiteBuilderTab from "@/components/contractor-crm/WebsiteBuilderTab";
 import ContractorPricingTab from "@/components/contractor-crm/ContractorPricingTab";
+import DisputeManagementTab from "@/components/contractor-crm/DisputeManagementTab";
+import AlternativeTimeTab from "@/components/contractor-crm/AlternativeTimeTab";
 
 type Contractor = Tables<"contractors">;
 
@@ -29,12 +31,14 @@ const NAV_ITEMS = [
   { key: "quotes", label: "Quotes", icon: FileText },
   { key: "invoices", label: "Invoices", icon: Receipt },
   { key: "pricing", label: "Pricing", icon: DollarSign },
+  { key: "scheduling", label: "Scheduling", icon: Clock },
+  { key: "disputes", label: "Issues", icon: AlertTriangle },
   { key: "website", label: "Website", icon: Globe },
   { key: "settings", label: "Settings", icon: Settings },
 ] as const;
 
 // Bottom nav shows max 5 items on mobile
-const MOBILE_NAV = ["overview", "jobs", "clients", "invoices", "settings"] as const;
+const MOBILE_NAV = ["overview", "jobs", "clients", "disputes", "settings"] as const;
 
 const ContractorDashboard = () => {
   const navigate = useNavigate();
@@ -52,7 +56,6 @@ const ContractorDashboard = () => {
   }, []);
 
   useEffect(() => {
-    // Keep URL in sync
     if (activeTab !== "overview") {
       setSearchParams({ tab: activeTab }, { replace: true });
     } else {
@@ -75,7 +78,6 @@ const ContractorDashboard = () => {
       .eq("user_id", user.id).single();
     if (!contractorData) { toast.error("Profile not found"); navigate("/contractor-auth"); return; }
 
-    // Check if setup wizard needed
     if (!contractorData.business_name && !contractorData.abn) {
       navigate("/contractor-onboarding");
       return;
@@ -83,7 +85,6 @@ const ContractorDashboard = () => {
 
     setContractor(contractorData);
 
-    // Unread notifications
     const { count } = await supabase
       .from("notifications").select("id", { count: "exact", head: true })
       .eq("user_id", user.id).eq("is_read", false);
@@ -117,7 +118,6 @@ const ContractorDashboard = () => {
 
   if (!contractor) return null;
 
-  // Pending approval state
   if (contractor.approval_status === "pending") {
     return (
       <div className="min-h-screen bg-background">
@@ -155,7 +155,6 @@ const ContractorDashboard = () => {
     <div className="min-h-screen bg-background flex">
       {/* ── Desktop Sidebar ── */}
       <aside className="hidden md:flex md:flex-col md:w-64 border-r border-border bg-card fixed inset-y-0 left-0 z-40">
-        {/* Brand */}
         <div className="flex items-center gap-2.5 px-5 h-16 border-b border-border">
           <div className="w-9 h-9 rounded-xl gradient-hero flex items-center justify-center shadow-soft">
             <Leaf className="w-5 h-5 text-primary-foreground" />
@@ -167,8 +166,6 @@ const ContractorDashboard = () => {
             )}
           </div>
         </div>
-
-        {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
             const isActive = activeTab === item.key;
@@ -188,8 +185,6 @@ const ContractorDashboard = () => {
             );
           })}
         </nav>
-
-        {/* User footer */}
         <div className="border-t border-border p-3">
           <div className="flex items-center gap-3 px-2 py-2">
             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-display font-bold text-xs">
@@ -251,7 +246,6 @@ const ContractorDashboard = () => {
 
       {/* ── Main Content ── */}
       <div className="flex-1 md:ml-64 flex flex-col min-h-screen pb-20 md:pb-0">
-        {/* Top bar */}
         <header className="sticky top-0 z-30 bg-card/80 backdrop-blur-lg border-b border-border">
           <div className="flex items-center justify-between px-4 sm:px-6 h-14">
             <div className="flex items-center gap-3">
@@ -273,7 +267,6 @@ const ContractorDashboard = () => {
           </div>
         </header>
 
-        {/* Page content */}
         <main className="flex-1 px-4 sm:px-6 py-5">
           {activeTab === "overview" && <DashboardOverview contractorId={contractor.id} />}
           {activeTab === "clients" && <ClientsTab contractorId={contractor.id} />}
@@ -281,6 +274,8 @@ const ContractorDashboard = () => {
           {activeTab === "quotes" && <QuotesTab contractorId={contractor.id} />}
           {activeTab === "invoices" && <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} />}
           {activeTab === "pricing" && <ContractorPricingTab contractor={contractor} onUpdate={setContractor} />}
+          {activeTab === "scheduling" && <AlternativeTimeTab contractorId={contractor.id} />}
+          {activeTab === "disputes" && <DisputeManagementTab contractorId={contractor.id} />}
           {activeTab === "website" && <WebsiteBuilderTab contractor={contractor} onUpdate={setContractor} />}
           {activeTab === "settings" && <ProfileSettingsTab contractor={contractor} onUpdate={setContractor} />}
         </main>
@@ -308,7 +303,6 @@ const ContractorDashboard = () => {
             );
           })}
         </div>
-        {/* Safe area padding for iOS */}
         <div className="h-safe-area-inset-bottom bg-card" />
       </nav>
     </div>
