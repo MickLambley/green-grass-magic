@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Pencil, Trash2, Loader2, Users } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Loader2, Users, MapPin, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
@@ -215,7 +215,14 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
                 const addr = client.address as any;
                 return (
                   <TableRow key={client.id}>
-                    <TableCell className="font-medium">{client.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {client.name}
+                      {client.user_id && (
+                        <Badge variant="outline" className="ml-2 text-[10px] bg-primary/10 text-primary border-primary/30">
+                          <CheckCircle2 className="w-3 h-3 mr-0.5" /> Verified
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="hidden md:table-cell text-muted-foreground">
                       {client.email || "—"}
                     </TableCell>
@@ -223,7 +230,12 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
                       {client.phone || "—"}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-muted-foreground">
-                      {addr?.city && addr?.state ? `${addr.city}, ${addr.state}` : "—"}
+                      {addr?.city && addr?.state ? (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {addr.street ? `${addr.street}, ` : ""}{addr.city}, {addr.state} {addr.postcode || ""}
+                        </span>
+                      ) : "—"}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
