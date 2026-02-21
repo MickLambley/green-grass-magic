@@ -24,6 +24,13 @@ import type { Tables, Json } from "@/integrations/supabase/types";
 type Job = Tables<"jobs">;
 type Client = Tables<"clients">;
 
+interface ClientAddress {
+  street?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
+}
+
 interface JobsTabProps {
   contractorId: string;
 }
@@ -45,7 +52,7 @@ interface RecurrenceRule {
 }
 
 const JobsTab = ({ contractorId }: JobsTabProps) => {
-  const [jobs, setJobs] = useState<(Job & { client_name?: string })[]>([]);
+  const [jobs, setJobs] = useState<(Job & { client_name?: string; client_address?: ClientAddress | null; client_email?: string | null; client_phone?: string | null })[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -84,8 +91,17 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
 
     if (clientsRes.data) setClients(clientsRes.data);
     if (jobsRes.data && clientsRes.data) {
-      const clientMap = new Map(clientsRes.data.map((c) => [c.id, c.name]));
-      setJobs(jobsRes.data.map((j) => ({ ...j, client_name: clientMap.get(j.client_id) || "Unknown" })));
+      const clientMap = new Map(clientsRes.data.map((c) => [c.id, c]));
+      setJobs(jobsRes.data.map((j) => {
+        const client = clientMap.get(j.client_id);
+        return {
+          ...j,
+          client_name: client?.name || "Unknown",
+          client_address: client?.address as ClientAddress | null,
+          client_email: client?.email || null,
+          client_phone: client?.phone || null,
+        };
+      }));
     }
     setIsLoading(false);
   };
@@ -388,7 +404,17 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
                       {job.title}
                       {job.recurrence_rule && <Badge variant="outline" className="ml-2 text-[10px]">Recurring</Badge>}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{job.client_name}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      <div>{job.client_name}</div>
+                      {job.client_address && (job.client_address.street || job.client_address.city) && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground/70 mt-0.5">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          <span className="truncate max-w-[200px]">
+                            {[job.client_address.street, job.client_address.city, job.client_address.state].filter(Boolean).join(", ")}
+                          </span>
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="hidden md:table-cell text-muted-foreground">
                       {format(new Date(job.scheduled_date), "dd MMM yyyy")}
                       {job.scheduled_time && ` ${job.scheduled_time}`}
