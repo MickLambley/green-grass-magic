@@ -92,7 +92,7 @@ const ContractorOnboarding = () => {
 
     if (!contractorData) {
       const { data: newC } = await supabase.from("contractors")
-        .insert({ user_id: user.id, service_areas: [], is_active: false, approval_status: "approved" })
+        .insert({ user_id: user.id, service_areas: [], is_active: false })
         .select().single();
       contractorData = newC;
     }
@@ -133,7 +133,6 @@ const ContractorOnboarding = () => {
       abn: profile.abn.replace(/\s/g, "") || null,
       phone: profile.phone.trim() || null,
       business_address: profile.business_address.trim() || null,
-      approval_status: "approved",
       is_active: true,
     }).eq("user_id", user.id).select().single();
 

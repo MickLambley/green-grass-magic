@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.stripe-payment-link-webhook]
 verify_jwt = false
+
+[functions.route-optimization]
+verify_jwt = false

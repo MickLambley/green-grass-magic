@@ -21,7 +21,8 @@ import WebsiteBuilderTab from "@/components/contractor-crm/WebsiteBuilderTab";
 import ContractorPricingTab from "@/components/contractor-crm/ContractorPricingTab";
 import DisputeManagementTab from "@/components/contractor-crm/DisputeManagementTab";
 import AlternativeTimeTab from "@/components/contractor-crm/AlternativeTimeTab";
-
+import RouteOptimizationBanner from "@/components/contractor-crm/RouteOptimizationBanner";
+import RouteOptimizationModal from "@/components/contractor-crm/RouteOptimizationModal";
 type Contractor = Tables<"contractors">;
 
 const NAV_ITEMS = [
@@ -50,6 +51,7 @@ const ContractorDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [routeOptOpen, setRouteOptOpen] = useState(false);
 
   useEffect(() => {
     checkAccess();
@@ -268,7 +270,16 @@ const ContractorDashboard = () => {
         </header>
 
         <main className="flex-1 px-4 sm:px-6 py-5">
-          {activeTab === "overview" && <DashboardOverview contractorId={contractor.id} />}
+          {activeTab === "overview" && (
+            <div className="space-y-6">
+              <RouteOptimizationBanner
+                contractorId={contractor.id}
+                subscriptionTier={contractor.subscription_tier}
+                onOpenOptimizations={() => setRouteOptOpen(true)}
+              />
+              <DashboardOverview contractorId={contractor.id} />
+            </div>
+          )}
           {activeTab === "clients" && <ClientsTab contractorId={contractor.id} />}
           {activeTab === "jobs" && <JobsTab contractorId={contractor.id} />}
           {activeTab === "quotes" && <QuotesTab contractorId={contractor.id} />}
@@ -279,6 +290,13 @@ const ContractorDashboard = () => {
           {activeTab === "website" && <WebsiteBuilderTab contractor={contractor} onUpdate={setContractor} />}
           {activeTab === "settings" && <ProfileSettingsTab contractor={contractor} onUpdate={setContractor} />}
         </main>
+
+        <RouteOptimizationModal
+          open={routeOptOpen}
+          onOpenChange={setRouteOptOpen}
+          contractorId={contractor.id}
+          onUpdated={() => {}}
+        />
       </div>
 
       {/* ── Mobile Bottom Nav ── */}

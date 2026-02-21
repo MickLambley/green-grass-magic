@@ -385,13 +385,10 @@ const Dashboard = ({ contractorSlug, contractorName, contractorLogoUrl, contract
   const getStatusBadge = (status: string) => {
     const config: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
       pending: { variant: "secondary", label: "Pending" },
-      pending_address_verification: { variant: "secondary", label: "Awaiting Verification" },
-      price_change_pending: { variant: "secondary", label: "Price Change - Review" },
       verified: { variant: "default", label: "Verified" },
       rejected: { variant: "destructive", label: "Rejected" },
       confirmed: { variant: "default", label: "Confirmed" },
       completed: { variant: "outline", label: "Completed" },
-      completed_pending_verification: { variant: "secondary", label: "Awaiting Review" },
       completed_with_issues: { variant: "secondary", label: "Issues Reported" },
       disputed: { variant: "destructive", label: "Disputed" },
       cancelled: { variant: "destructive", label: "Cancelled" },

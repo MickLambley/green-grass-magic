@@ -78,8 +78,6 @@ const statusConfig: Record<string, { variant: "default" | "secondary" | "destruc
   confirmed: { variant: "default", label: "Confirmed" },
   completed: { variant: "outline", label: "Completed" },
   cancelled: { variant: "destructive", label: "Cancelled" },
-  pending_address_verification: { variant: "secondary", label: "Needs Verification" },
-  price_change_pending: { variant: "secondary", label: "Price Change Pending" },
 };
 
 const PlatformBookingDetailDialog = ({
@@ -162,39 +160,13 @@ const PlatformBookingDetailDialog = ({
     const newPrice = parseFloat(editPrice);
     const originalPrice = booking.total_price || 0;
 
-    // If contractor set a higher price, move to price_change_pending
-    if (newPrice && newPrice > originalPrice) {
-      const { error } = await supabase.from("bookings").update({
-        contractor_id: contractorId,
-        contractor_accepted_at: new Date().toISOString(),
-        total_price: newPrice,
-        original_price: originalPrice,
-        status: "price_change_pending" as any,
-        notes: editNotes || booking.notes,
-      }).eq("id", booking.id);
+    const finalPrice = newPrice || originalPrice;
 
-      if (error) {
-        toast.error("Failed to update booking");
-      } else {
-        // Notify customer about price change
-        await supabase.from("notifications").insert({
-          user_id: booking.user_id,
-          title: "💰 Price Update on Your Booking",
-          message: `Your contractor has quoted $${newPrice.toFixed(2)} for your booking on ${format(new Date(booking.scheduled_date), "dd MMM yyyy")}. The original estimate was $${originalPrice.toFixed(2)}. Please review and confirm.`,
-          type: "price_change",
-          booking_id: booking.id,
-        });
-        toast.success("Price submitted — awaiting customer confirmation");
-        onUpdated();
-        onOpenChange(false);
-      }
-    } else {
-      // Lower or equal price — confirm immediately
+    {
       const { error } = await supabase.from("bookings").update({
         contractor_id: contractorId,
         contractor_accepted_at: new Date().toISOString(),
-        total_price: newPrice || originalPrice,
-        original_price: newPrice && newPrice < originalPrice ? originalPrice : null,
+        total_price: finalPrice,
         status: "confirmed" as any,
         notes: editNotes || booking.notes,
       }).eq("id", booking.id);
@@ -205,7 +177,7 @@ const PlatformBookingDetailDialog = ({
         await supabase.from("notifications").insert({
           user_id: booking.user_id,
           title: "✅ Booking Confirmed",
-          message: `Your booking for ${format(new Date(booking.scheduled_date), "dd MMM yyyy")} has been confirmed${newPrice && newPrice < originalPrice ? ` at a reduced price of $${newPrice.toFixed(2)}` : ""}.`,
+          message: `Your booking for ${format(new Date(booking.scheduled_date), "dd MMM yyyy")} has been confirmed.`,
           type: "booking_confirmed",
           booking_id: booking.id,
         });
@@ -312,7 +284,7 @@ const PlatformBookingDetailDialog = ({
     ? format(editDate, "yyyy-MM-dd") !== booking.scheduled_date || editTimeSlot !== booking.time_slot
     : false;
 
-  const isPending = booking?.status === "pending" || booking?.status === "pending_address_verification";
+  const isPending = booking?.status === "pending";
 
   return (
     <>

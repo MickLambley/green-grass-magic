@@ -116,7 +116,6 @@ const CustomerVerifyJob = () => {
       return;
     }
 
-    // Allow access for completed_pending_verification, completed (within 7 days), disputed, post_payment_dispute
     const allowedStatuses = ["completed", "disputed", "post_payment_dispute"];
     if (!allowedStatuses.includes(bookingData.status)) {
       toast.error("This booking cannot be reviewed");
@@ -387,7 +386,7 @@ const CustomerVerifyJob = () => {
       })
     : "";
 
-  const isVerifiable = booking.status === "completed_pending_verification";
+  const isVerifiable = false; // Legacy verification removed
   const isCompleted = booking.status === "completed";
   const isPostPaymentDispute = booking.status === "post_payment_dispute";
   const isAlreadyDisputed = booking.status === "disputed" || isPostPaymentDispute;
