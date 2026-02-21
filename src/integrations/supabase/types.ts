@@ -82,30 +82,33 @@ export type Database = {
       }
       alternative_suggestions: {
         Row: {
-          booking_id: string
+          booking_id: string | null
           contractor_id: string
           created_at: string
           id: string
+          job_id: string | null
           responded_at: string | null
           status: string
           suggested_date: string
           suggested_time_slot: string
         }
         Insert: {
-          booking_id: string
+          booking_id?: string | null
           contractor_id: string
           created_at?: string
           id?: string
+          job_id?: string | null
           responded_at?: string | null
           status?: string
           suggested_date: string
           suggested_time_slot: string
         }
         Update: {
-          booking_id?: string
+          booking_id?: string | null
           contractor_id?: string
           created_at?: string
           id?: string
+          job_id?: string | null
           responded_at?: string | null
           status?: string
           suggested_date?: string
@@ -124,6 +127,13 @@ export type Database = {
             columns: ["contractor_id"]
             isOneToOne: false
             referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alternative_suggestions_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
             referencedColumns: ["id"]
           },
         ]
@@ -483,7 +493,8 @@ export type Database = {
       }
       disputes: {
         Row: {
-          booking_id: string
+          booking_id: string | null
+          contractor_id: string | null
           contractor_response: string | null
           contractor_response_photos: string[] | null
           created_at: string
@@ -491,6 +502,7 @@ export type Database = {
           description: string
           dispute_reason: string | null
           id: string
+          job_id: string | null
           raised_by: string
           refund_percentage: number | null
           resolution: string | null
@@ -500,7 +512,8 @@ export type Database = {
           suggested_refund_amount: number | null
         }
         Insert: {
-          booking_id: string
+          booking_id?: string | null
+          contractor_id?: string | null
           contractor_response?: string | null
           contractor_response_photos?: string[] | null
           created_at?: string
@@ -508,6 +521,7 @@ export type Database = {
           description: string
           dispute_reason?: string | null
           id?: string
+          job_id?: string | null
           raised_by: string
           refund_percentage?: number | null
           resolution?: string | null
@@ -517,7 +531,8 @@ export type Database = {
           suggested_refund_amount?: number | null
         }
         Update: {
-          booking_id?: string
+          booking_id?: string | null
+          contractor_id?: string | null
           contractor_response?: string | null
           contractor_response_photos?: string[] | null
           created_at?: string
@@ -525,6 +540,7 @@ export type Database = {
           description?: string
           dispute_reason?: string | null
           id?: string
+          job_id?: string | null
           raised_by?: string
           refund_percentage?: number | null
           resolution?: string | null
@@ -539,6 +555,20 @@ export type Database = {
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disputes_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disputes_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
             referencedColumns: ["id"]
           },
         ]
@@ -621,28 +651,31 @@ export type Database = {
       }
       job_photos: {
         Row: {
-          booking_id: string
+          booking_id: string | null
           contractor_id: string
           exif_timestamp: string | null
           id: string
+          job_id: string | null
           photo_type: string
           photo_url: string
           uploaded_at: string
         }
         Insert: {
-          booking_id: string
+          booking_id?: string | null
           contractor_id: string
           exif_timestamp?: string | null
           id?: string
+          job_id?: string | null
           photo_type: string
           photo_url: string
           uploaded_at?: string
         }
         Update: {
-          booking_id?: string
+          booking_id?: string | null
           contractor_id?: string
           exif_timestamp?: string | null
           id?: string
+          job_id?: string | null
           photo_type?: string
           photo_url?: string
           uploaded_at?: string
@@ -662,70 +695,114 @@ export type Database = {
             referencedRelation: "contractors"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "job_photos_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
         ]
       }
       jobs: {
         Row: {
+          address_id: string | null
           client_id: string
           completed_at: string | null
           contractor_id: string
           created_at: string
+          customer_email: string | null
+          customer_phone: string | null
+          customer_user_id: string | null
           description: string | null
           duration_minutes: number | null
           id: string
           notes: string | null
           payment_intent_id: string | null
+          payment_method_id: string | null
           payment_status: string
+          quote_breakdown: Json | null
           recurrence_rule: Json | null
           scheduled_date: string
           scheduled_time: string | null
           source: string
           status: string
+          stripe_customer_id: string | null
+          stripe_invoice_id: string | null
+          stripe_payment_link_id: string | null
+          stripe_payment_link_url: string | null
           title: string
           total_price: number | null
           updated_at: string
         }
         Insert: {
+          address_id?: string | null
           client_id: string
           completed_at?: string | null
           contractor_id: string
           created_at?: string
+          customer_email?: string | null
+          customer_phone?: string | null
+          customer_user_id?: string | null
           description?: string | null
           duration_minutes?: number | null
           id?: string
           notes?: string | null
           payment_intent_id?: string | null
+          payment_method_id?: string | null
           payment_status?: string
+          quote_breakdown?: Json | null
           recurrence_rule?: Json | null
           scheduled_date: string
           scheduled_time?: string | null
           source?: string
           status?: string
+          stripe_customer_id?: string | null
+          stripe_invoice_id?: string | null
+          stripe_payment_link_id?: string | null
+          stripe_payment_link_url?: string | null
           title?: string
           total_price?: number | null
           updated_at?: string
         }
         Update: {
+          address_id?: string | null
           client_id?: string
           completed_at?: string | null
           contractor_id?: string
           created_at?: string
+          customer_email?: string | null
+          customer_phone?: string | null
+          customer_user_id?: string | null
           description?: string | null
           duration_minutes?: number | null
           id?: string
           notes?: string | null
           payment_intent_id?: string | null
+          payment_method_id?: string | null
           payment_status?: string
+          quote_breakdown?: Json | null
           recurrence_rule?: Json | null
           scheduled_date?: string
           scheduled_time?: string | null
           source?: string
           status?: string
+          stripe_customer_id?: string | null
+          stripe_invoice_id?: string | null
+          stripe_payment_link_id?: string | null
+          stripe_payment_link_url?: string | null
           title?: string
           total_price?: number | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "jobs_address_id_fkey"
+            columns: ["address_id"]
+            isOneToOne: false
+            referencedRelation: "addresses"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "jobs_client_id_fkey"
             columns: ["client_id"]
