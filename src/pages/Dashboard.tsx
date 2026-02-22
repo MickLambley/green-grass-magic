@@ -148,23 +148,28 @@ const Dashboard = ({ contractorSlug, contractorName, contractorLogoUrl, contract
 
     const { data: bookingData } = await supabase
       .from("bookings")
-      .select(
-        `
-        *,
-        contractor:contractors(
-          business_name,
-          user_id
-        )
-      `,
-      )
+      .select("*")
       .eq("user_id", userId)
       .order("scheduled_date", { ascending: false });
 
     if (bookingData) {
-      // Normalize contractor from array to single object (Supabase returns array for joins)
+      // Fetch contractor info separately since FK was removed
+      const contractorIds = [...new Set(bookingData.filter(b => b.contractor_id).map(b => b.contractor_id!))];
+      let contractorMap = new Map<string, { business_name: string | null; user_id: string }>();
+      
+      if (contractorIds.length > 0) {
+        const { data: contractors } = await supabase
+          .from("contractors")
+          .select("id, business_name, user_id")
+          .in("id", contractorIds);
+        if (contractors) {
+          contractors.forEach(c => contractorMap.set(c.id, { business_name: c.business_name, user_id: c.user_id }));
+        }
+      }
+
       const normalized = bookingData.map((b: any) => ({
         ...b,
-        contractor: Array.isArray(b.contractor) ? b.contractor[0] || null : b.contractor,
+        contractor: b.contractor_id ? contractorMap.get(b.contractor_id) || null : null,
       }));
       setBookings(normalized as Booking[]);
 

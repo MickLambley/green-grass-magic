@@ -77,8 +77,6 @@ const RouteOptimizationBanner = ({ contractorId, subscriptionTier, onOpenOptimiz
   }
 
   // Pro/Team: full feature
-  if (pendingCount === 0 && totalSaved === 0) return null;
-
   return (
     <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
       <CardContent className="flex items-center justify-between p-4">
@@ -96,7 +94,7 @@ const RouteOptimizationBanner = ({ contractorId, subscriptionTier, onOpenOptimiz
                   Review suggested route changes to save travel time
                 </p>
               </>
-            ) : (
+            ) : totalSaved > 0 ? (
               <>
                 <p className="text-sm font-semibold text-foreground flex items-center gap-1">
                   <Clock className="w-4 h-4 text-primary" />
@@ -104,6 +102,16 @@ const RouteOptimizationBanner = ({ contractorId, subscriptionTier, onOpenOptimiz
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Route optimization is working in the background
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-foreground flex items-center gap-1">
+                  <TrendingUp className="w-4 h-4 text-primary" />
+                  Route Optimization Active
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Your routes are being automatically optimized nightly
                 </p>
               </>
             )}
