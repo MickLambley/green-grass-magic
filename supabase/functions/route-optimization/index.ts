@@ -111,10 +111,14 @@ function optimizeRoute(jobIds: string[], distanceMap: Map<string, number>): stri
 }
 
 async function runOptimization(contractorId: string, supabase: any) {
-  const today = new Date().toISOString().split("T")[0];
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+  const today = new Date();
+  const dates = [0, 1, 2].map(offset => {
+    const d = new Date(today);
+    d.setDate(today.getDate() + offset);
+    return d.toISOString().split("T")[0];
+  });
 
-  // Fetch jobs for today and tomorrow with client addresses
+  // Fetch jobs for today, tomorrow, and day after
   const { data: jobs } = await supabase
     .from("jobs")
     .select(`
@@ -123,7 +127,7 @@ async function runOptimization(contractorId: string, supabase: any) {
       clients!inner(address)
     `)
     .eq("contractor_id", contractorId)
-    .in("scheduled_date", [today, tomorrow])
+    .in("scheduled_date", dates)
     .in("status", ["scheduled", "in_progress"])
     .order("scheduled_time");
 
@@ -162,186 +166,192 @@ async function runOptimization(contractorId: string, supabase: any) {
     distanceMap.set(`${d.fromId}->${d.toId}`, d.durationMinutes);
   }
 
-  // ── Level 1: Within-Day Flexible Optimization ──
-  const todayJobs = jobsWithAddresses.filter(j => j.scheduled_date === today);
-  const flexibleToday = todayJobs.filter(j => j.time_flexibility === "flexible" && !j.route_optimization_locked);
-  const lockedToday = todayJobs.filter(j => j.route_optimization_locked);
+  // ── Run optimization per day (Level 1 & 3) ──
+  const allResults: { level: number; timeSaved: number; status: string; date: string }[] = [];
 
-  if (flexibleToday.length >= 2) {
-    const currentOrder = flexibleToday.map(j => j.id);
-    const currentTime = calculateRouteTime(currentOrder, distanceMap);
-    const optimizedOrder = optimizeRoute(currentOrder, distanceMap);
-    const optimizedTime = calculateRouteTime(optimizedOrder, distanceMap);
-    const timeSaved = currentTime - optimizedTime;
+  for (const date of dates) {
+    const dayJobs = jobsWithAddresses.filter(j => j.scheduled_date === date);
+    
+    // Level 1: Within-Day Flexible Optimization
+    const flexibleDay = dayJobs.filter(j => j.time_flexibility === "flexible" && !j.route_optimization_locked);
 
-    if (timeSaved > 30) {
-      // Auto-apply Level 1
-      const { data: opt } = await supabase.from("route_optimizations").insert({
-        contractor_id: contractorId,
-        optimization_date: today,
-        level: 1,
-        time_saved_minutes: timeSaved,
-        status: "applied",
-      }).select().single();
+    if (flexibleDay.length >= 2) {
+      const currentOrder = flexibleDay.map(j => j.id);
+      const currentTime = calculateRouteTime(currentOrder, distanceMap);
+      const optimizedOrder = optimizeRoute(currentOrder, distanceMap);
+      const optimizedTime = calculateRouteTime(optimizedOrder, distanceMap);
+      const timeSaved = currentTime - optimizedTime;
 
-      // Reorder the flexible jobs
-      for (let i = 0; i < optimizedOrder.length; i++) {
-        const job = flexibleToday.find(j => j.id === optimizedOrder[i]);
-        if (job) {
-          const hour = 7 + Math.floor(i * 1.5); // Distribute across morning
-          await supabase.from("jobs").update({
-            scheduled_time: `${hour.toString().padStart(2, "0")}:00`,
-            original_scheduled_date: job.scheduled_date,
-          }).eq("id", job.id);
+      if (timeSaved > 30) {
+        await supabase.from("route_optimizations").insert({
+          contractor_id: contractorId,
+          optimization_date: date,
+          level: 1,
+          time_saved_minutes: timeSaved,
+          status: "applied",
+        });
+
+        for (let i = 0; i < optimizedOrder.length; i++) {
+          const job = flexibleDay.find(j => j.id === optimizedOrder[i]);
+          if (job) {
+            const hour = 7 + Math.floor(i * 1.5);
+            await supabase.from("jobs").update({
+              scheduled_time: `${hour.toString().padStart(2, "0")}:00`,
+              original_scheduled_date: job.scheduled_date,
+            }).eq("id", job.id);
+          }
+        }
+
+        allResults.push({ level: 1, timeSaved, status: "applied", date });
+      }
+    }
+
+    // Level 3: Time-Restricted Slot Swapping (Requires Approval)
+    const restrictedDay = dayJobs.filter(j => j.time_flexibility === "time_restricted" && !j.route_optimization_locked);
+
+    if (restrictedDay.length >= 2) {
+      const morningJobs = restrictedDay.filter((j: any) => j.time_slot === "morning");
+      const afternoonJobs = restrictedDay.filter((j: any) => j.time_slot === "afternoon");
+
+      if (morningJobs.length > 0 && afternoonJobs.length > 0) {
+        const currentTotal = calculateRouteTime(morningJobs.map(j => j.id), distanceMap) +
+          calculateRouteTime(afternoonJobs.map(j => j.id), distanceMap);
+
+        const allIds = [...morningJobs.map(j => j.id), ...afternoonJobs.map(j => j.id)];
+        const optimizedAll = optimizeRoute(allIds, distanceMap);
+        const newMorning = optimizedAll.slice(0, morningJobs.length);
+        const newAfternoon = optimizedAll.slice(morningJobs.length);
+        const newTotal = calculateRouteTime(newMorning, distanceMap) + calculateRouteTime(newAfternoon, distanceMap);
+        const timeSaved = currentTotal - newTotal;
+
+        if (timeSaved > 30) {
+          const { data: opt } = await supabase.from("route_optimizations").insert({
+            contractor_id: contractorId,
+            optimization_date: date,
+            level: 3,
+            time_saved_minutes: timeSaved,
+            status: "pending_approval",
+          }).select().single();
+
+          if (opt) {
+            const suggestions = [];
+            for (const jobId of newMorning) {
+              const origJob = restrictedDay.find(j => j.id === jobId) as any;
+              if (origJob && origJob.time_slot !== "morning") {
+                suggestions.push({
+                  route_optimization_id: opt.id, job_id: jobId,
+                  current_date_val: date, current_time_slot: origJob.time_slot,
+                  suggested_date: date, suggested_time_slot: "morning",
+                  requires_customer_approval: true,
+                });
+              }
+            }
+            for (const jobId of newAfternoon) {
+              const origJob = restrictedDay.find(j => j.id === jobId) as any;
+              if (origJob && origJob.time_slot !== "afternoon") {
+                suggestions.push({
+                  route_optimization_id: opt.id, job_id: jobId,
+                  current_date_val: date, current_time_slot: origJob.time_slot,
+                  suggested_date: date, suggested_time_slot: "afternoon",
+                  requires_customer_approval: true,
+                });
+              }
+            }
+
+            if (suggestions.length > 0) {
+              await supabase.from("route_optimization_suggestions").insert(suggestions);
+            }
+
+            const { data: contractor } = await supabase
+              .from("contractors").select("user_id").eq("id", contractorId).single();
+
+            if (contractor) {
+              await supabase.from("notifications").insert({
+                user_id: contractor.user_id,
+                title: "🗺️ Route Optimization Available",
+                message: `A route optimization could save you ${timeSaved} minutes on ${date}. Review the suggested changes.`,
+                type: "route_optimization",
+              });
+            }
+          }
+
+          allResults.push({ level: 3, timeSaved, status: "pending_approval", date });
         }
       }
-
-      return { level: 1, timeSaved, status: "applied" };
     }
   }
 
-  // ── Level 2: Two-Day Flexible Optimization ──
-  const tomorrowJobs = jobsWithAddresses.filter(j => j.scheduled_date === tomorrow);
-  const flexibleAll = [...flexibleToday, ...tomorrowJobs.filter(j => j.time_flexibility === "flexible" && !j.route_optimization_locked)];
+  // ── Level 2: Multi-Day Flexible Optimization ──
+  const allFlexible = jobsWithAddresses.filter(j => j.time_flexibility === "flexible" && !j.route_optimization_locked);
 
-  if (flexibleAll.length >= 3) {
-    // Try redistributing flexible jobs across today and tomorrow
-    const allFlexIds = flexibleAll.map(j => j.id);
-    const currentTotalTime = calculateRouteTime(flexibleToday.map(j => j.id), distanceMap) +
-      calculateRouteTime(tomorrowJobs.filter(j => j.time_flexibility === "flexible").map(j => j.id), distanceMap);
+  if (allFlexible.length >= 3) {
+    // Calculate current total travel per day
+    let currentTotalTime = 0;
+    for (const date of dates) {
+      const dayFlex = allFlexible.filter(j => j.scheduled_date === date);
+      if (dayFlex.length >= 2) {
+        currentTotalTime += calculateRouteTime(dayFlex.map(j => j.id), distanceMap);
+      }
+    }
 
-    // Try moving some tomorrow jobs to today and vice versa
+    const allFlexIds = allFlexible.map(j => j.id);
     const optimizedAll = optimizeRoute(allFlexIds, distanceMap);
-    const half = Math.ceil(optimizedAll.length / 2);
-    const newToday = optimizedAll.slice(0, half);
-    const newTomorrow = optimizedAll.slice(half);
-    const newTotalTime = calculateRouteTime(newToday, distanceMap) + calculateRouteTime(newTomorrow, distanceMap);
+    
+    // Distribute optimized order across the days proportionally
+    const jobsPerDay = dates.map(date => allFlexible.filter(j => j.scheduled_date === date).length);
+    const distributed: { date: string; jobIds: string[] }[] = [];
+    let idx = 0;
+    for (let d = 0; d < dates.length; d++) {
+      const count = jobsPerDay[d];
+      distributed.push({ date: dates[d], jobIds: optimizedAll.slice(idx, idx + count) });
+      idx += count;
+    }
+
+    let newTotalTime = 0;
+    for (const group of distributed) {
+      if (group.jobIds.length >= 2) {
+        newTotalTime += calculateRouteTime(group.jobIds, distanceMap);
+      }
+    }
+
     const timeSaved = currentTotalTime - newTotalTime;
 
     if (timeSaved > 30) {
-      const { data: opt } = await supabase.from("route_optimizations").insert({
+      await supabase.from("route_optimizations").insert({
         contractor_id: contractorId,
-        optimization_date: today,
+        optimization_date: dates[0],
         level: 2,
         time_saved_minutes: timeSaved,
         status: "applied",
-      }).select().single();
+      });
 
-      // Apply date changes
-      for (const jobId of newToday) {
-        const job = flexibleAll.find(j => j.id === jobId);
-        if (job && job.scheduled_date !== today) {
-          await supabase.from("jobs").update({
-            scheduled_date: today,
-            original_scheduled_date: job.scheduled_date,
-          }).eq("id", jobId);
-        }
-      }
-      for (const jobId of newTomorrow) {
-        const job = flexibleAll.find(j => j.id === jobId);
-        if (job && job.scheduled_date !== tomorrow) {
-          await supabase.from("jobs").update({
-            scheduled_date: tomorrow,
-            original_scheduled_date: job.scheduled_date,
-          }).eq("id", jobId);
+      for (const group of distributed) {
+        for (const jobId of group.jobIds) {
+          const job = allFlexible.find(j => j.id === jobId);
+          if (job && job.scheduled_date !== group.date) {
+            await supabase.from("jobs").update({
+              scheduled_date: group.date,
+              original_scheduled_date: job.scheduled_date,
+            }).eq("id", jobId);
+          }
         }
       }
 
-      return { level: 2, timeSaved, status: "applied" };
+      allResults.push({ level: 2, timeSaved, status: "applied", date: dates[0] });
     }
   }
 
-  // ── Level 3: Time-Restricted Slot Swapping (Requires Approval) ──
-  const restrictedToday = todayJobs.filter(j => j.time_flexibility === "time_restricted" && !j.route_optimization_locked);
+  if (allResults.length === 0) return null;
 
-  if (restrictedToday.length >= 2) {
-    // Try swapping morning/afternoon slots
-    const morningJobs = restrictedToday.filter((j: any) => j.time_slot === "morning");
-    const afternoonJobs = restrictedToday.filter((j: any) => j.time_slot === "afternoon");
-
-    if (morningJobs.length > 0 && afternoonJobs.length > 0) {
-      // Calculate current route time
-      const currentMorningTime = calculateRouteTime(morningJobs.map(j => j.id), distanceMap);
-      const currentAfternoonTime = calculateRouteTime(afternoonJobs.map(j => j.id), distanceMap);
-      const currentTotal = currentMorningTime + currentAfternoonTime;
-
-      // Try swapping some jobs between slots
-      const allIds = [...morningJobs.map(j => j.id), ...afternoonJobs.map(j => j.id)];
-      const optimizedAll = optimizeRoute(allIds, distanceMap);
-      const newMorning = optimizedAll.slice(0, morningJobs.length);
-      const newAfternoon = optimizedAll.slice(morningJobs.length);
-      const newTotal = calculateRouteTime(newMorning, distanceMap) + calculateRouteTime(newAfternoon, distanceMap);
-      const timeSaved = currentTotal - newTotal;
-
-      if (timeSaved > 30) {
-        // Create pending approval optimization
-        const { data: opt } = await supabase.from("route_optimizations").insert({
-          contractor_id: contractorId,
-          optimization_date: today,
-          level: 3,
-          time_saved_minutes: timeSaved,
-          status: "pending_approval",
-        }).select().single();
-
-        if (opt) {
-          // Create suggestions for each moved job
-          const suggestions = [];
-          for (const jobId of newMorning) {
-            const origJob = restrictedToday.find(j => j.id === jobId) as any;
-            if (origJob && origJob.time_slot !== "morning") {
-              suggestions.push({
-                route_optimization_id: opt.id,
-                job_id: jobId,
-                current_date_val: today,
-                current_time_slot: origJob.time_slot,
-                suggested_date: today,
-                suggested_time_slot: "morning",
-                requires_customer_approval: true,
-              });
-            }
-          }
-          for (const jobId of newAfternoon) {
-            const origJob = restrictedToday.find(j => j.id === jobId) as any;
-            if (origJob && origJob.time_slot !== "afternoon") {
-              suggestions.push({
-                route_optimization_id: opt.id,
-                job_id: jobId,
-                current_date_val: today,
-                current_time_slot: origJob.time_slot,
-                suggested_date: today,
-                suggested_time_slot: "afternoon",
-                requires_customer_approval: true,
-              });
-            }
-          }
-
-          if (suggestions.length > 0) {
-            await supabase.from("route_optimization_suggestions").insert(suggestions);
-          }
-
-          // Notify contractor
-          const { data: contractor } = await supabase
-            .from("contractors")
-            .select("user_id")
-            .eq("id", contractorId)
-            .single();
-
-          if (contractor) {
-            await supabase.from("notifications").insert({
-              user_id: contractor.user_id,
-              title: "🗺️ Route Optimization Available",
-              message: `A route optimization could save you ${timeSaved} minutes today. Review the suggested changes in your dashboard.`,
-              type: "route_optimization",
-            });
-          }
-        }
-
-        return { level: 3, timeSaved, status: "pending_approval" };
-      }
-    }
-  }
-
-  return null;
+  // Return the most impactful result
+  const totalSaved = allResults.reduce((sum, r) => sum + r.timeSaved, 0);
+  const hasApproval = allResults.some(r => r.status === "pending_approval");
+  return {
+    level: Math.max(...allResults.map(r => r.level)),
+    timeSaved: totalSaved,
+    status: hasApproval ? "pending_approval" : "applied",
+    details: allResults,
+  };
 }
 
 serve(async (req) => {
