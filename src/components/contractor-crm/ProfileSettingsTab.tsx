@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Save, CreditCard, ExternalLink } from "lucide-react";
+import { Loader2, Save, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -28,7 +28,7 @@ const TIER_LABELS: Record<string, { label: string; fee: string; color: string }>
 const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isUpgrading, setIsUpgrading] = useState(false);
-  const [isManaging, setIsManaging] = useState(false);
+  
 
   const [form, setForm] = useState({
     business_name: contractor.business_name || "",
@@ -66,39 +66,26 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
     setIsSaving(false);
   };
 
-  const handleUpgrade = async (tier: string) => {
+  const handleSelectTier = async (tier: string) => {
     setIsUpgrading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("manage-subscription", {
-        body: { action: "create-checkout", tier },
-      });
-      if (error) throw error;
-      if (data?.url) {
-        window.open(data.url, "_blank");
-      }
-    } catch {
-      toast.error("Failed to start upgrade");
+    const { data, error } = await supabase
+      .from("contractors")
+      .update({ subscription_tier: tier })
+      .eq("id", contractor.id)
+      .select()
+      .single();
+
+    if (error) {
+      toast.error("Failed to update plan");
+    } else if (data) {
+      toast.success(`Switched to ${TIER_LABELS[tier]?.label || tier} plan`);
+      onUpdate(data);
     }
     setIsUpgrading(false);
   };
 
-  const handleManageBilling = async () => {
-    setIsManaging(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("manage-subscription", {
-        body: { action: "create-portal" },
-      });
-      if (error) throw error;
-      if (data?.url) {
-        window.open(data.url, "_blank");
-      }
-    } catch {
-      toast.error("Failed to open billing portal");
-    }
-    setIsManaging(false);
-  };
-
   const currentTier = TIER_LABELS[contractor.subscription_tier] || TIER_LABELS.free;
+  const allTiers = ["free", "starter", "pro", "team"];
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -106,44 +93,28 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
       <Card>
         <CardHeader>
           <CardTitle className="font-display text-lg">Subscription</CardTitle>
-          <CardDescription>Manage your Yardly plan</CardDescription>
+          <CardDescription>Choose your Yardly plan</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Current Plan</p>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge variant="outline" className={currentTier.color}>{currentTier.label}</Badge>
-                <span className="text-xs text-muted-foreground">{currentTier.fee} transaction fee</span>
-              </div>
-            </div>
-            {contractor.subscription_tier !== "free" && (
-              <Button variant="outline" size="sm" onClick={handleManageBilling} disabled={isManaging}>
-                {isManaging ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CreditCard className="w-4 h-4 mr-2" /> Manage Billing</>}
-              </Button>
-            )}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {allTiers.map((tier) => {
+              const info = TIER_LABELS[tier];
+              const prices: Record<string, string> = { free: "$0", starter: "$29", pro: "$59", team: "$99" };
+              const isActive = contractor.subscription_tier === tier;
+              return (
+                <Button
+                  key={tier}
+                  variant={isActive ? "default" : "outline"}
+                  className="flex flex-col h-auto py-3"
+                  onClick={() => handleSelectTier(tier)}
+                  disabled={isUpgrading || isActive}
+                >
+                  <span className="font-semibold">{info.label}</span>
+                  <span className="text-xs opacity-80">{prices[tier]}/mo • {info.fee} fee</span>
+                </Button>
+              );
+            })}
           </div>
-
-          {contractor.subscription_tier === "free" && (
-            <div className="grid grid-cols-3 gap-3 pt-2">
-              {["starter", "pro", "team"].map((tier) => {
-                const info = TIER_LABELS[tier];
-                const prices: Record<string, string> = { starter: "$29", pro: "$59", team: "$99" };
-                return (
-                  <Button
-                    key={tier}
-                    variant="outline"
-                    className="flex flex-col h-auto py-3"
-                    onClick={() => handleUpgrade(tier)}
-                    disabled={isUpgrading}
-                  >
-                    <span className="font-semibold">{info.label}</span>
-                    <span className="text-xs text-muted-foreground">{prices[tier]}/mo • {info.fee} fee</span>
-                  </Button>
-                );
-              })}
-            </div>
-          )}
         </CardContent>
       </Card>
 
