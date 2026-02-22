@@ -19,9 +19,67 @@ interface JobWithAddress {
   total_price: number | null;
   client_id: string;
   address_id: string | null;
+  duration_minutes: number | null;
   address_lat?: number;
   address_lng?: number;
   address_string?: string;
+}
+
+// Round minutes up to nearest 5-minute increment
+function roundUpTo5(minutes: number): number {
+  return Math.ceil(minutes / 5) * 5;
+}
+
+// Format total minutes from midnight as HH:MM string
+function minutesToTime(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60);
+  const m = Math.round(totalMinutes % 60);
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+}
+
+// Calculate sequential schedule times for an ordered list of jobs,
+// accounting for each job's duration + travel time to the next job
+function calculateSequentialTimes(
+  jobOrder: string[],
+  jobMap: Map<string, { duration_minutes: number }>,
+  distanceMap: Map<string, number>,
+  startMinutes: number
+): { jobId: string; time: string; endMinutes: number }[] {
+  const result: { jobId: string; time: string; endMinutes: number }[] = [];
+  let currentMinutes = startMinutes;
+
+  for (let i = 0; i < jobOrder.length; i++) {
+    const jobId = jobOrder[i];
+    const job = jobMap.get(jobId);
+    const duration = job?.duration_minutes || 60; // default 60 min
+
+    result.push({
+      jobId,
+      time: minutesToTime(currentMinutes),
+      endMinutes: currentMinutes + duration,
+    });
+
+    // Add duration + travel time to next job
+    if (i < jobOrder.length - 1) {
+      const travelKey = `${jobId}->${jobOrder[i + 1]}`;
+      const travelMinutes = distanceMap.get(travelKey) || 0;
+      currentMinutes += duration + roundUpTo5(travelMinutes);
+    }
+  }
+
+  return result;
+}
+
+// Calculate total time span for a sequential route (first job start to last job end)
+function calculateSequentialRouteSpan(
+  jobOrder: string[],
+  jobMap: Map<string, { duration_minutes: number }>,
+  distanceMap: Map<string, number>,
+  startMinutes: number
+): number {
+  const times = calculateSequentialTimes(jobOrder, jobMap, distanceMap, startMinutes);
+  if (times.length === 0) return 0;
+  return times[times.length - 1].endMinutes - startMinutes;
 }
 
 interface DistanceResult {
@@ -123,7 +181,7 @@ async function runOptimization(contractorId: string, supabase: any) {
     .from("jobs")
     .select(`
       id, scheduled_date, scheduled_time, time_flexibility, route_optimization_locked,
-      total_price, client_id, address_id,
+      total_price, client_id, address_id, duration_minutes,
       clients!inner(address)
     `)
     .eq("contractor_id", contractorId)
@@ -184,17 +242,26 @@ async function runOptimization(contractorId: string, supabase: any) {
     // Fetch distances for this day's jobs
     await fetchDistancesForJobs(dayJobs);
     
+    // Build a job map for duration lookups
+    const jobMap = new Map<string, { duration_minutes: number }>();
+    for (const j of dayJobs) {
+      jobMap.set(j.id, { duration_minutes: j.duration_minutes || 60 });
+    }
+
     // Level 1: Within-Day Optimization (flexible jobs across all slots + time_restricted within their slot)
     const unlocked = dayJobs.filter(j => !j.route_optimization_locked);
     const flexibleDay = unlocked.filter(j => j.time_flexibility === "flexible");
     const restrictedMorning = unlocked.filter(j => j.time_flexibility === "time_restricted" && (j as any).time_slot === "morning");
     const restrictedAfternoon = unlocked.filter(j => j.time_flexibility === "time_restricted" && (j as any).time_slot === "afternoon");
 
-    // Groups to optimize independently: flexible (any time), restricted-morning, restricted-afternoon
+    // Groups to optimize independently: morning starts at 7:00 (420min), afternoon at 12:00 (720min)
+    const MORNING_START = 7 * 60; // 420
+    const AFTERNOON_START = 12 * 60; // 720
+
     const optimizationGroups = [
-      { jobs: flexibleDay, label: "flexible", slotStart: 7, slotSpacing: 1.5 },
-      { jobs: restrictedMorning, label: "restricted-morning", slotStart: 7, slotSpacing: 0.5 },
-      { jobs: restrictedAfternoon, label: "restricted-afternoon", slotStart: 12, slotSpacing: 0.5 },
+      { jobs: flexibleDay, label: "flexible", startMinutes: MORNING_START },
+      { jobs: restrictedMorning, label: "restricted-morning", startMinutes: MORNING_START },
+      { jobs: restrictedAfternoon, label: "restricted-afternoon", startMinutes: AFTERNOON_START },
     ];
 
     let dayTimeSaved = 0;
@@ -204,43 +271,55 @@ async function runOptimization(contractorId: string, supabase: any) {
       if (group.jobs.length < 2) continue;
 
       const currentOrder = group.jobs.map(j => j.id);
-      const currentTime = calculateRouteTime(currentOrder, distanceMap);
+      const currentSpan = calculateSequentialRouteSpan(currentOrder, jobMap, distanceMap, group.startMinutes);
       const optimizedOrder = optimizeRoute(currentOrder, distanceMap);
-      const optimizedTime = calculateRouteTime(optimizedOrder, distanceMap);
-      const saved = currentTime - optimizedTime;
+      const optimizedSpan = calculateSequentialRouteSpan(optimizedOrder, jobMap, distanceMap, group.startMinutes);
+      const saved = currentSpan - optimizedSpan;
 
       if (saved > 0) {
         dayTimeSaved += saved;
-        for (let i = 0; i < optimizedOrder.length; i++) {
-          const job = group.jobs.find(j => j.id === optimizedOrder[i]);
-          if (job) {
-            const minutes = (group.slotStart + i * group.slotSpacing) * 60;
-            const h = Math.floor(minutes / 60);
-            const m = Math.round(minutes % 60);
-            dayUpdates.push({
-              jobId: job.id,
-              time: `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`,
-              origDate: job.scheduled_date,
-            });
-          }
-        }
+      }
+
+      // Always set sequential times for optimized order (even if no time saved, times should be correct)
+      const scheduledTimes = calculateSequentialTimes(optimizedOrder, jobMap, distanceMap, group.startMinutes);
+      for (const st of scheduledTimes) {
+        dayUpdates.push({
+          jobId: st.jobId,
+          time: st.time,
+          origDate: date,
+        });
       }
     }
 
-    if (dayTimeSaved > 5) {
-      await supabase.from("route_optimizations").insert({
-        contractor_id: contractorId,
-        optimization_date: date,
-        level: 1,
-        time_saved_minutes: dayTimeSaved,
-        status: "applied",
-      });
+    // Also schedule single-job groups with correct times
+    for (const group of optimizationGroups) {
+      if (group.jobs.length === 1) {
+        const job = group.jobs[0];
+        dayUpdates.push({
+          jobId: job.id,
+          time: minutesToTime(group.startMinutes),
+          origDate: date,
+        });
+      }
+    }
 
+    // Always apply sequential time updates; log optimization if time was saved
+    if (dayUpdates.length > 0) {
       for (const upd of dayUpdates) {
         await supabase.from("jobs").update({
           scheduled_time: upd.time,
           original_scheduled_date: upd.origDate,
         }).eq("id", upd.jobId);
+      }
+
+      if (dayTimeSaved > 0) {
+        await supabase.from("route_optimizations").insert({
+          contractor_id: contractorId,
+          optimization_date: date,
+          level: 1,
+          time_saved_minutes: dayTimeSaved,
+          status: "applied",
+        });
       }
 
       allResults.push({ level: 1, timeSaved: dayTimeSaved, status: "applied", date });
