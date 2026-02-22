@@ -89,6 +89,7 @@ const JobsTab = ({ contractorId, subscriptionTier, onOpenRouteOptimization }: Jo
   const [jobs, setJobs] = useState<UnifiedJob[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isOptimizing, setIsOptimizing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -110,6 +111,30 @@ const JobsTab = ({ contractorId, subscriptionTier, onOpenRouteOptimization }: Jo
   const [markPaidJob, setMarkPaidJob] = useState<{
     id: string; title: string; client_name: string; total_price: number | null;
   } | null>(null);
+
+  const handleRunOptimization = async () => {
+    setIsOptimizing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("route-optimization", {
+        body: { contractor_id: contractorId },
+      });
+      if (error) throw error;
+      if (data?.result) {
+        const r = data.result;
+        toast.success(`Route optimized! Level ${r.level} saved ${r.timeSaved} minutes. Status: ${r.status === "pending_approval" ? "Awaiting your approval" : "Applied"}`);
+        if (r.status === "pending_approval" && onOpenRouteOptimization) {
+          onOpenRouteOptimization();
+        }
+        fetchData();
+      } else {
+        toast.info("No optimization opportunities found for today's jobs. Ensure jobs have client addresses and are not locked.");
+      }
+    } catch (err) {
+      console.error("Optimization error:", err);
+      toast.error("Failed to run route optimization");
+    }
+    setIsOptimizing(false);
+  };
 
   const [form, setForm] = useState({
     title: "Lawn Mowing",
@@ -447,9 +472,10 @@ const JobsTab = ({ contractorId, subscriptionTier, onOpenRouteOptimization }: Jo
               <List className="w-4 h-4" />
             </Button>
           </div>
-          {subscriptionTier && ["pro", "team"].includes(subscriptionTier) && onOpenRouteOptimization && (
-            <Button variant="outline" onClick={onOpenRouteOptimization}>
-              <MapPin className="w-4 h-4 mr-2" /> Route Optimization
+          {subscriptionTier && ["pro", "team"].includes(subscriptionTier) && (
+            <Button variant="outline" onClick={handleRunOptimization} disabled={isOptimizing}>
+              {isOptimizing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <MapPin className="w-4 h-4 mr-2" />}
+              {isOptimizing ? "Optimizing..." : "Run Route Optimization"}
             </Button>
           )}
           <Button onClick={() => openCreateDialog()} disabled={clients.length === 0}>

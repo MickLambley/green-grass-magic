@@ -352,7 +352,39 @@ serve(async (req) => {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Get all contractors with Pro or Team subscriptions
+    // Check if this is an on-demand run for a specific contractor
+    let requestedContractorId: string | null = null;
+    if (req.method === "POST") {
+      try {
+        const body = await req.json();
+        requestedContractorId = body.contractor_id || null;
+      } catch { /* no body, run for all */ }
+    }
+
+    if (requestedContractorId) {
+      // On-demand single contractor run
+      const { data: contractor } = await supabase
+        .from("contractors")
+        .select("id, subscription_tier, user_id")
+        .eq("id", requestedContractorId)
+        .in("subscription_tier", ["pro", "team"])
+        .eq("is_active", true)
+        .single();
+
+      if (!contractor) {
+        return new Response(JSON.stringify({ error: "Contractor not eligible for optimization" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const result = await runOptimization(contractor.id, supabase);
+      return new Response(JSON.stringify({ success: true, result }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Batch run for all eligible contractors (cron/scheduled)
     const { data: contractors } = await supabase
       .from("contractors")
       .select("id, subscription_tier, user_id")
@@ -387,7 +419,6 @@ serve(async (req) => {
     if (starterContractors) {
       for (const contractor of starterContractors) {
         try {
-          // Run optimization but don't apply — just calculate savings
           const today = new Date().toISOString().split("T")[0];
           const { data: jobs } = await supabase
             .from("jobs")
@@ -413,7 +444,6 @@ serve(async (req) => {
               const potentialSaving = currentTime - optimizedTime;
 
               if (potentialSaving > 15) {
-                // Send teaser notification
                 await supabase.from("notifications").insert({
                   user_id: contractor.user_id,
                   title: "💡 Route Optimization Available",
