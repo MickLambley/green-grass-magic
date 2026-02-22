@@ -157,13 +157,21 @@ async function runOptimization(contractorId: string, supabase: any) {
 
   if (jobsWithAddresses.length < 2) return null;
 
-  // Get all pairwise distances
-  const locations = jobsWithAddresses.map(j => ({ id: j.id, address: j.address_string }));
-  const distances = await getDistanceMatrix(locations, locations);
-
+  // Build distance map per-day to avoid MAX_ELEMENTS_EXCEEDED (limit: 100 elements per request)
   const distanceMap = new Map<string, number>();
-  for (const d of distances) {
-    distanceMap.set(`${d.fromId}->${d.toId}`, d.durationMinutes);
+
+  async function fetchDistancesForJobs(jobs: typeof jobsWithAddresses) {
+    if (jobs.length < 2) return;
+    const locations = jobs.map(j => ({ id: j.id, address: j.address_string }));
+    // Batch into chunks of 10 origins to stay under 100 elements (10x10=100)
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < locations.length; i += BATCH_SIZE) {
+      const originBatch = locations.slice(i, i + BATCH_SIZE);
+      const distances = await getDistanceMatrix(originBatch, locations);
+      for (const d of distances) {
+        distanceMap.set(`${d.fromId}->${d.toId}`, d.durationMinutes);
+      }
+    }
   }
 
   // ── Run optimization per day (Level 1 & 3) ──
@@ -171,6 +179,10 @@ async function runOptimization(contractorId: string, supabase: any) {
 
   for (const date of dates) {
     const dayJobs = jobsWithAddresses.filter(j => j.scheduled_date === date);
+    if (dayJobs.length < 2) continue;
+
+    // Fetch distances for this day's jobs
+    await fetchDistancesForJobs(dayJobs);
     
     // Level 1: Within-Day Optimization (flexible jobs across all slots + time_restricted within their slot)
     const unlocked = dayJobs.filter(j => !j.route_optimization_locked);
