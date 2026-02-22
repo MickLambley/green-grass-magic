@@ -172,38 +172,66 @@ async function runOptimization(contractorId: string, supabase: any) {
   for (const date of dates) {
     const dayJobs = jobsWithAddresses.filter(j => j.scheduled_date === date);
     
-    // Level 1: Within-Day Flexible Optimization
-    const flexibleDay = dayJobs.filter(j => j.time_flexibility === "flexible" && !j.route_optimization_locked);
+    // Level 1: Within-Day Optimization (flexible jobs across all slots + time_restricted within their slot)
+    const unlocked = dayJobs.filter(j => !j.route_optimization_locked);
+    const flexibleDay = unlocked.filter(j => j.time_flexibility === "flexible");
+    const restrictedMorning = unlocked.filter(j => j.time_flexibility === "time_restricted" && (j as any).time_slot === "morning");
+    const restrictedAfternoon = unlocked.filter(j => j.time_flexibility === "time_restricted" && (j as any).time_slot === "afternoon");
 
-    if (flexibleDay.length >= 2) {
-      const currentOrder = flexibleDay.map(j => j.id);
+    // Groups to optimize independently: flexible (any time), restricted-morning, restricted-afternoon
+    const optimizationGroups = [
+      { jobs: flexibleDay, label: "flexible", slotStart: 7, slotSpacing: 1.5 },
+      { jobs: restrictedMorning, label: "restricted-morning", slotStart: 7, slotSpacing: 0.5 },
+      { jobs: restrictedAfternoon, label: "restricted-afternoon", slotStart: 12, slotSpacing: 0.5 },
+    ];
+
+    let dayTimeSaved = 0;
+    const dayUpdates: { jobId: string; time: string; origDate: string }[] = [];
+
+    for (const group of optimizationGroups) {
+      if (group.jobs.length < 2) continue;
+
+      const currentOrder = group.jobs.map(j => j.id);
       const currentTime = calculateRouteTime(currentOrder, distanceMap);
       const optimizedOrder = optimizeRoute(currentOrder, distanceMap);
       const optimizedTime = calculateRouteTime(optimizedOrder, distanceMap);
-      const timeSaved = currentTime - optimizedTime;
+      const saved = currentTime - optimizedTime;
 
-      if (timeSaved > 30) {
-        await supabase.from("route_optimizations").insert({
-          contractor_id: contractorId,
-          optimization_date: date,
-          level: 1,
-          time_saved_minutes: timeSaved,
-          status: "applied",
-        });
-
+      if (saved > 0) {
+        dayTimeSaved += saved;
         for (let i = 0; i < optimizedOrder.length; i++) {
-          const job = flexibleDay.find(j => j.id === optimizedOrder[i]);
+          const job = group.jobs.find(j => j.id === optimizedOrder[i]);
           if (job) {
-            const hour = 7 + Math.floor(i * 1.5);
-            await supabase.from("jobs").update({
-              scheduled_time: `${hour.toString().padStart(2, "0")}:00`,
-              original_scheduled_date: job.scheduled_date,
-            }).eq("id", job.id);
+            const minutes = (group.slotStart + i * group.slotSpacing) * 60;
+            const h = Math.floor(minutes / 60);
+            const m = Math.round(minutes % 60);
+            dayUpdates.push({
+              jobId: job.id,
+              time: `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`,
+              origDate: job.scheduled_date,
+            });
           }
         }
-
-        allResults.push({ level: 1, timeSaved, status: "applied", date });
       }
+    }
+
+    if (dayTimeSaved > 5) {
+      await supabase.from("route_optimizations").insert({
+        contractor_id: contractorId,
+        optimization_date: date,
+        level: 1,
+        time_saved_minutes: dayTimeSaved,
+        status: "applied",
+      });
+
+      for (const upd of dayUpdates) {
+        await supabase.from("jobs").update({
+          scheduled_time: upd.time,
+          original_scheduled_date: upd.origDate,
+        }).eq("id", upd.jobId);
+      }
+
+      allResults.push({ level: 1, timeSaved: dayTimeSaved, status: "applied", date });
     }
 
     // Level 3: Time-Restricted Slot Swapping (Requires Approval)
@@ -224,7 +252,7 @@ async function runOptimization(contractorId: string, supabase: any) {
         const newTotal = calculateRouteTime(newMorning, distanceMap) + calculateRouteTime(newAfternoon, distanceMap);
         const timeSaved = currentTotal - newTotal;
 
-        if (timeSaved > 30) {
+        if (timeSaved > 5) {
           const { data: opt } = await supabase.from("route_optimizations").insert({
             contractor_id: contractorId,
             optimization_date: date,
@@ -316,7 +344,7 @@ async function runOptimization(contractorId: string, supabase: any) {
 
     const timeSaved = currentTotalTime - newTotalTime;
 
-    if (timeSaved > 30) {
+    if (timeSaved > 5) {
       await supabase.from("route_optimizations").insert({
         contractor_id: contractorId,
         optimization_date: dates[0],
