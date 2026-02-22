@@ -281,7 +281,16 @@ const ContractorDashboard = () => {
             </div>
           )}
           {activeTab === "clients" && <ClientsTab contractorId={contractor.id} />}
-          {activeTab === "jobs" && <JobsTab contractorId={contractor.id} />}
+          {activeTab === "jobs" && (
+            <div className="space-y-4">
+              <RouteOptimizationBanner
+                contractorId={contractor.id}
+                subscriptionTier={contractor.subscription_tier}
+                onOpenOptimizations={() => setRouteOptOpen(true)}
+              />
+              <JobsTab contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} onOpenRouteOptimization={() => setRouteOptOpen(true)} />
+            </div>
+          )}
           {activeTab === "quotes" && <QuotesTab contractorId={contractor.id} />}
           {activeTab === "invoices" && <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} />}
           {activeTab === "pricing" && <ContractorPricingTab contractor={contractor} onUpdate={setContractor} />}
