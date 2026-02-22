@@ -37,6 +37,8 @@ interface ClientAddress {
 
 interface JobsTabProps {
   contractorId: string;
+  subscriptionTier?: string;
+  onOpenRouteOptimization?: () => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -83,7 +85,7 @@ interface UnifiedJob {
   customer_email?: string | null;
 }
 
-const JobsTab = ({ contractorId }: JobsTabProps) => {
+const JobsTab = ({ contractorId, subscriptionTier, onOpenRouteOptimization }: JobsTabProps) => {
   const [jobs, setJobs] = useState<UnifiedJob[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -445,6 +447,11 @@ const JobsTab = ({ contractorId }: JobsTabProps) => {
               <List className="w-4 h-4" />
             </Button>
           </div>
+          {subscriptionTier && ["pro", "team"].includes(subscriptionTier) && onOpenRouteOptimization && (
+            <Button variant="outline" onClick={onOpenRouteOptimization}>
+              <MapPin className="w-4 h-4 mr-2" /> Route Optimization
+            </Button>
+          )}
           <Button onClick={() => openCreateDialog()} disabled={clients.length === 0}>
             <Plus className="w-4 h-4 mr-2" /> New Job
           </Button>
