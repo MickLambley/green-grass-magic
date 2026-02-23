@@ -288,7 +288,7 @@ const ContractorDashboard = () => {
                 subscriptionTier={contractor.subscription_tier}
                 onOpenOptimizations={() => setRouteOptOpen(true)}
               />
-              <JobsTab contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} onOpenRouteOptimization={() => setRouteOptOpen(true)} />
+              <JobsTab contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} workingHours={contractor.working_hours as any} onOpenRouteOptimization={() => setRouteOptOpen(true)} />
             </div>
           )}
           {activeTab === "quotes" && <QuotesTab contractorId={contractor.id} />}

@@ -16,11 +16,17 @@ interface TimelineJob {
   client_address?: { street?: string; city?: string; state?: string; postcode?: string } | null;
 }
 
+interface WorkingHoursRange {
+  start: string; // "HH:MM"
+  end: string;
+}
+
 interface DayTimelineProps {
   jobs: TimelineJob[];
   date: Date;
   onDateChange: (date: Date) => void;
   onJobClick?: (job: TimelineJob) => void;
+  workingHours?: WorkingHoursRange | null; // null = day off
 }
 
 const statusColors: Record<string, { bg: string; border: string; text: string }> = {
@@ -52,7 +58,7 @@ function formatDateLabel(date: Date): string {
   return format(date, "EEEE, d MMMM yyyy");
 }
 
-const DayTimeline = ({ jobs, date, onDateChange, onJobClick }: DayTimelineProps) => {
+const DayTimeline = ({ jobs, date, onDateChange, onJobClick, workingHours }: DayTimelineProps) => {
   // Sort jobs by scheduled_time, filter to ones with times
   const sortedJobs = useMemo(() => {
     return [...jobs]
@@ -95,17 +101,26 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick }: DayTimelineProps)
     return result;
   }, [sortedJobs]);
 
-  // Timeline bounds
+  // Timeline bounds — include working hours range
   const timelineBounds = useMemo(() => {
-    if (sortedJobs.length === 0) return { startHour: 7, endHour: 17 };
-    const firstStart = timeToMinutes(sortedJobs[0].scheduled_time!);
-    const lastJob = sortedJobs[sortedJobs.length - 1];
-    const lastEnd = timeToMinutes(lastJob.scheduled_time!) + (lastJob.duration_minutes || 60);
-    return {
-      startHour: Math.floor(firstStart / 60),
-      endHour: Math.min(Math.ceil(lastEnd / 60) + 1, 24),
-    };
-  }, [sortedJobs]);
+    let startHour = 7;
+    let endHour = 17;
+
+    if (workingHours) {
+      startHour = Math.floor(timeToMinutes(workingHours.start) / 60);
+      endHour = Math.ceil(timeToMinutes(workingHours.end) / 60);
+    }
+
+    if (sortedJobs.length > 0) {
+      const firstStart = timeToMinutes(sortedJobs[0].scheduled_time!);
+      const lastJob = sortedJobs[sortedJobs.length - 1];
+      const lastEnd = timeToMinutes(lastJob.scheduled_time!) + (lastJob.duration_minutes || 60);
+      startHour = Math.min(startHour, Math.floor(firstStart / 60));
+      endHour = Math.max(endHour, Math.min(Math.ceil(lastEnd / 60) + 1, 24));
+    }
+
+    return { startHour, endHour };
+  }, [sortedJobs, workingHours]);
 
   const totalHours = timelineBounds.endHour - timelineBounds.startHour;
   const hourLabels = Array.from({ length: totalHours + 1 }, (_, i) => timelineBounds.startHour + i);
@@ -133,13 +148,40 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick }: DayTimelineProps)
         </div>
       </CardHeader>
       <CardContent className="px-3 pb-4">
-        {sortedJobs.length === 0 ? (
+        {workingHours === null && (
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
+            Day off — not a working day
+          </div>
+        )}
+
+        {workingHours !== null && sortedJobs.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground text-sm">
             <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
             No scheduled jobs for this day
           </div>
-        ) : (
+        ) : workingHours !== null ? (
           <div className="relative" style={{ minHeight: `${Math.max(totalHours * 64, 300)}px` }}>
+            {/* Working hours shaded background */}
+            {workingHours && (() => {
+              const whStart = timeToMinutes(workingHours.start);
+              const whEnd = timeToMinutes(workingHours.end);
+              const top = getTop(whStart);
+              const height = getHeight(whEnd - whStart);
+              return (
+                <div
+                  className="absolute right-0 rounded-md bg-primary/[0.04] border border-primary/10"
+                  style={{ top: `${top}%`, height: `${height}%`, left: "3.5rem" }}
+                >
+                  <span className="absolute -left-0.5 top-0 -translate-x-full text-[9px] text-primary/50 font-medium whitespace-nowrap">
+                    Start
+                  </span>
+                  <span className="absolute -left-0.5 bottom-0 -translate-x-full text-[9px] text-primary/50 font-medium whitespace-nowrap">
+                    End
+                  </span>
+                </div>
+              );
+            })()}
             {/* Hour gridlines */}
             {hourLabels.map((hour) => {
               const top = getTop(hour * 60);
@@ -245,7 +287,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick }: DayTimelineProps)
               </span>
             </div>
           </div>
-        )}
+        ) : null}
 
         {cancelledJobs.length > 0 && (
           <div className="mt-3 pt-3 border-t border-border">
