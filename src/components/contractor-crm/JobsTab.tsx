@@ -20,7 +20,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock } from "lucide-react";
+import DayTimeline from "./DayTimeline";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, endOfWeek, isToday } from "date-fns";
 import type { Tables, Json } from "@/integrations/supabase/types";
@@ -95,7 +96,8 @@ const JobsTab = ({ contractorId, subscriptionTier, onOpenRouteOptimization }: Jo
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [viewMode, setViewMode] = useState<"list" | "calendar">("calendar");
+  const [viewMode, setViewMode] = useState<"list" | "calendar" | "timeline">("timeline");
+  const [timelineDate, setTimelineDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [platformDetailOpen, setPlatformDetailOpen] = useState(false);
   const [selectedPlatformBookingId, setSelectedPlatformBookingId] = useState<string | null>(null);
@@ -465,10 +467,13 @@ const JobsTab = ({ contractorId, subscriptionTier, onOpenRouteOptimization }: Jo
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center border border-border rounded-lg overflow-hidden">
-            <Button variant={viewMode === "calendar" ? "default" : "ghost"} size="sm" className="rounded-none" onClick={() => setViewMode("calendar")}>
+            <Button variant={viewMode === "timeline" ? "default" : "ghost"} size="sm" className="rounded-none" onClick={() => setViewMode("timeline")} title="Timeline">
+              <Clock className="w-4 h-4" />
+            </Button>
+            <Button variant={viewMode === "calendar" ? "default" : "ghost"} size="sm" className="rounded-none" onClick={() => setViewMode("calendar")} title="Calendar">
               <LayoutGrid className="w-4 h-4" />
             </Button>
-            <Button variant={viewMode === "list" ? "default" : "ghost"} size="sm" className="rounded-none" onClick={() => setViewMode("list")}>
+            <Button variant={viewMode === "list" ? "default" : "ghost"} size="sm" className="rounded-none" onClick={() => setViewMode("list")} title="List">
               <List className="w-4 h-4" />
             </Button>
           </div>
@@ -533,6 +538,34 @@ const JobsTab = ({ contractorId, subscriptionTier, onOpenRouteOptimization }: Jo
             ))}
           </div>
         </div>
+      )}
+
+      {/* Timeline View */}
+      {viewMode === "timeline" && clients.length > 0 && (
+        <DayTimeline
+          jobs={filtered.filter(j => j.scheduled_date === format(timelineDate, "yyyy-MM-dd")).map(j => ({
+            id: j.id,
+            title: j.title,
+            client_name: j.client_name,
+            scheduled_time: j.scheduled_time,
+            duration_minutes: j.duration_minutes ?? null,
+            status: j.status,
+            source: j.source,
+            client_address: j.client_address,
+          }))}
+          date={timelineDate}
+          onDateChange={setTimelineDate}
+          onJobClick={(job) => {
+            const unified = jobs.find(j => j.id === job.id);
+            if (!unified) return;
+            if (unified.source === "platform") {
+              setSelectedPlatformBookingId(unified.id);
+              setPlatformDetailOpen(true);
+            } else {
+              openEditDialog(unified as any);
+            }
+          }}
+        />
       )}
 
       {viewMode === "calendar" && clients.length > 0 && (
