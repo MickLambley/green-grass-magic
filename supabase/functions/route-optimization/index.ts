@@ -10,6 +10,38 @@ const GOOGLE_MAPS_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") || Deno.env.get(
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+interface DaySchedule {
+  enabled: boolean;
+  start: string; // "HH:MM"
+  end: string;   // "HH:MM"
+}
+
+interface WorkingHours {
+  monday: DaySchedule;
+  tuesday: DaySchedule;
+  wednesday: DaySchedule;
+  thursday: DaySchedule;
+  friday: DaySchedule;
+  saturday: DaySchedule;
+  sunday: DaySchedule;
+}
+
+const DAY_NAMES: (keyof WorkingHours)[] = [
+  "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"
+];
+
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + (m || 0);
+}
+
+function getDaySchedule(workingHours: WorkingHours, dateStr: string): DaySchedule | null {
+  const d = new Date(dateStr + "T00:00:00");
+  const dayName = DAY_NAMES[d.getDay()];
+  const schedule = workingHours[dayName];
+  return schedule?.enabled ? schedule : null;
+}
+
 interface JobWithAddress {
   id: string;
   scheduled_date: string;
@@ -169,6 +201,22 @@ function optimizeRoute(jobIds: string[], distanceMap: Map<string, number>): stri
 }
 
 async function runOptimization(contractorId: string, supabase: any) {
+  // Fetch contractor's working hours
+  const { data: contractorData } = await supabase
+    .from("contractors")
+    .select("working_hours")
+    .eq("id", contractorId)
+    .single();
+
+  const defaultSchedule: DaySchedule = { enabled: true, start: "07:00", end: "17:00" };
+  const defaultWorkingHours: WorkingHours = {
+    monday: defaultSchedule, tuesday: defaultSchedule, wednesday: defaultSchedule,
+    thursday: defaultSchedule, friday: defaultSchedule,
+    saturday: { enabled: false, start: "08:00", end: "14:00" },
+    sunday: { enabled: false, start: "08:00", end: "14:00" },
+  };
+  const workingHours: WorkingHours = (contractorData?.working_hours as WorkingHours) || defaultWorkingHours;
+
   const today = new Date();
   const dates = [0, 1, 2].map(offset => {
     const d = new Date(today);
@@ -199,11 +247,16 @@ async function runOptimization(contractorId: string, supabase: any) {
     const addressStr = [addr.street, addr.city, addr.state, addr.postcode].filter(Boolean).join(", ");
     if (!addressStr) continue;
 
-    // Determine time slot from scheduled_time
+    // Determine time slot from scheduled_time using working hours midpoint
+    const daySchedule = getDaySchedule(workingHours, job.scheduled_date);
+    const workStart = daySchedule ? timeToMinutes(daySchedule.start) : 7 * 60;
+    const workEnd = daySchedule ? timeToMinutes(daySchedule.end) : 17 * 60;
+    const midpoint = Math.floor((workStart + workEnd) / 2);
+
     let timeSlot = "morning";
     if (job.scheduled_time) {
-      const hour = parseInt(job.scheduled_time.split(":")[0]);
-      timeSlot = hour >= 12 ? "afternoon" : "morning";
+      const jobMinutes = timeToMinutes(job.scheduled_time);
+      timeSlot = jobMinutes >= midpoint ? "afternoon" : "morning";
     }
 
     jobsWithAddresses.push({
@@ -236,6 +289,13 @@ async function runOptimization(contractorId: string, supabase: any) {
   const allResults: { level: number; timeSaved: number; status: string; date: string }[] = [];
 
   for (const date of dates) {
+    // Skip non-working days
+    const daySchedule = getDaySchedule(workingHours, date);
+    if (!daySchedule) {
+      console.log(`Skipping ${date} — not a working day`);
+      continue;
+    }
+
     const dayJobs = jobsWithAddresses.filter(j => j.scheduled_date === date);
     if (dayJobs.length < 2) continue;
 
@@ -248,20 +308,21 @@ async function runOptimization(contractorId: string, supabase: any) {
       jobMap.set(j.id, { duration_minutes: j.duration_minutes || 60 });
     }
 
-    // Level 1: Within-Day Optimization (flexible jobs across all slots + time_restricted within their slot)
+    // Use contractor's working hours for start times
+    const WORK_START = timeToMinutes(daySchedule.start);
+    const WORK_END = timeToMinutes(daySchedule.end);
+    const MIDPOINT = Math.floor((WORK_START + WORK_END) / 2);
+
+    // Level 1: Within-Day Optimization
     const unlocked = dayJobs.filter(j => !j.route_optimization_locked);
     const flexibleDay = unlocked.filter(j => j.time_flexibility === "flexible");
     const restrictedMorning = unlocked.filter(j => j.time_flexibility === "time_restricted" && (j as any).time_slot === "morning");
     const restrictedAfternoon = unlocked.filter(j => j.time_flexibility === "time_restricted" && (j as any).time_slot === "afternoon");
 
-    // Groups to optimize independently: morning starts at 7:00 (420min), afternoon at 12:00 (720min)
-    const MORNING_START = 7 * 60; // 420
-    const AFTERNOON_START = 12 * 60; // 720
-
     const optimizationGroups = [
-      { jobs: flexibleDay, label: "flexible", startMinutes: MORNING_START },
-      { jobs: restrictedMorning, label: "restricted-morning", startMinutes: MORNING_START },
-      { jobs: restrictedAfternoon, label: "restricted-afternoon", startMinutes: AFTERNOON_START },
+      { jobs: flexibleDay, label: "flexible", startMinutes: WORK_START },
+      { jobs: restrictedMorning, label: "restricted-morning", startMinutes: WORK_START },
+      { jobs: restrictedAfternoon, label: "restricted-afternoon", startMinutes: MIDPOINT },
     ];
 
     let dayTimeSaved = 0;
