@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Save, CreditCard } from "lucide-react";
+import { Loader2, Save, CreditCard, Clock } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
+import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "./WorkingHoursEditor";
 
 type Contractor = Tables<"contractors">;
 
@@ -40,6 +41,10 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
     bank_account_number: contractor.bank_account_number || "",
   });
 
+  const [workingHours, setWorkingHours] = useState<WorkingHours>(
+    (contractor.working_hours as unknown as WorkingHours) || DEFAULT_WORKING_HOURS
+  );
+
   const handleSave = async () => {
     setIsSaving(true);
     const { data, error } = await supabase
@@ -52,6 +57,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
         gst_registered: form.gst_registered,
         bank_bsb: form.bank_bsb.trim() || null,
         bank_account_number: form.bank_account_number.trim() || null,
+        working_hours: workingHours as any,
       })
       .eq("id", contractor.id)
       .select()
@@ -147,6 +153,20 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
             <Switch checked={form.gst_registered} onCheckedChange={(v) => setForm({ ...form, gst_registered: v })} id="gst" />
             <Label htmlFor="gst" className="cursor-pointer">GST Registered</Label>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Working Hours */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-display text-lg flex items-center gap-2">
+            <Clock className="w-5 h-5" />
+            Working Hours
+          </CardTitle>
+          <CardDescription>Set your available working days and times</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <WorkingHoursEditor value={workingHours} onChange={setWorkingHours} />
         </CardContent>
       </Card>
 

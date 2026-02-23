@@ -349,6 +349,7 @@ export type Database = {
           user_id: string
           website_copy: Json | null
           website_published: boolean
+          working_hours: Json
         }
         Insert: {
           abn?: string | null
@@ -394,6 +395,7 @@ export type Database = {
           user_id: string
           website_copy?: Json | null
           website_published?: boolean
+          working_hours?: Json
         }
         Update: {
           abn?: string | null
@@ -439,6 +441,7 @@ export type Database = {
           user_id?: string
           website_copy?: Json | null
           website_published?: boolean
+          working_hours?: Json
         }
         Relationships: []
       }

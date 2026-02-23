@@ -12,6 +12,7 @@ import {
   CreditCard, Globe, Users, Calendar, Sparkles, ExternalLink,
   CheckCircle2, User as UserIcon, Plus,
 } from "lucide-react";
+import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "@/components/contractor-crm/WorkingHoursEditor";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -47,6 +48,7 @@ const ContractorOnboarding = () => {
     phone: "",
     business_address: "",
   });
+  const [workingHours, setWorkingHours] = useState<WorkingHours>(DEFAULT_WORKING_HOURS);
 
   // Client form
   const [clientForm, setClientForm] = useState({
@@ -107,6 +109,9 @@ const ContractorOnboarding = () => {
           phone: contractorData.phone || "",
           business_address: contractorData.business_address || "",
         });
+        if (contractorData.working_hours) {
+          setWorkingHours(contractorData.working_hours as unknown as WorkingHours);
+        }
         // If profile is already set, determine which step to start on
         if (contractorData.business_name) {
           if (contractorData.stripe_onboarding_complete) {
@@ -133,6 +138,7 @@ const ContractorOnboarding = () => {
       abn: profile.abn.replace(/\s/g, "") || null,
       phone: profile.phone.trim() || null,
       business_address: profile.business_address.trim() || null,
+      working_hours: workingHours as any,
       is_active: true,
     }).eq("user_id", user.id).select().single();
 
@@ -370,6 +376,12 @@ const ContractorOnboarding = () => {
                   onChange={(e) => setProfile({ ...profile, business_address: e.target.value })}
                   placeholder="123 Main St, Melbourne VIC 3000"
                 />
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <Label className="text-sm font-semibold">Working Days & Hours</Label>
+                <p className="text-xs text-muted-foreground mb-2">Set which days you work and your start/end times</p>
+                <WorkingHoursEditor value={workingHours} onChange={setWorkingHours} compact />
               </div>
 
               <Button onClick={handleSaveProfile} disabled={isSaving} className="w-full" size="lg">
