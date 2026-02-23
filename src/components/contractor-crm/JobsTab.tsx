@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { WorkingHours } from "./WorkingHoursEditor";
 import PlatformBookingDetailDialog from "./PlatformBookingDetailDialog";
 import JobCompletionDialog from "./JobCompletionDialog";
 import SuggestTimeDialog from "./SuggestTimeDialog";
@@ -39,6 +40,7 @@ interface ClientAddress {
 interface JobsTabProps {
   contractorId: string;
   subscriptionTier?: string;
+  workingHours?: WorkingHours | null;
   onOpenRouteOptimization?: () => void;
 }
 
@@ -86,7 +88,7 @@ interface UnifiedJob {
   customer_email?: string | null;
 }
 
-const JobsTab = ({ contractorId, subscriptionTier, onOpenRouteOptimization }: JobsTabProps) => {
+const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorkingHours, onOpenRouteOptimization }: JobsTabProps) => {
   const [jobs, setJobs] = useState<UnifiedJob[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -555,6 +557,13 @@ const JobsTab = ({ contractorId, subscriptionTier, onOpenRouteOptimization }: Jo
           }))}
           date={timelineDate}
           onDateChange={setTimelineDate}
+          workingHours={(() => {
+            if (!contractorWorkingHours) return undefined;
+            const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
+            const dayKey = dayNames[timelineDate.getDay()];
+            const schedule = contractorWorkingHours[dayKey];
+            return schedule?.enabled ? { start: schedule.start, end: schedule.end } : null;
+          })()}
           onJobClick={(job) => {
             const unified = jobs.find(j => j.id === job.id);
             if (!unified) return;
