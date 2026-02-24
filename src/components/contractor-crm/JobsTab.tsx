@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { autoShiftTime } from "@/lib/scheduleConflict";
 import { supabase } from "@/integrations/supabase/client";
 import type { WorkingHours } from "./WorkingHoursEditor";
 import PlatformBookingDetailDialog from "./PlatformBookingDetailDialog";
@@ -276,6 +277,18 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     setDialogOpen(true);
   };
 
+  // Helper: get existing job slots for a given date (for conflict detection)
+  const getSameDaySlots = useCallback(async (date: string, excludeJobId?: string) => {
+    const sameDayJobs = jobs.filter(
+      (j) => j.scheduled_date === date && j.scheduled_time && j.status !== "cancelled" && j.id !== excludeJobId,
+    );
+    return sameDayJobs.map((j) => ({
+      id: j.id,
+      scheduled_time: j.scheduled_time!,
+      duration_minutes: j.duration_minutes || 60,
+    }));
+  }, [jobs]);
+
   const handleSave = async () => {
     if (!form.client_id) { toast.error("Please select a client"); return; }
     if (!form.scheduled_date) { toast.error("Please select a date"); return; }
@@ -290,13 +303,25 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
         }
       : null;
 
+    // Auto-shift if there's a scheduling conflict
+    let resolvedTime = form.scheduled_time || null;
+    if (resolvedTime) {
+      const duration = form.duration_minutes ? parseInt(form.duration_minutes) : 60;
+      const existing = await getSameDaySlots(form.scheduled_date, editingJob?.id);
+      const result = autoShiftTime(resolvedTime, duration, existing);
+      if (result.shifted) {
+        resolvedTime = result.newTime;
+        toast.info(result.message);
+      }
+    }
+
     const payload = {
       contractor_id: contractorId,
       client_id: form.client_id,
       title: form.title.trim() || "Lawn Mowing",
       description: form.description.trim() || null,
       scheduled_date: form.scheduled_date,
-      scheduled_time: form.scheduled_time || null,
+      scheduled_time: resolvedTime,
       duration_minutes: form.duration_minutes ? parseInt(form.duration_minutes) : null,
       total_price: form.total_price ? parseFloat(form.total_price) : null,
       notes: form.notes.trim() || null,
@@ -575,14 +600,24 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             }
           }}
           onJobReschedule={async (jobId, newTime, source) => {
+            // Auto-shift if conflict
+            const dateStr = format(timelineDate, "yyyy-MM-dd");
+            const job = jobs.find(j => j.id === jobId);
+            const duration = job?.duration_minutes || 60;
+            const existing = await getSameDaySlots(dateStr, jobId);
+            const shift = autoShiftTime(newTime, duration, existing);
+            const finalTime = shift.shifted ? shift.newTime : newTime;
+
+            if (shift.shifted) toast.info(shift.message);
+
             if (source === "platform") {
-              const { error } = await supabase.from("bookings").update({ scheduled_time: newTime }).eq("id", jobId);
+              const { error } = await supabase.from("bookings").update({ scheduled_time: finalTime }).eq("id", jobId);
               if (error) { toast.error("Failed to reschedule"); return; }
             } else {
-              const { error } = await supabase.from("jobs").update({ scheduled_time: newTime }).eq("id", jobId);
+              const { error } = await supabase.from("jobs").update({ scheduled_time: finalTime }).eq("id", jobId);
               if (error) { toast.error("Failed to reschedule"); return; }
             }
-            toast.success(`Rescheduled to ${newTime}`);
+            toast.success(`Rescheduled to ${finalTime}`);
             fetchData();
           }}
         />
