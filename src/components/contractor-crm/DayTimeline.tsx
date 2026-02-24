@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Clock, Car, ChevronLeft, ChevronRight, GripVertical } from "lucide-react";
+import { MapPin, Clock, Car, ChevronLeft, ChevronRight, GripVertical, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format, addDays, subDays, isToday, isTomorrow, isYesterday } from "date-fns";
 
@@ -17,7 +17,7 @@ interface TimelineJob {
 }
 
 interface WorkingHoursRange {
-  start: string; // "HH:MM"
+  start: string;
   end: string;
 }
 
@@ -27,7 +27,7 @@ interface DayTimelineProps {
   onDateChange: (date: Date) => void;
   onJobClick?: (job: TimelineJob) => void;
   onJobReschedule?: (jobId: string, newTime: string, source: "crm" | "platform") => void;
-  workingHours?: WorkingHoursRange | null; // null = day off
+  workingHours?: WorkingHoursRange | null;
 }
 
 const statusColors: Record<string, { bg: string; border: string; text: string }> = {
@@ -39,6 +39,9 @@ const statusColors: Record<string, { bg: string; border: string; text: string }>
   confirmed: { bg: "bg-sky/10", border: "border-sky/40", text: "text-sky" },
   pending_confirmation: { bg: "bg-sunshine/10", border: "border-sunshine/40", text: "text-sunshine" },
 };
+
+// Pixels per hour — large enough so 15-min jobs get ~30px
+const PX_PER_HOUR = 120;
 
 function timeToMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -65,15 +68,22 @@ function formatDateLabel(date: Date): string {
   return format(date, "EEEE, d MMMM yyyy");
 }
 
-// Snap to nearest 15-minute interval
 function snapTo15(minutes: number): number {
   return Math.round(minutes / 15) * 15;
+}
+
+function formatHourLabel(hour: number): string {
+  if (hour === 0) return "12 AM";
+  if (hour < 12) return `${hour} AM`;
+  if (hour === 12) return "12 PM";
+  return `${hour - 12} PM`;
 }
 
 const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, workingHours }: DayTimelineProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
   const [dragJobId, setDragJobId] = useState<string | null>(null);
   const [dropPreviewMinutes, setDropPreviewMinutes] = useState<number | null>(null);
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
   const sortedJobs = useMemo(() => {
     return [...jobs]
@@ -126,18 +136,20 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
   }, [sortedJobs, workingHours]);
 
   const totalHours = timelineBounds.endHour - timelineBounds.startHour;
+  const totalPx = totalHours * PX_PER_HOUR;
   const hourLabels = Array.from({ length: totalHours + 1 }, (_, i) => timelineBounds.startHour + i);
-  const totalMinutes = totalHours * 60;
-  const getTop = (minutes: number) => ((minutes - timelineBounds.startHour * 60) / totalMinutes) * 100;
-  const getHeight = (duration: number) => (duration / totalMinutes) * 100;
 
-  // Convert a Y position in the timeline container to minutes
+  // Convert minutes to pixel offset
+  const getTopPx = (minutes: number) => ((minutes - timelineBounds.startHour * 60) / 60) * PX_PER_HOUR;
+  const getHeightPx = (duration: number) => (duration / 60) * PX_PER_HOUR;
+
   const yToMinutes = useCallback((y: number): number => {
     if (!timelineRef.current) return 0;
     const rect = timelineRef.current.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, y / rect.height));
+    const totalMinutes = totalHours * 60;
     return snapTo15(timelineBounds.startHour * 60 + pct * totalMinutes);
-  }, [timelineBounds, totalMinutes]);
+  }, [timelineBounds, totalHours]);
 
   const handleDragStart = useCallback((e: React.DragEvent, job: TimelineJob) => {
     if (job.status === "completed" || job.status === "cancelled") {
@@ -147,7 +159,6 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
     setDragJobId(job.id);
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", job.id);
-    // Make the drag image semi-transparent
     if (e.currentTarget instanceof HTMLElement) {
       e.currentTarget.style.opacity = "0.5";
     }
@@ -192,6 +203,18 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
   const cancelledJobs = jobs.filter(j => j.status === "cancelled");
   const isDraggable = !!onJobReschedule;
 
+  // A job is "short" if it would render less than 48px tall
+  const isShortJob = (durationMinutes: number) => getHeightPx(durationMinutes) < 48;
+
+  const handleJobCardClick = (job: TimelineJob, durationMinutes: number) => {
+    if (isShortJob(durationMinutes)) {
+      // Toggle expand for short jobs
+      setExpandedJobId(prev => prev === job.id ? null : job.id);
+    } else {
+      onJobClick?.(job);
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -221,17 +244,17 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
             No scheduled jobs for this day
           </div>
         ) : workingHours !== null ? (
-          <div className="relative" style={{ minHeight: `${Math.max(totalHours * 64, 300)}px` }}>
+          <div className="relative" style={{ height: `${totalPx}px` }}>
             {/* Working hours shaded background */}
             {workingHours && (() => {
               const whStart = timeToMinutes(workingHours.start);
               const whEnd = timeToMinutes(workingHours.end);
-              const top = getTop(whStart);
-              const height = getHeight(whEnd - whStart);
+              const top = getTopPx(whStart);
+              const height = getHeightPx(whEnd - whStart);
               return (
                 <div
                   className="absolute right-0 rounded-md bg-primary/[0.04] border border-primary/10"
-                  style={{ top: `${top}%`, height: `${height}%`, left: "3.5rem" }}
+                  style={{ top: `${top}px`, height: `${height}px`, left: "3.5rem" }}
                 >
                   <span className="absolute -left-0.5 top-0 -translate-x-full text-[9px] text-primary/50 font-medium whitespace-nowrap">
                     Start
@@ -245,12 +268,12 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
 
             {/* Hour gridlines */}
             {hourLabels.map((hour) => {
-              const top = getTop(hour * 60);
+              const top = getTopPx(hour * 60);
               return (
-                <div key={hour} className="absolute left-0 right-0" style={{ top: `${top}%` }}>
+                <div key={hour} className="absolute left-0 right-0" style={{ top: `${top}px` }}>
                   <div className="flex items-start">
                     <span className="text-[10px] text-muted-foreground w-12 -mt-1.5 text-right pr-2 shrink-0">
-                      {hour === 0 ? "12 AM" : hour <= 12 ? `${hour} ${hour < 12 ? "AM" : "PM"}` : `${hour - 12} PM`}
+                      {formatHourLabel(hour)}
                     </span>
                     <div className="flex-1 border-t border-border/50" />
                   </div>
@@ -262,7 +285,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
             {dragJobId && dropPreviewMinutes !== null && (
               <div
                 className="absolute left-14 right-2 h-0.5 bg-primary rounded-full z-30 pointer-events-none"
-                style={{ top: `${getTop(dropPreviewMinutes)}%` }}
+                style={{ top: `${getTopPx(dropPreviewMinutes)}px` }}
               >
                 <span className="absolute -left-1 -top-2.5 text-[9px] font-bold text-primary bg-background px-1 rounded">
                   {minutesToTime(dropPreviewMinutes)}
@@ -274,28 +297,29 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
             <div
               ref={timelineRef}
               className="ml-14 relative"
-              style={{ minHeight: `${Math.max(totalHours * 64, 300)}px` }}
+              style={{ height: `${totalPx}px` }}
               onDragOver={isDraggable ? handleDragOver : undefined}
               onDrop={isDraggable ? handleDrop : undefined}
             >
               {entries.map((entry, idx) => {
-                const top = getTop(entry.startMinutes);
-                const height = getHeight(entry.durationMinutes);
-                const minPx = entry.type === "job" ? 48 : 24;
+                const topPx = getTopPx(entry.startMinutes);
+                const heightPx = getHeightPx(entry.durationMinutes);
 
                 if (entry.type === "travel") {
                   return (
                     <div
                       key={`travel-${idx}`}
                       className={`absolute left-2 right-2 flex items-center justify-center transition-opacity ${dragJobId ? "opacity-30" : ""}`}
-                      style={{ top: `${top}%`, height: `max(${height}%, ${minPx}px)` }}
+                      style={{ top: `${topPx}px`, height: `${Math.max(heightPx, 20)}px` }}
                     >
-                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/60 border border-dashed border-border">
-                        <Car className="w-3 h-3 text-muted-foreground" />
-                        <span className="text-[10px] font-medium text-muted-foreground">
-                          {formatDuration(entry.travelMinutes!)} travel
-                        </span>
-                      </div>
+                      {heightPx >= 20 && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/60 border border-dashed border-border">
+                          <Car className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-[10px] font-medium text-muted-foreground">
+                            {formatDuration(entry.travelMinutes!)} travel
+                          </span>
+                        </div>
+                      )}
                     </div>
                   );
                 }
@@ -304,11 +328,11 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                 const colors = statusColors[job.status] || statusColors.scheduled;
                 const startTime = job.scheduled_time!;
                 const endMinutes = entry.startMinutes + entry.durationMinutes;
-                const endH = Math.floor(endMinutes / 60);
-                const endM = endMinutes % 60;
-                const endTime = `${endH.toString().padStart(2, "0")}:${endM.toString().padStart(2, "0")}`;
+                const endTime = minutesToTime(endMinutes);
                 const canDrag = isDraggable && job.status !== "completed" && job.status !== "cancelled";
                 const isBeingDragged = dragJobId === job.id;
+                const short = isShortJob(entry.durationMinutes);
+                const isExpanded = expandedJobId === job.id;
 
                 return (
                   <div
@@ -316,43 +340,63 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                     draggable={canDrag}
                     onDragStart={canDrag ? (e) => handleDragStart(e, job) : undefined}
                     onDragEnd={canDrag ? handleDragEnd : undefined}
-                    className={`absolute left-1 right-1 rounded-lg border-l-4 ${colors.border} ${colors.bg} px-3 py-2 cursor-pointer hover:shadow-md transition-all overflow-hidden ${
+                    className={`absolute left-1 right-1 rounded-lg border-l-4 ${colors.border} ${colors.bg} cursor-pointer hover:shadow-md transition-all overflow-hidden ${
                       canDrag ? "cursor-grab active:cursor-grabbing" : ""
                     } ${isBeingDragged ? "opacity-50 shadow-lg ring-2 ring-primary/30" : ""}`}
-                    style={{ top: `${top}%`, minHeight: `max(${height}%, ${minPx}px)`, zIndex: isBeingDragged ? 20 : 10 }}
-                    onClick={() => !isBeingDragged && onJobClick?.(job)}
+                    style={{
+                      top: `${topPx}px`,
+                      height: isExpanded ? "auto" : `${Math.max(heightPx, 28)}px`,
+                      minHeight: isExpanded ? `${Math.max(heightPx, 28)}px` : undefined,
+                      zIndex: isExpanded ? 25 : isBeingDragged ? 20 : 10,
+                    }}
+                    onClick={() => !isBeingDragged && handleJobCardClick(job, entry.durationMinutes)}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1 flex items-start gap-1.5">
-                        {canDrag && (
-                          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 mt-0.5" />
-                        )}
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold text-foreground truncate">{job.title}</span>
-                            {job.source === "platform" && (
-                              <Badge variant="outline" className="text-[8px] px-1 py-0 shrink-0">🌐</Badge>
+                    {/* Compact layout for short jobs */}
+                    {short && !isExpanded ? (
+                      <div className="flex items-center gap-2 px-2 py-1 h-full">
+                        {canDrag && <GripVertical className="w-3 h-3 text-muted-foreground/50 shrink-0" />}
+                        <span className="text-[10px] font-bold text-foreground truncate">{job.title}</span>
+                        <span className="text-[10px] text-muted-foreground shrink-0">{startTime}–{endTime}</span>
+                        <ChevronDown className="w-3 h-3 text-muted-foreground/50 shrink-0 ml-auto" />
+                      </div>
+                    ) : (
+                      <div className="px-3 py-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1 flex items-start gap-1.5">
+                            {canDrag && (
+                              <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 mt-0.5" />
                             )}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-foreground truncate">{job.title}</span>
+                                {job.source === "platform" && (
+                                  <Badge variant="outline" className="text-[8px] px-1 py-0 shrink-0">🌐</Badge>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-muted-foreground truncate">{job.client_name}</p>
+                            </div>
                           </div>
-                          <p className="text-[11px] text-muted-foreground truncate">{job.client_name}</p>
+                          <div className="text-right shrink-0">
+                            <p className="text-[11px] font-semibold text-foreground">{startTime}</p>
+                            <p className="text-[10px] text-muted-foreground">→ {endTime}</p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-[11px] font-semibold text-foreground">{startTime}</p>
-                        <p className="text-[10px] text-muted-foreground">→ {endTime}</p>
-                      </div>
-                    </div>
-                    {entry.durationMinutes >= 30 && (
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                          <Clock className="w-2.5 h-2.5" />
-                          {formatDuration(entry.durationMinutes)}
-                        </span>
-                        {job.client_address?.street && (
-                          <span className="flex items-center gap-1 text-[10px] text-muted-foreground truncate">
-                            <MapPin className="w-2.5 h-2.5 shrink-0" />
-                            <span className="truncate">{job.client_address.street}</span>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <Clock className="w-2.5 h-2.5" />
+                            {formatDuration(entry.durationMinutes)}
                           </span>
+                          {job.client_address?.street && (
+                            <span className="flex items-center gap-1 text-[10px] text-muted-foreground truncate">
+                              <MapPin className="w-2.5 h-2.5 shrink-0" />
+                              <span className="truncate">{job.client_address.street}</span>
+                            </span>
+                          )}
+                        </div>
+                        {short && isExpanded && (
+                          <div className="flex justify-center mt-1">
+                            <ChevronUp className="w-3 h-3 text-muted-foreground/50" />
+                          </div>
                         )}
                       </div>
                     )}
