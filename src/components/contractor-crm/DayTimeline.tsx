@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Clock, Car, ChevronLeft, ChevronRight } from "lucide-react";
+import { MapPin, Clock, Car, ChevronLeft, ChevronRight, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format, addDays, subDays, isToday, isTomorrow, isYesterday } from "date-fns";
 
@@ -26,6 +26,7 @@ interface DayTimelineProps {
   date: Date;
   onDateChange: (date: Date) => void;
   onJobClick?: (job: TimelineJob) => void;
+  onJobReschedule?: (jobId: string, newTime: string, source: "crm" | "platform") => void;
   workingHours?: WorkingHoursRange | null; // null = day off
 }
 
@@ -44,6 +45,12 @@ function timeToMinutes(t: string): number {
   return h * 60 + (m || 0);
 }
 
+function minutesToTime(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+}
+
 function formatDuration(mins: number): string {
   if (mins < 60) return `${mins}m`;
   const h = Math.floor(mins / 60);
@@ -58,19 +65,22 @@ function formatDateLabel(date: Date): string {
   return format(date, "EEEE, d MMMM yyyy");
 }
 
-const DayTimeline = ({ jobs, date, onDateChange, onJobClick, workingHours }: DayTimelineProps) => {
-  // Sort jobs by scheduled_time, filter to ones with times
+// Snap to nearest 15-minute interval
+function snapTo15(minutes: number): number {
+  return Math.round(minutes / 15) * 15;
+}
+
+const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, workingHours }: DayTimelineProps) => {
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const [dragJobId, setDragJobId] = useState<string | null>(null);
+  const [dropPreviewMinutes, setDropPreviewMinutes] = useState<number | null>(null);
+
   const sortedJobs = useMemo(() => {
     return [...jobs]
       .filter((j) => j.scheduled_time && j.status !== "cancelled")
-      .sort((a, b) => {
-        const aMin = timeToMinutes(a.scheduled_time!);
-        const bMin = timeToMinutes(b.scheduled_time!);
-        return aMin - bMin;
-      });
+      .sort((a, b) => timeToMinutes(a.scheduled_time!) - timeToMinutes(b.scheduled_time!));
   }, [jobs]);
 
-  // Calculate travel gaps between consecutive jobs
   const entries = useMemo(() => {
     const result: {
       type: "job" | "travel";
@@ -84,10 +94,8 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, workingHours }: Day
       const job = sortedJobs[i];
       const startMin = timeToMinutes(job.scheduled_time!);
       const duration = job.duration_minutes || 60;
-
       result.push({ type: "job", job, startMinutes: startMin, durationMinutes: duration });
 
-      // Calculate gap to next job
       if (i < sortedJobs.length - 1) {
         const endMin = startMin + duration;
         const nextStart = timeToMinutes(sortedJobs[i + 1].scheduled_time!);
@@ -97,20 +105,16 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, workingHours }: Day
         }
       }
     }
-
     return result;
   }, [sortedJobs]);
 
-  // Timeline bounds — include working hours range
   const timelineBounds = useMemo(() => {
     let startHour = 7;
     let endHour = 17;
-
     if (workingHours) {
       startHour = Math.floor(timeToMinutes(workingHours.start) / 60);
       endHour = Math.ceil(timeToMinutes(workingHours.end) / 60);
     }
-
     if (sortedJobs.length > 0) {
       const firstStart = timeToMinutes(sortedJobs[0].scheduled_time!);
       const lastJob = sortedJobs[sortedJobs.length - 1];
@@ -118,19 +122,75 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, workingHours }: Day
       startHour = Math.min(startHour, Math.floor(firstStart / 60));
       endHour = Math.max(endHour, Math.min(Math.ceil(lastEnd / 60) + 1, 24));
     }
-
     return { startHour, endHour };
   }, [sortedJobs, workingHours]);
 
   const totalHours = timelineBounds.endHour - timelineBounds.startHour;
   const hourLabels = Array.from({ length: totalHours + 1 }, (_, i) => timelineBounds.startHour + i);
-
-  // Calculate position and height as percentages of the timeline
   const totalMinutes = totalHours * 60;
   const getTop = (minutes: number) => ((minutes - timelineBounds.startHour * 60) / totalMinutes) * 100;
   const getHeight = (duration: number) => (duration / totalMinutes) * 100;
 
+  // Convert a Y position in the timeline container to minutes
+  const yToMinutes = useCallback((y: number): number => {
+    if (!timelineRef.current) return 0;
+    const rect = timelineRef.current.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, y / rect.height));
+    return snapTo15(timelineBounds.startHour * 60 + pct * totalMinutes);
+  }, [timelineBounds, totalMinutes]);
+
+  const handleDragStart = useCallback((e: React.DragEvent, job: TimelineJob) => {
+    if (job.status === "completed" || job.status === "cancelled") {
+      e.preventDefault();
+      return;
+    }
+    setDragJobId(job.id);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", job.id);
+    // Make the drag image semi-transparent
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = "0.5";
+    }
+  }, []);
+
+  const handleDragEnd = useCallback((e: React.DragEvent) => {
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = "1";
+    }
+    setDragJobId(null);
+    setDropPreviewMinutes(null);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (!timelineRef.current) return;
+    const rect = timelineRef.current.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    setDropPreviewMinutes(yToMinutes(y));
+  }, [yToMinutes]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const jobId = e.dataTransfer.getData("text/plain");
+    if (!jobId || !timelineRef.current || !onJobReschedule) return;
+
+    const rect = timelineRef.current.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const newMinutes = yToMinutes(y);
+    const newTime = minutesToTime(newMinutes);
+
+    const job = jobs.find(j => j.id === jobId);
+    if (job) {
+      onJobReschedule(jobId, newTime, job.source);
+    }
+
+    setDragJobId(null);
+    setDropPreviewMinutes(null);
+  }, [yToMinutes, onJobReschedule, jobs]);
+
   const cancelledJobs = jobs.filter(j => j.status === "cancelled");
+  const isDraggable = !!onJobReschedule;
 
   return (
     <Card>
@@ -182,6 +242,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, workingHours }: Day
                 </div>
               );
             })()}
+
             {/* Hour gridlines */}
             {hourLabels.map((hour) => {
               const top = getTop(hour * 60);
@@ -197,8 +258,26 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, workingHours }: Day
               );
             })}
 
+            {/* Drop preview indicator */}
+            {dragJobId && dropPreviewMinutes !== null && (
+              <div
+                className="absolute left-14 right-2 h-0.5 bg-primary rounded-full z-30 pointer-events-none"
+                style={{ top: `${getTop(dropPreviewMinutes)}%` }}
+              >
+                <span className="absolute -left-1 -top-2.5 text-[9px] font-bold text-primary bg-background px-1 rounded">
+                  {minutesToTime(dropPreviewMinutes)}
+                </span>
+              </div>
+            )}
+
             {/* Timeline entries */}
-            <div className="ml-14 relative" style={{ minHeight: `${Math.max(totalHours * 64, 300)}px` }}>
+            <div
+              ref={timelineRef}
+              className="ml-14 relative"
+              style={{ minHeight: `${Math.max(totalHours * 64, 300)}px` }}
+              onDragOver={isDraggable ? handleDragOver : undefined}
+              onDrop={isDraggable ? handleDrop : undefined}
+            >
               {entries.map((entry, idx) => {
                 const top = getTop(entry.startMinutes);
                 const height = getHeight(entry.durationMinutes);
@@ -208,7 +287,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, workingHours }: Day
                   return (
                     <div
                       key={`travel-${idx}`}
-                      className="absolute left-2 right-2 flex items-center justify-center"
+                      className={`absolute left-2 right-2 flex items-center justify-center transition-opacity ${dragJobId ? "opacity-30" : ""}`}
                       style={{ top: `${top}%`, height: `max(${height}%, ${minPx}px)` }}
                     >
                       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/60 border border-dashed border-border">
@@ -228,23 +307,35 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, workingHours }: Day
                 const endH = Math.floor(endMinutes / 60);
                 const endM = endMinutes % 60;
                 const endTime = `${endH.toString().padStart(2, "0")}:${endM.toString().padStart(2, "0")}`;
+                const canDrag = isDraggable && job.status !== "completed" && job.status !== "cancelled";
+                const isBeingDragged = dragJobId === job.id;
 
                 return (
                   <div
                     key={job.id}
-                    className={`absolute left-1 right-1 rounded-lg border-l-4 ${colors.border} ${colors.bg} px-3 py-2 cursor-pointer hover:shadow-md transition-shadow overflow-hidden`}
-                    style={{ top: `${top}%`, minHeight: `max(${height}%, ${minPx}px)` }}
-                    onClick={() => onJobClick?.(job)}
+                    draggable={canDrag}
+                    onDragStart={canDrag ? (e) => handleDragStart(e, job) : undefined}
+                    onDragEnd={canDrag ? handleDragEnd : undefined}
+                    className={`absolute left-1 right-1 rounded-lg border-l-4 ${colors.border} ${colors.bg} px-3 py-2 cursor-pointer hover:shadow-md transition-all overflow-hidden ${
+                      canDrag ? "cursor-grab active:cursor-grabbing" : ""
+                    } ${isBeingDragged ? "opacity-50 shadow-lg ring-2 ring-primary/30" : ""}`}
+                    style={{ top: `${top}%`, minHeight: `max(${height}%, ${minPx}px)`, zIndex: isBeingDragged ? 20 : 10 }}
+                    onClick={() => !isBeingDragged && onJobClick?.(job)}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-foreground truncate">{job.title}</span>
-                          {job.source === "platform" && (
-                            <Badge variant="outline" className="text-[8px] px-1 py-0 shrink-0">🌐</Badge>
-                          )}
+                      <div className="min-w-0 flex-1 flex items-start gap-1.5">
+                        {canDrag && (
+                          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 mt-0.5" />
+                        )}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-foreground truncate">{job.title}</span>
+                            {job.source === "platform" && (
+                              <Badge variant="outline" className="text-[8px] px-1 py-0 shrink-0">🌐</Badge>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground truncate">{job.client_name}</p>
                         </div>
-                        <p className="text-[11px] text-muted-foreground truncate">{job.client_name}</p>
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-[11px] font-semibold text-foreground">{startTime}</p>
@@ -286,6 +377,12 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, workingHours }: Day
                 {formatDuration(entries.filter(e => e.type === "job").reduce((sum, e) => sum + e.durationMinutes, 0))} work
               </span>
             </div>
+
+            {isDraggable && (
+              <p className="text-[10px] text-muted-foreground/60 ml-14 mt-1">
+                Drag jobs to reschedule · Snaps to 15-min intervals
+              </p>
+            )}
           </div>
         ) : null}
 

@@ -574,6 +574,17 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               openEditDialog(unified as any);
             }
           }}
+          onJobReschedule={async (jobId, newTime, source) => {
+            if (source === "platform") {
+              const { error } = await supabase.from("bookings").update({ scheduled_time: newTime }).eq("id", jobId);
+              if (error) { toast.error("Failed to reschedule"); return; }
+            } else {
+              const { error } = await supabase.from("jobs").update({ scheduled_time: newTime }).eq("id", jobId);
+              if (error) { toast.error("Failed to reschedule"); return; }
+            }
+            toast.success(`Rescheduled to ${newTime}`);
+            fetchData();
+          }}
         />
       )}
 
