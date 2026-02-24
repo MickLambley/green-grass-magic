@@ -23,6 +23,7 @@ import DisputeManagementTab from "@/components/contractor-crm/DisputeManagementT
 import AlternativeTimeTab from "@/components/contractor-crm/AlternativeTimeTab";
 import RouteOptimizationBanner from "@/components/contractor-crm/RouteOptimizationBanner";
 import RouteOptimizationModal from "@/components/contractor-crm/RouteOptimizationModal";
+import OptimizationPreviewDialog from "@/components/contractor-crm/OptimizationPreviewDialog";
 type Contractor = Tables<"contractors">;
 
 const NAV_ITEMS = [
@@ -53,26 +54,56 @@ const ContractorDashboard = () => {
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [routeOptOpen, setRouteOptOpen] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [optimizationPreview, setOptimizationPreview] = useState<{
+    timeSaved: number;
+    proposedChanges: { jobId: string; title: string; clientName: string; date: string; currentTime: string | null; newTime: string }[];
+  } | null>(null);
+  const [isApplying, setIsApplying] = useState(false);
 
   const handleRunOptimization = async () => {
     if (!contractor) return;
     setIsOptimizing(true);
+    try {
+      // Step 1: Preview (dry run)
+      const { data, error } = await supabase.functions.invoke("route-optimization", {
+        body: { contractor_id: contractor.id, preview: true },
+      });
+      if (error) throw error;
+      if (data?.result && data.result.timeSaved > 0) {
+        setOptimizationPreview({
+          timeSaved: data.result.timeSaved,
+          proposedChanges: data.result.proposedChanges || [],
+        });
+        setPreviewOpen(true);
+      } else {
+        toast.info("No optimization opportunities found. Ensure jobs have client addresses and are not locked.");
+      }
+    } catch (err) {
+      console.error("Optimization error:", err);
+      toast.error("Failed to preview optimization");
+    }
+    setIsOptimizing(false);
+  };
+
+  const handleConfirmOptimization = async () => {
+    if (!contractor) return;
+    setIsApplying(true);
     try {
       const { data, error } = await supabase.functions.invoke("route-optimization", {
         body: { contractor_id: contractor.id },
       });
       if (error) throw error;
       if (data?.result) {
-        const r = data.result;
-        toast.success(`Routes optimized! Saved ${r.timeSaved} minutes.`);
-      } else {
-        toast.info("No optimization opportunities found. Ensure jobs have client addresses and are not locked.");
+        toast.success(`Routes optimized! Saved ${data.result.timeSaved} minutes.`);
       }
+      setPreviewOpen(false);
+      setOptimizationPreview(null);
     } catch (err) {
       console.error("Optimization error:", err);
-      toast.error("Failed to run route optimization");
+      toast.error("Failed to apply optimization");
     }
-    setIsOptimizing(false);
+    setIsApplying(false);
   };
 
   useEffect(() => {
@@ -331,6 +362,13 @@ const ContractorDashboard = () => {
           onOpenChange={setRouteOptOpen}
           contractorId={contractor.id}
           onUpdated={() => {}}
+        />
+        <OptimizationPreviewDialog
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          preview={optimizationPreview}
+          onConfirm={handleConfirmOptimization}
+          isApplying={isApplying}
         />
       </div>
 

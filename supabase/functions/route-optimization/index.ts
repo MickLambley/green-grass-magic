@@ -205,6 +205,9 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     .eq("id", contractorId)
     .single();
 
+  // Also fetch job titles and client names for preview
+  const jobDetailsMap = new Map<string, { title: string; client_name: string; current_time: string | null }>();
+
   const defaultSchedule: DaySchedule = { enabled: true, start: "07:00", end: "17:00" };
   const defaultWorkingHours: WorkingHours = {
     monday: defaultSchedule, tuesday: defaultSchedule, wednesday: defaultSchedule,
@@ -225,8 +228,8 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     .from("jobs")
     .select(`
       id, scheduled_date, scheduled_time, time_flexibility, route_optimization_locked,
-      total_price, client_id, address_id, duration_minutes,
-      clients!inner(address)
+      total_price, client_id, address_id, duration_minutes, title,
+      clients!inner(address, name)
     `)
     .eq("contractor_id", contractorId)
     .in("scheduled_date", dates)
@@ -235,8 +238,14 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
 
   if (!jobs || jobs.length < 2) return null;
 
+  // Build job details map for preview
   const jobsWithAddresses: (JobWithAddress & { address_string: string; time_slot: string })[] = [];
   for (const job of jobs) {
+    jobDetailsMap.set(job.id, {
+      title: job.title || "Job",
+      client_name: (job.clients as any)?.name || "Unknown",
+      current_time: job.scheduled_time,
+    });
     const addr = job.clients?.address as any;
     if (!addr) continue;
     const addressStr = [addr.street, addr.city, addr.state, addr.postcode].filter(Boolean).join(", ");
@@ -278,6 +287,7 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
   }
 
   const allResults: { level: number; timeSaved: number; status: string; date: string }[] = [];
+  const proposedChanges: { jobId: string; title: string; clientName: string; date: string; currentTime: string | null; newTime: string }[] = [];
 
   for (const date of dates) {
     const daySchedule = getDaySchedule(workingHours, date);
@@ -351,6 +361,23 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     }
 
     if (dayUpdates.length > 0) {
+      // Collect proposed changes for preview
+      for (const upd of dayUpdates) {
+        const details = jobDetailsMap.get(upd.jobId);
+        const currentTime = details?.current_time || null;
+        // Only include if time actually changes
+        if (currentTime !== upd.time) {
+          proposedChanges.push({
+            jobId: upd.jobId,
+            title: details?.title || "Job",
+            clientName: details?.client_name || "Unknown",
+            date: upd.origDate,
+            currentTime,
+            newTime: upd.time,
+          });
+        }
+      }
+
       if (!dryRun) {
         // Actually apply the schedule changes
         for (const upd of dayUpdates) {
@@ -519,6 +546,7 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     timeSaved: totalSaved,
     status: dryRun ? "potential" : (hasApproval ? "pending_approval" : "applied"),
     details: allResults,
+    proposedChanges: dryRun ? proposedChanges : undefined,
   };
 }
 
@@ -531,15 +559,17 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     let requestedContractorId: string | null = null;
+    let isPreview = false;
     if (req.method === "POST") {
       try {
         const body = await req.json();
         requestedContractorId = body.contractor_id || null;
+        isPreview = body.preview === true;
       } catch { /* no body, run for all */ }
     }
 
     if (requestedContractorId) {
-      // ── On-demand manual run: ACTUALLY reschedule jobs ──
+      // ── On-demand run: preview (dry run) or apply ──
       const { data: contractor } = await supabase
         .from("contractors")
         .select("id, subscription_tier, user_id")
@@ -555,7 +585,7 @@ serve(async (req) => {
         });
       }
 
-      const result = await runOptimization(contractor.id, supabase, false); // dryRun=false
+      const result = await runOptimization(contractor.id, supabase, isPreview); // dryRun=isPreview
       return new Response(JSON.stringify({ success: true, result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
