@@ -2,19 +2,20 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { MapPin, Clock, ArrowRight, TrendingUp, Lock } from "lucide-react";
-import { format } from "date-fns";
+import { MapPin, Clock, TrendingUp, Lock, Loader2 } from "lucide-react";
 
 interface RouteOptimizationBannerProps {
   contractorId: string;
   subscriptionTier: string;
   onOpenOptimizations: () => void;
+  onRunOptimization?: () => void;
+  isOptimizing?: boolean;
 }
 
-const RouteOptimizationBanner = ({ contractorId, subscriptionTier, onOpenOptimizations }: RouteOptimizationBannerProps) => {
+const RouteOptimizationBanner = ({ contractorId, subscriptionTier, onOpenOptimizations, onRunOptimization, isOptimizing }: RouteOptimizationBannerProps) => {
   const [pendingCount, setPendingCount] = useState(0);
   const [totalSaved, setTotalSaved] = useState(0);
+  const [potentialSaving, setPotentialSaving] = useState(0);
 
   useEffect(() => {
     fetchOptimizationStats();
@@ -44,6 +45,24 @@ const RouteOptimizationBanner = ({ contractorId, subscriptionTier, onOpenOptimiz
 
     const total = (applied || []).reduce((sum, o) => sum + o.time_saved_minutes, 0);
     setTotalSaved(total);
+
+    // Check for recent potential-saving notifications
+    if (subscriptionTier === "pro" || subscriptionTier === "team") {
+      const { data: notifications } = await supabase
+        .from("notifications")
+        .select("message")
+        .eq("type", "route_optimization")
+        .eq("is_read", false)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (notifications && notifications.length > 0) {
+        const match = notifications[0].message.match(/save (\d+) minutes/);
+        if (match) {
+          setPotentialSaving(parseInt(match[1]));
+        }
+      }
+    }
   };
 
   // Free tier: hidden
@@ -64,7 +83,7 @@ const RouteOptimizationBanner = ({ contractorId, subscriptionTier, onOpenOptimiz
                 Route Optimization
               </p>
               <p className="text-xs text-muted-foreground">
-                Upgrade to Pro to automatically save travel time between jobs
+                Upgrade to Pro to save travel time between jobs
               </p>
             </div>
           </div>
@@ -94,6 +113,16 @@ const RouteOptimizationBanner = ({ contractorId, subscriptionTier, onOpenOptimiz
                   Review suggested route changes to save travel time
                 </p>
               </>
+            ) : potentialSaving > 0 ? (
+              <>
+                <p className="text-sm font-semibold text-foreground flex items-center gap-1">
+                  <TrendingUp className="w-4 h-4 text-primary" />
+                  Save ~{potentialSaving} min by optimizing routes
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Run optimization to automatically reschedule your jobs for less travel time
+                </p>
+              </>
             ) : totalSaved > 0 ? (
               <>
                 <p className="text-sm font-semibold text-foreground flex items-center gap-1">
@@ -101,27 +130,38 @@ const RouteOptimizationBanner = ({ contractorId, subscriptionTier, onOpenOptimiz
                   {totalSaved} min saved this month
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Route optimization is working in the background
+                  Run optimization anytime to check for more savings
                 </p>
               </>
             ) : (
               <>
                 <p className="text-sm font-semibold text-foreground flex items-center gap-1">
                   <TrendingUp className="w-4 h-4 text-primary" />
-                  Route Optimization Active
+                  Route Optimization
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Your routes are being automatically optimized nightly
+                  Run optimization to minimize travel time between jobs
                 </p>
               </>
             )}
           </div>
         </div>
-        {pendingCount > 0 && (
-          <Button size="sm" onClick={onOpenOptimizations}>
-            Review
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {pendingCount > 0 && (
+            <Button size="sm" variant="outline" onClick={onOpenOptimizations}>
+              Review
+            </Button>
+          )}
+          {onRunOptimization && (
+            <Button size="sm" onClick={onRunOptimization} disabled={isOptimizing}>
+              {isOptimizing ? (
+                <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Optimizing...</>
+              ) : (
+                <><MapPin className="w-3.5 h-3.5 mr-1" /> Run Optimization</>
+              )}
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

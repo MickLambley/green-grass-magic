@@ -52,6 +52,28 @@ const ContractorDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [routeOptOpen, setRouteOptOpen] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+
+  const handleRunOptimization = async () => {
+    if (!contractor) return;
+    setIsOptimizing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("route-optimization", {
+        body: { contractor_id: contractor.id },
+      });
+      if (error) throw error;
+      if (data?.result) {
+        const r = data.result;
+        toast.success(`Routes optimized! Saved ${r.timeSaved} minutes.`);
+      } else {
+        toast.info("No optimization opportunities found. Ensure jobs have client addresses and are not locked.");
+      }
+    } catch (err) {
+      console.error("Optimization error:", err);
+      toast.error("Failed to run route optimization");
+    }
+    setIsOptimizing(false);
+  };
 
   useEffect(() => {
     checkAccess();
@@ -276,6 +298,8 @@ const ContractorDashboard = () => {
                 contractorId={contractor.id}
                 subscriptionTier={contractor.subscription_tier}
                 onOpenOptimizations={() => setRouteOptOpen(true)}
+                onRunOptimization={handleRunOptimization}
+                isOptimizing={isOptimizing}
               />
               <DashboardOverview contractorId={contractor.id} />
             </div>
@@ -287,6 +311,8 @@ const ContractorDashboard = () => {
                 contractorId={contractor.id}
                 subscriptionTier={contractor.subscription_tier}
                 onOpenOptimizations={() => setRouteOptOpen(true)}
+                onRunOptimization={handleRunOptimization}
+                isOptimizing={isOptimizing}
               />
               <JobsTab contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} workingHours={contractor.working_hours as any} onOpenRouteOptimization={() => setRouteOptOpen(true)} />
             </div>
