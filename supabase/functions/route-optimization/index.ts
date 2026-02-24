@@ -69,8 +69,6 @@ function minutesToTime(totalMinutes: number): string {
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 
-// Calculate sequential schedule times for an ordered list of jobs,
-// accounting for each job's duration + travel time to the next job
 function calculateSequentialTimes(
   jobOrder: string[],
   jobMap: Map<string, { duration_minutes: number }>,
@@ -83,7 +81,7 @@ function calculateSequentialTimes(
   for (let i = 0; i < jobOrder.length; i++) {
     const jobId = jobOrder[i];
     const job = jobMap.get(jobId);
-    const duration = job?.duration_minutes || 60; // default 60 min
+    const duration = job?.duration_minutes || 60;
 
     result.push({
       jobId,
@@ -91,7 +89,6 @@ function calculateSequentialTimes(
       endMinutes: currentMinutes + duration,
     });
 
-    // Add duration + travel time to next job
     if (i < jobOrder.length - 1) {
       const travelKey = `${jobId}->${jobOrder[i + 1]}`;
       const travelMinutes = distanceMap.get(travelKey) || 0;
@@ -102,7 +99,6 @@ function calculateSequentialTimes(
   return result;
 }
 
-// Calculate total time span for a sequential route (first job start to last job end)
 function calculateSequentialRouteSpan(
   jobOrder: string[],
   jobMap: Map<string, { duration_minutes: number }>,
@@ -120,7 +116,6 @@ interface DistanceResult {
   durationMinutes: number;
 }
 
-// Get travel times between job locations using Google Distance Matrix
 async function getDistanceMatrix(
   origins: { id: string; address: string }[],
   destinations: { id: string; address: string }[]
@@ -161,7 +156,6 @@ async function getDistanceMatrix(
   }
 }
 
-// Calculate total travel time for a route order
 function calculateRouteTime(jobOrder: string[], distanceMap: Map<string, number>): number {
   let total = 0;
   for (let i = 0; i < jobOrder.length - 1; i++) {
@@ -171,13 +165,12 @@ function calculateRouteTime(jobOrder: string[], distanceMap: Map<string, number>
   return total;
 }
 
-// Simple nearest-neighbor optimization
 function optimizeRoute(jobIds: string[], distanceMap: Map<string, number>): string[] {
   if (jobIds.length <= 2) return jobIds;
 
   const unvisited = new Set(jobIds);
   const route: string[] = [];
-  let current = jobIds[0]; // Start with first job
+  let current = jobIds[0];
   route.push(current);
   unvisited.delete(current);
 
@@ -200,11 +193,15 @@ function optimizeRoute(jobIds: string[], distanceMap: Map<string, number>): stri
   return route;
 }
 
-async function runOptimization(contractorId: string, supabase: any) {
-  // Fetch contractor's working hours
+/**
+ * Run optimization for a contractor.
+ * When dryRun=true, only calculates potential savings (no DB updates to jobs).
+ * When dryRun=false, actually reschedules jobs.
+ */
+async function runOptimization(contractorId: string, supabase: any, dryRun = false) {
   const { data: contractorData } = await supabase
     .from("contractors")
-    .select("working_hours")
+    .select("working_hours, user_id")
     .eq("id", contractorId)
     .single();
 
@@ -224,7 +221,6 @@ async function runOptimization(contractorId: string, supabase: any) {
     return d.toISOString().split("T")[0];
   });
 
-  // Fetch jobs for today, tomorrow, and day after
   const { data: jobs } = await supabase
     .from("jobs")
     .select(`
@@ -239,7 +235,6 @@ async function runOptimization(contractorId: string, supabase: any) {
 
   if (!jobs || jobs.length < 2) return null;
 
-  // Parse addresses for distance calculation
   const jobsWithAddresses: (JobWithAddress & { address_string: string; time_slot: string })[] = [];
   for (const job of jobs) {
     const addr = job.clients?.address as any;
@@ -247,7 +242,6 @@ async function runOptimization(contractorId: string, supabase: any) {
     const addressStr = [addr.street, addr.city, addr.state, addr.postcode].filter(Boolean).join(", ");
     if (!addressStr) continue;
 
-    // Determine time slot from scheduled_time using working hours midpoint
     const daySchedule = getDaySchedule(workingHours, job.scheduled_date);
     const workStart = daySchedule ? timeToMinutes(daySchedule.start) : 7 * 60;
     const workEnd = daySchedule ? timeToMinutes(daySchedule.end) : 17 * 60;
@@ -268,13 +262,11 @@ async function runOptimization(contractorId: string, supabase: any) {
 
   if (jobsWithAddresses.length < 2) return null;
 
-  // Build distance map per-day to avoid MAX_ELEMENTS_EXCEEDED (limit: 100 elements per request)
   const distanceMap = new Map<string, number>();
 
   async function fetchDistancesForJobs(jobs: typeof jobsWithAddresses) {
     if (jobs.length < 2) return;
     const locations = jobs.map(j => ({ id: j.id, address: j.address_string }));
-    // Batch into chunks of 10 origins to stay under 100 elements (10x10=100)
     const BATCH_SIZE = 10;
     for (let i = 0; i < locations.length; i += BATCH_SIZE) {
       const originBatch = locations.slice(i, i + BATCH_SIZE);
@@ -285,11 +277,9 @@ async function runOptimization(contractorId: string, supabase: any) {
     }
   }
 
-  // ── Run optimization per day (Level 1 & 3) ──
   const allResults: { level: number; timeSaved: number; status: string; date: string }[] = [];
 
   for (const date of dates) {
-    // Skip non-working days
     const daySchedule = getDaySchedule(workingHours, date);
     if (!daySchedule) {
       console.log(`Skipping ${date} — not a working day`);
@@ -299,16 +289,13 @@ async function runOptimization(contractorId: string, supabase: any) {
     const dayJobs = jobsWithAddresses.filter(j => j.scheduled_date === date);
     if (dayJobs.length < 2) continue;
 
-    // Fetch distances for this day's jobs
     await fetchDistancesForJobs(dayJobs);
     
-    // Build a job map for duration lookups
     const jobMap = new Map<string, { duration_minutes: number }>();
     for (const j of dayJobs) {
       jobMap.set(j.id, { duration_minutes: j.duration_minutes || 60 });
     }
 
-    // Use contractor's working hours for start times
     const WORK_START = timeToMinutes(daySchedule.start);
     const WORK_END = timeToMinutes(daySchedule.end);
     const MIDPOINT = Math.floor((WORK_START + WORK_END) / 2);
@@ -341,7 +328,6 @@ async function runOptimization(contractorId: string, supabase: any) {
         dayTimeSaved += saved;
       }
 
-      // Always set sequential times for optimized order (even if no time saved, times should be correct)
       const scheduledTimes = calculateSequentialTimes(optimizedOrder, jobMap, distanceMap, group.startMinutes);
       for (const st of scheduledTimes) {
         dayUpdates.push({
@@ -352,7 +338,7 @@ async function runOptimization(contractorId: string, supabase: any) {
       }
     }
 
-    // Also schedule single-job groups with correct times
+    // Single-job groups
     for (const group of optimizationGroups) {
       if (group.jobs.length === 1) {
         const job = group.jobs[0];
@@ -364,172 +350,174 @@ async function runOptimization(contractorId: string, supabase: any) {
       }
     }
 
-    // Always apply sequential time updates; log optimization if time was saved
     if (dayUpdates.length > 0) {
-      for (const upd of dayUpdates) {
-        await supabase.from("jobs").update({
-          scheduled_time: upd.time,
-          original_scheduled_date: upd.origDate,
-        }).eq("id", upd.jobId);
+      if (!dryRun) {
+        // Actually apply the schedule changes
+        for (const upd of dayUpdates) {
+          await supabase.from("jobs").update({
+            scheduled_time: upd.time,
+            original_scheduled_date: upd.origDate,
+          }).eq("id", upd.jobId);
+        }
       }
 
       if (dayTimeSaved > 0) {
-        await supabase.from("route_optimizations").insert({
-          contractor_id: contractorId,
-          optimization_date: date,
-          level: 1,
-          time_saved_minutes: dayTimeSaved,
-          status: "applied",
-        });
-      }
-
-      allResults.push({ level: 1, timeSaved: dayTimeSaved, status: "applied", date });
-    }
-
-    // Level 3: Time-Restricted Slot Swapping (Requires Approval)
-    const restrictedDay = dayJobs.filter(j => j.time_flexibility === "time_restricted" && !j.route_optimization_locked);
-
-    if (restrictedDay.length >= 2) {
-      const morningJobs = restrictedDay.filter((j: any) => j.time_slot === "morning");
-      const afternoonJobs = restrictedDay.filter((j: any) => j.time_slot === "afternoon");
-
-      if (morningJobs.length > 0 && afternoonJobs.length > 0) {
-        const currentTotal = calculateRouteTime(morningJobs.map(j => j.id), distanceMap) +
-          calculateRouteTime(afternoonJobs.map(j => j.id), distanceMap);
-
-        const allIds = [...morningJobs.map(j => j.id), ...afternoonJobs.map(j => j.id)];
-        const optimizedAll = optimizeRoute(allIds, distanceMap);
-        const newMorning = optimizedAll.slice(0, morningJobs.length);
-        const newAfternoon = optimizedAll.slice(morningJobs.length);
-        const newTotal = calculateRouteTime(newMorning, distanceMap) + calculateRouteTime(newAfternoon, distanceMap);
-        const timeSaved = currentTotal - newTotal;
-
-        if (timeSaved > 5) {
-          const { data: opt } = await supabase.from("route_optimizations").insert({
+        if (!dryRun) {
+          await supabase.from("route_optimizations").insert({
             contractor_id: contractorId,
             optimization_date: date,
-            level: 3,
-            time_saved_minutes: timeSaved,
-            status: "pending_approval",
-          }).select().single();
+            level: 1,
+            time_saved_minutes: dayTimeSaved,
+            status: "applied",
+          });
+        }
+      }
 
-          if (opt) {
-            const suggestions = [];
-            for (const jobId of newMorning) {
-              const origJob = restrictedDay.find(j => j.id === jobId) as any;
-              if (origJob && origJob.time_slot !== "morning") {
-                suggestions.push({
-                  route_optimization_id: opt.id, job_id: jobId,
-                  current_date_val: date, current_time_slot: origJob.time_slot,
-                  suggested_date: date, suggested_time_slot: "morning",
-                  requires_customer_approval: true,
+      allResults.push({ level: 1, timeSaved: dayTimeSaved, status: dryRun ? "potential" : "applied", date });
+    }
+
+    // Level 3: Time-Restricted Slot Swapping (Requires Approval) — only on actual runs
+    if (!dryRun) {
+      const restrictedDay = dayJobs.filter(j => j.time_flexibility === "time_restricted" && !j.route_optimization_locked);
+
+      if (restrictedDay.length >= 2) {
+        const morningJobs = restrictedDay.filter((j: any) => j.time_slot === "morning");
+        const afternoonJobs = restrictedDay.filter((j: any) => j.time_slot === "afternoon");
+
+        if (morningJobs.length > 0 && afternoonJobs.length > 0) {
+          const currentTotal = calculateRouteTime(morningJobs.map(j => j.id), distanceMap) +
+            calculateRouteTime(afternoonJobs.map(j => j.id), distanceMap);
+
+          const allIds = [...morningJobs.map(j => j.id), ...afternoonJobs.map(j => j.id)];
+          const optimizedAll = optimizeRoute(allIds, distanceMap);
+          const newMorning = optimizedAll.slice(0, morningJobs.length);
+          const newAfternoon = optimizedAll.slice(morningJobs.length);
+          const newTotal = calculateRouteTime(newMorning, distanceMap) + calculateRouteTime(newAfternoon, distanceMap);
+          const timeSaved = currentTotal - newTotal;
+
+          if (timeSaved > 5) {
+            const { data: opt } = await supabase.from("route_optimizations").insert({
+              contractor_id: contractorId,
+              optimization_date: date,
+              level: 3,
+              time_saved_minutes: timeSaved,
+              status: "pending_approval",
+            }).select().single();
+
+            if (opt) {
+              const suggestions = [];
+              for (const jobId of newMorning) {
+                const origJob = restrictedDay.find(j => j.id === jobId) as any;
+                if (origJob && origJob.time_slot !== "morning") {
+                  suggestions.push({
+                    route_optimization_id: opt.id, job_id: jobId,
+                    current_date_val: date, current_time_slot: origJob.time_slot,
+                    suggested_date: date, suggested_time_slot: "morning",
+                    requires_customer_approval: true,
+                  });
+                }
+              }
+              for (const jobId of newAfternoon) {
+                const origJob = restrictedDay.find(j => j.id === jobId) as any;
+                if (origJob && origJob.time_slot !== "afternoon") {
+                  suggestions.push({
+                    route_optimization_id: opt.id, job_id: jobId,
+                    current_date_val: date, current_time_slot: origJob.time_slot,
+                    suggested_date: date, suggested_time_slot: "afternoon",
+                    requires_customer_approval: true,
+                  });
+                }
+              }
+
+              if (suggestions.length > 0) {
+                await supabase.from("route_optimization_suggestions").insert(suggestions);
+              }
+
+              if (contractorData) {
+                await supabase.from("notifications").insert({
+                  user_id: contractorData.user_id,
+                  title: "🗺️ Route Optimization Available",
+                  message: `A route optimization could save you ${timeSaved} minutes on ${date}. Review the suggested changes.`,
+                  type: "route_optimization",
                 });
               }
             }
-            for (const jobId of newAfternoon) {
-              const origJob = restrictedDay.find(j => j.id === jobId) as any;
-              if (origJob && origJob.time_slot !== "afternoon") {
-                suggestions.push({
-                  route_optimization_id: opt.id, job_id: jobId,
-                  current_date_val: date, current_time_slot: origJob.time_slot,
-                  suggested_date: date, suggested_time_slot: "afternoon",
-                  requires_customer_approval: true,
-                });
-              }
-            }
 
-            if (suggestions.length > 0) {
-              await supabase.from("route_optimization_suggestions").insert(suggestions);
-            }
-
-            const { data: contractor } = await supabase
-              .from("contractors").select("user_id").eq("id", contractorId).single();
-
-            if (contractor) {
-              await supabase.from("notifications").insert({
-                user_id: contractor.user_id,
-                title: "🗺️ Route Optimization Available",
-                message: `A route optimization could save you ${timeSaved} minutes on ${date}. Review the suggested changes.`,
-                type: "route_optimization",
-              });
-            }
+            allResults.push({ level: 3, timeSaved, status: "pending_approval", date });
           }
-
-          allResults.push({ level: 3, timeSaved, status: "pending_approval", date });
         }
       }
     }
   }
 
-  // ── Level 2: Multi-Day Flexible Optimization ──
-  const allFlexible = jobsWithAddresses.filter(j => j.time_flexibility === "flexible" && !j.route_optimization_locked);
+  // Level 2: Multi-Day Flexible Optimization — only on actual runs
+  if (!dryRun) {
+    const allFlexible = jobsWithAddresses.filter(j => j.time_flexibility === "flexible" && !j.route_optimization_locked);
 
-  if (allFlexible.length >= 3) {
-    // Calculate current total travel per day
-    let currentTotalTime = 0;
-    for (const date of dates) {
-      const dayFlex = allFlexible.filter(j => j.scheduled_date === date);
-      if (dayFlex.length >= 2) {
-        currentTotalTime += calculateRouteTime(dayFlex.map(j => j.id), distanceMap);
-      }
-    }
-
-    const allFlexIds = allFlexible.map(j => j.id);
-    const optimizedAll = optimizeRoute(allFlexIds, distanceMap);
-    
-    // Distribute optimized order across the days proportionally
-    const jobsPerDay = dates.map(date => allFlexible.filter(j => j.scheduled_date === date).length);
-    const distributed: { date: string; jobIds: string[] }[] = [];
-    let idx = 0;
-    for (let d = 0; d < dates.length; d++) {
-      const count = jobsPerDay[d];
-      distributed.push({ date: dates[d], jobIds: optimizedAll.slice(idx, idx + count) });
-      idx += count;
-    }
-
-    let newTotalTime = 0;
-    for (const group of distributed) {
-      if (group.jobIds.length >= 2) {
-        newTotalTime += calculateRouteTime(group.jobIds, distanceMap);
-      }
-    }
-
-    const timeSaved = currentTotalTime - newTotalTime;
-
-    if (timeSaved > 5) {
-      await supabase.from("route_optimizations").insert({
-        contractor_id: contractorId,
-        optimization_date: dates[0],
-        level: 2,
-        time_saved_minutes: timeSaved,
-        status: "applied",
-      });
-
-      for (const group of distributed) {
-        for (const jobId of group.jobIds) {
-          const job = allFlexible.find(j => j.id === jobId);
-          if (job && job.scheduled_date !== group.date) {
-            await supabase.from("jobs").update({
-              scheduled_date: group.date,
-              original_scheduled_date: job.scheduled_date,
-            }).eq("id", jobId);
-          }
+    if (allFlexible.length >= 3) {
+      let currentTotalTime = 0;
+      for (const date of dates) {
+        const dayFlex = allFlexible.filter(j => j.scheduled_date === date);
+        if (dayFlex.length >= 2) {
+          currentTotalTime += calculateRouteTime(dayFlex.map(j => j.id), distanceMap);
         }
       }
 
-      allResults.push({ level: 2, timeSaved, status: "applied", date: dates[0] });
+      const allFlexIds = allFlexible.map(j => j.id);
+      const optimizedAll = optimizeRoute(allFlexIds, distanceMap);
+      
+      const jobsPerDay = dates.map(date => allFlexible.filter(j => j.scheduled_date === date).length);
+      const distributed: { date: string; jobIds: string[] }[] = [];
+      let idx = 0;
+      for (let d = 0; d < dates.length; d++) {
+        const count = jobsPerDay[d];
+        distributed.push({ date: dates[d], jobIds: optimizedAll.slice(idx, idx + count) });
+        idx += count;
+      }
+
+      let newTotalTime = 0;
+      for (const group of distributed) {
+        if (group.jobIds.length >= 2) {
+          newTotalTime += calculateRouteTime(group.jobIds, distanceMap);
+        }
+      }
+
+      const timeSaved = currentTotalTime - newTotalTime;
+
+      if (timeSaved > 5) {
+        await supabase.from("route_optimizations").insert({
+          contractor_id: contractorId,
+          optimization_date: dates[0],
+          level: 2,
+          time_saved_minutes: timeSaved,
+          status: "applied",
+        });
+
+        for (const group of distributed) {
+          for (const jobId of group.jobIds) {
+            const job = allFlexible.find(j => j.id === jobId);
+            if (job && job.scheduled_date !== group.date) {
+              await supabase.from("jobs").update({
+                scheduled_date: group.date,
+                original_scheduled_date: job.scheduled_date,
+              }).eq("id", jobId);
+            }
+          }
+        }
+
+        allResults.push({ level: 2, timeSaved, status: "applied", date: dates[0] });
+      }
     }
   }
 
   if (allResults.length === 0) return null;
 
-  // Return the most impactful result
   const totalSaved = allResults.reduce((sum, r) => sum + r.timeSaved, 0);
   const hasApproval = allResults.some(r => r.status === "pending_approval");
   return {
     level: Math.max(...allResults.map(r => r.level)),
     timeSaved: totalSaved,
-    status: hasApproval ? "pending_approval" : "applied",
+    status: dryRun ? "potential" : (hasApproval ? "pending_approval" : "applied"),
     details: allResults,
   };
 }
@@ -542,7 +530,6 @@ serve(async (req) => {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Check if this is an on-demand run for a specific contractor
     let requestedContractorId: string | null = null;
     if (req.method === "POST") {
       try {
@@ -552,7 +539,7 @@ serve(async (req) => {
     }
 
     if (requestedContractorId) {
-      // On-demand single contractor run
+      // ── On-demand manual run: ACTUALLY reschedule jobs ──
       const { data: contractor } = await supabase
         .from("contractors")
         .select("id, subscription_tier, user_id")
@@ -568,13 +555,13 @@ serve(async (req) => {
         });
       }
 
-      const result = await runOptimization(contractor.id, supabase);
+      const result = await runOptimization(contractor.id, supabase, false); // dryRun=false
       return new Response(JSON.stringify({ success: true, result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Batch run for all eligible contractors (cron/scheduled)
+    // ── Cron/batch run: DRY RUN only — calculate potential savings and notify ──
     const { data: contractors } = await supabase
       .from("contractors")
       .select("id, subscription_tier, user_id")
@@ -591,7 +578,18 @@ serve(async (req) => {
 
     for (const contractor of contractors) {
       try {
-        const result = await runOptimization(contractor.id, supabase);
+        const result = await runOptimization(contractor.id, supabase, true); // dryRun=true
+        
+        // If there are potential savings, notify the contractor
+        if (result && result.timeSaved > 0) {
+          await supabase.from("notifications").insert({
+            user_id: contractor.user_id,
+            title: "🗺️ Route Optimization Available",
+            message: `Optimizing your routes could save ${result.timeSaved} minutes over the next 3 days. Open Jobs → Run Optimization to apply.`,
+            type: "route_optimization",
+          });
+        }
+
         results.push({ contractorId: contractor.id, result });
       } catch (err) {
         console.error(`Optimization failed for ${contractor.id}:`, err);
@@ -599,7 +597,7 @@ serve(async (req) => {
       }
     }
 
-    // Also calculate teaser savings for Starter tier
+    // Starter tier: teaser notifications
     const { data: starterContractors } = await supabase
       .from("contractors")
       .select("id, user_id")
