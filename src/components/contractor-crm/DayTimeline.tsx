@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Clock, Car, ChevronLeft, ChevronRight, GripVertical, ChevronDown, ChevronUp } from "lucide-react";
+import { MapPin, Clock, Car, ChevronLeft, ChevronRight, GripVertical, ChevronDown, ChevronUp, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format, addDays, subDays, isToday, isTomorrow, isYesterday } from "date-fns";
 
@@ -14,6 +14,7 @@ interface TimelineJob {
   status: string;
   source: "crm" | "platform";
   client_address?: { street?: string; city?: string; state?: string; postcode?: string } | null;
+  original_scheduled_time?: string | null;
 }
 
 interface WorkingHoursRange {
@@ -333,24 +334,40 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                 const isBeingDragged = dragJobId === job.id;
                 const short = isShortJob(entry.durationMinutes);
                 const isExpanded = expandedJobId === job.id;
+                const wasShifted = !!job.original_scheduled_time && job.original_scheduled_time !== startTime;
+                const originalTopPx = wasShifted ? getTopPx(timeToMinutes(job.original_scheduled_time!)) : 0;
 
                 return (
-                  <div
-                    key={job.id}
-                    draggable={canDrag}
-                    onDragStart={canDrag ? (e) => handleDragStart(e, job) : undefined}
-                    onDragEnd={canDrag ? handleDragEnd : undefined}
-                    className={`absolute left-1 right-1 rounded-lg border-l-4 ${colors.border} ${colors.bg} cursor-pointer hover:shadow-md transition-all overflow-hidden ${
-                      canDrag ? "cursor-grab active:cursor-grabbing" : ""
-                    } ${isBeingDragged ? "opacity-50 shadow-lg ring-2 ring-primary/30" : ""}`}
-                    style={{
-                      top: `${topPx}px`,
-                      height: isExpanded ? "auto" : `${Math.max(heightPx, 28)}px`,
-                      minHeight: isExpanded ? `${Math.max(heightPx, 28)}px` : undefined,
-                      zIndex: isExpanded ? 25 : isBeingDragged ? 20 : 10,
-                    }}
-                    onClick={() => !isBeingDragged && handleJobCardClick(job, entry.durationMinutes)}
-                  >
+                  <div key={job.id}>
+                    {/* Ghost marker at original time when job was auto-shifted */}
+                    {wasShifted && (
+                      <div
+                        className="absolute left-1 right-1 rounded-lg border-2 border-dashed border-amber-400/40 bg-amber-500/5 pointer-events-none z-[5]"
+                        style={{
+                          top: `${originalTopPx}px`,
+                          height: `${Math.max(getHeightPx(entry.durationMinutes), 28)}px`,
+                        }}
+                      >
+                        <span className="absolute top-0.5 left-2 text-[9px] font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          Originally {job.original_scheduled_time} <ArrowRight className="w-2.5 h-2.5" /> {startTime}
+                        </span>
+                      </div>
+                    )}
+                    <div
+                      draggable={canDrag}
+                      onDragStart={canDrag ? (e) => handleDragStart(e, job) : undefined}
+                      onDragEnd={canDrag ? handleDragEnd : undefined}
+                      className={`absolute left-1 right-1 rounded-lg border-l-4 ${colors.border} ${colors.bg} cursor-pointer hover:shadow-md transition-all overflow-hidden ${
+                        canDrag ? "cursor-grab active:cursor-grabbing" : ""
+                      } ${isBeingDragged ? "opacity-50 shadow-lg ring-2 ring-primary/30" : ""} ${wasShifted ? "ring-1 ring-amber-400/30" : ""}`}
+                      style={{
+                        top: `${topPx}px`,
+                        height: isExpanded ? "auto" : `${Math.max(heightPx, 28)}px`,
+                        minHeight: isExpanded ? `${Math.max(heightPx, 28)}px` : undefined,
+                        zIndex: isExpanded ? 25 : isBeingDragged ? 20 : 10,
+                      }}
+                      onClick={() => !isBeingDragged && handleJobCardClick(job, entry.durationMinutes)}
+                    >
                     {/* Compact layout for short jobs */}
                     {short && !isExpanded ? (
                       <div className="flex items-center gap-2 px-2 py-1 h-full">
@@ -400,6 +417,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                         )}
                       </div>
                     )}
+                    </div>
                   </div>
                 );
               })}
