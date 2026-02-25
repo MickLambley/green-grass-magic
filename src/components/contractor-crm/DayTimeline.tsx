@@ -307,20 +307,23 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                 const heightPx = getHeightPx(entry.durationMinutes);
 
                 if (entry.type === "travel") {
+                  const isShortTravel = heightPx < 24;
                   return (
                     <div
                       key={`travel-${idx}`}
-                      className={`absolute left-2 right-2 flex items-center justify-center transition-opacity ${dragJobId ? "opacity-30" : ""}`}
-                      style={{ top: `${topPx}px`, height: `${Math.max(heightPx, 20)}px` }}
+                      className={`absolute left-2 right-2 flex items-center justify-center transition-opacity pointer-events-none ${dragJobId ? "opacity-30" : ""}`}
+                      style={{
+                        top: `${topPx}px`,
+                        height: isShortTravel ? "22px" : `${Math.max(heightPx, 20)}px`,
+                        zIndex: isShortTravel ? 12 : 5,
+                      }}
                     >
-                      {heightPx >= 20 && (
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/60 border border-dashed border-border">
-                          <Car className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-[10px] font-medium text-muted-foreground">
-                            {formatDuration(entry.travelMinutes!)} travel
-                          </span>
-                        </div>
-                      )}
+                      <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/80 border border-dashed border-border ${isShortTravel ? "shadow-sm" : ""}`}>
+                        <Car className="w-3 h-3 text-muted-foreground shrink-0" />
+                        <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">
+                          {formatDuration(entry.travelMinutes!)}
+                        </span>
+                      </div>
                     </div>
                   );
                 }
