@@ -24,6 +24,7 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { getLawnImageSignedUrl } from "@/lib/storage";
+import { autoShiftTime } from "@/lib/scheduleConflict";
 import type { Json } from "@/integrations/supabase/types";
 
 interface BookingAddress {
@@ -71,6 +72,12 @@ const timeSlots: Record<string, string> = {
   "7am-10am": "7:00 AM - 10:00 AM",
   "10am-2pm": "10:00 AM - 2:00 PM",
   "2pm-5pm": "2:00 PM - 5:00 PM",
+};
+
+const timeSlotToStartTime: Record<string, string> = {
+  "7am-10am": "07:00",
+  "10am-2pm": "10:00",
+  "2pm-5pm": "14:00",
 };
 
 const statusConfig: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
@@ -159,8 +166,33 @@ const PlatformBookingDetailDialog = ({
 
     const newPrice = parseFloat(editPrice);
     const originalPrice = booking.total_price || 0;
-
     const finalPrice = newPrice || originalPrice;
+
+    // Determine scheduled time from time slot
+    const scheduledDate = editDate ? format(editDate, "yyyy-MM-dd") : booking.scheduled_date;
+    const startTime = timeSlotToStartTime[editTimeSlot] || timeSlotToStartTime[booking.time_slot] || "10:00";
+    const jobDuration = 60; // Default booking duration
+
+    // Fetch existing jobs for this contractor on the same day
+    const { data: existingJobs } = await supabase
+      .from("jobs")
+      .select("id, scheduled_time, duration_minutes")
+      .eq("contractor_id", contractorId)
+      .eq("scheduled_date", scheduledDate)
+      .neq("status", "cancelled");
+
+    const slots = (existingJobs || []).map((j) => ({
+      id: j.id,
+      scheduled_time: j.scheduled_time || "09:00",
+      duration_minutes: j.duration_minutes || 60,
+    }));
+
+    const shiftResult = autoShiftTime(startTime, jobDuration, slots);
+    const finalTime = shiftResult.newTime;
+
+    if (shiftResult.shifted) {
+      toast.info(shiftResult.message);
+    }
 
     {
       const { error } = await supabase.from("bookings").update({
@@ -169,15 +201,20 @@ const PlatformBookingDetailDialog = ({
         total_price: finalPrice,
         status: "confirmed" as any,
         notes: editNotes || booking.notes,
+        scheduled_date: scheduledDate,
+        scheduled_time: finalTime,
+        time_slot: editTimeSlot || booking.time_slot,
       }).eq("id", booking.id);
 
       if (error) {
         toast.error("Failed to accept booking");
       } else {
+        const dateLabel = format(new Date(scheduledDate), "dd MMM yyyy");
+        const timeNote = shiftResult.shifted ? ` Time adjusted to ${finalTime} to avoid a scheduling conflict.` : "";
         await supabase.from("notifications").insert({
           user_id: booking.user_id,
           title: "✅ Booking Confirmed",
-          message: `Your booking for ${format(new Date(booking.scheduled_date), "dd MMM yyyy")} has been confirmed.`,
+          message: `Your booking for ${dateLabel} has been confirmed.${timeNote}`,
           type: "booking_confirmed",
           booking_id: booking.id,
         });
