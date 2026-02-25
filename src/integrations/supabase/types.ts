@@ -673,6 +673,7 @@ export type Database = {
           id: string
           notes: string | null
           original_scheduled_date: string | null
+          original_scheduled_time: string | null
           original_time_slot: string | null
           payment_intent_id: string | null
           payment_method_id: string | null
@@ -707,6 +708,7 @@ export type Database = {
           id?: string
           notes?: string | null
           original_scheduled_date?: string | null
+          original_scheduled_time?: string | null
           original_time_slot?: string | null
           payment_intent_id?: string | null
           payment_method_id?: string | null
@@ -741,6 +743,7 @@ export type Database = {
           id?: string
           notes?: string | null
           original_scheduled_date?: string | null
+          original_scheduled_time?: string | null
           original_time_slot?: string | null
           payment_intent_id?: string | null
           payment_method_id?: string | null

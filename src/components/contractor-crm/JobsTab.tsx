@@ -305,11 +305,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
 
     // Auto-shift if there's a scheduling conflict
     let resolvedTime = form.scheduled_time || null;
+    let originalTime: string | null = null;
     if (resolvedTime) {
       const duration = form.duration_minutes ? parseInt(form.duration_minutes) : 60;
       const existing = await getSameDaySlots(form.scheduled_date, editingJob?.id);
       const result = autoShiftTime(resolvedTime, duration, existing);
       if (result.shifted) {
+        originalTime = resolvedTime;
         resolvedTime = result.newTime;
         toast.info(result.message);
       }
@@ -326,6 +328,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       total_price: form.total_price ? parseFloat(form.total_price) : null,
       notes: form.notes.trim() || null,
       status: form.status,
+      original_scheduled_time: originalTime,
       completed_at: form.status === "completed" ? new Date().toISOString() : null,
       recurrence_rule: recurrenceRule as unknown as Json,
     };
@@ -579,6 +582,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             status: j.status,
             source: j.source,
             client_address: j.client_address,
+            original_scheduled_time: (j as any).original_scheduled_time ?? null,
           }))}
           date={timelineDate}
           onDateChange={setTimelineDate}
@@ -614,7 +618,10 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               const { error } = await supabase.from("bookings").update({ scheduled_time: finalTime }).eq("id", jobId);
               if (error) { toast.error("Failed to reschedule"); return; }
             } else {
-              const { error } = await supabase.from("jobs").update({ scheduled_time: finalTime }).eq("id", jobId);
+              const updatePayload: Record<string, any> = { scheduled_time: finalTime };
+              if (shift.shifted) updatePayload.original_scheduled_time = newTime;
+              else updatePayload.original_scheduled_time = null;
+              const { error } = await supabase.from("jobs").update(updatePayload).eq("id", jobId);
               if (error) { toast.error("Failed to reschedule"); return; }
             }
             toast.success(`Rescheduled to ${finalTime}`);
