@@ -4,9 +4,10 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import TestModeBanner from "@/components/test-mode/TestModeBanner";
-import Index from "./pages/Index";
-import ProtectedRoute from "./components/auth/ProtectedRoute";
+
+const TestModeBanner = lazy(() => import("@/components/test-mode/TestModeBanner"));
+const Index = lazy(() => import("./pages/Index"));
+const ProtectedRoute = lazy(() => import("./components/auth/ProtectedRoute"));
 
 // Lazy-loaded routes for code splitting
 const About = lazy(() => import("./pages/About"));
@@ -35,7 +36,9 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <TestModeBanner />
+        <Suspense fallback={null}>
+          <TestModeBanner />
+        </Suspense>
         <Suspense fallback={<div className="min-h-screen bg-background" />}>
           <Routes>
             <Route path="/" element={<Index />} />
