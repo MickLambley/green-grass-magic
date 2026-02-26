@@ -6,6 +6,7 @@ const corsHeaders = {
 };
 
 const TEST_SECRET_KEY = Deno.env.get("VITE_TEST_MODE_SECRET_KEY") || "";
+const TEST_MODE_ENABLED = Deno.env.get("VITE_ENABLE_TEST_MODE") === "true";
 
 interface TestPersonaConfig {
   email: string;
@@ -81,12 +82,20 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Kill switch: disable entirely in production
+  if (!TEST_MODE_ENABLED) {
+    return new Response(JSON.stringify({ error: "Test mode is disabled" }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const { persona, test_key } = await req.json();
 
     // Validate test key
-    if (test_key !== TEST_SECRET_KEY) {
-      return new Response(JSON.stringify({ error: "Invalid test key" }), {
+    if (!TEST_SECRET_KEY || test_key !== TEST_SECRET_KEY) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -94,7 +103,7 @@ Deno.serve(async (req) => {
 
     const config = PERSONAS[persona];
     if (!config) {
-      return new Response(JSON.stringify({ error: "Unknown persona" }), {
+      return new Response(JSON.stringify({ error: "Invalid request" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -106,7 +115,6 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Try to sign in first
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const anonClient = createClient(supabaseUrl, anonKey);
 
@@ -115,7 +123,6 @@ Deno.serve(async (req) => {
       password: config.password,
     });
 
-    // If user doesn't exist, create them
     if (signInResult.error) {
       console.log(`Creating test user: ${config.email}`);
 
@@ -126,62 +133,42 @@ Deno.serve(async (req) => {
         user_metadata: { full_name: config.full_name },
       });
 
-      if (createError) {
-        throw new Error(`Failed to create test user: ${createError.message}`);
-      }
+      if (createError) throw new Error("Failed to create test user");
 
       const userId = newUser.user.id;
 
-      // Add contractor role if needed
       if (config.role === "contractor") {
-        // Check if contractor role already exists
         const { data: existingRole } = await adminClient
-          .from("user_roles")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("role", "contractor")
-          .maybeSingle();
+          .from("user_roles").select("id")
+          .eq("user_id", userId).eq("role", "contractor").maybeSingle();
 
         if (!existingRole) {
-          await adminClient.from("user_roles").insert({
-            user_id: userId,
-            role: "contractor",
-          });
+          await adminClient.from("user_roles").insert({ user_id: userId, role: "contractor" });
         }
 
-        // Create contractor profile
         if (config.contractor_profile) {
           const { data: existingContractor } = await adminClient
-            .from("contractors")
-            .select("id")
-            .eq("user_id", userId)
-            .maybeSingle();
+            .from("contractors").select("id")
+            .eq("user_id", userId).maybeSingle();
 
           if (!existingContractor) {
             await adminClient.from("contractors").insert({
-              user_id: userId,
-              ...config.contractor_profile,
+              user_id: userId, ...config.contractor_profile,
             });
           }
         }
       }
 
-      // Create verified address for customer
       if (config.role === "user") {
         await ensureTestAddress(adminClient, userId);
       }
 
-      // Now sign in
       signInResult = await anonClient.auth.signInWithPassword({
-        email: config.email,
-        password: config.password,
+        email: config.email, password: config.password,
       });
 
-      if (signInResult.error) {
-        throw new Error(`Failed to sign in after creation: ${signInResult.error.message}`);
-      }
+      if (signInResult.error) throw new Error("Failed to sign in after creation");
     } else {
-      // User exists - ensure setup is complete
       const userId = signInResult.data.user.id;
 
       if (config.role === "user") {
@@ -190,33 +177,22 @@ Deno.serve(async (req) => {
 
       if (config.role === "contractor" && config.contractor_profile) {
         const { data: existingContractor } = await adminClient
-          .from("contractors")
-          .select("id, abn")
-          .eq("user_id", userId)
-          .maybeSingle();
+          .from("contractors").select("id, abn")
+          .eq("user_id", userId).maybeSingle();
 
         if (!existingContractor) {
-          // Ensure contractor role
           const { data: existingRole } = await adminClient
-            .from("user_roles")
-            .select("id")
-            .eq("user_id", userId)
-            .eq("role", "contractor")
-            .maybeSingle();
+            .from("user_roles").select("id")
+            .eq("user_id", userId).eq("role", "contractor").maybeSingle();
 
           if (!existingRole) {
-            await adminClient.from("user_roles").insert({
-              user_id: userId,
-              role: "contractor",
-            });
+            await adminClient.from("user_roles").insert({ user_id: userId, role: "contractor" });
           }
 
           await adminClient.from("contractors").insert({
-            user_id: userId,
-            ...config.contractor_profile,
+            user_id: userId, ...config.contractor_profile,
           });
         } else if (!existingContractor.abn) {
-          // Update existing contractor with missing fields
           await adminClient.from("contractors").update({
             abn: config.contractor_profile.abn,
             business_address: config.contractor_profile.business_address,
@@ -236,18 +212,13 @@ Deno.serve(async (req) => {
         persona,
         role: config.role,
       }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Test mode login error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      JSON.stringify({ error: "Request failed" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
