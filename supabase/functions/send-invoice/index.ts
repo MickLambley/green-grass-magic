@@ -71,6 +71,8 @@ serve(async (req) => {
       `).join("");
 
     const businessName = contractor.business_name || "Your Contractor";
+    const isGst = contractor.gst_registered;
+    const invoiceLabel = isGst ? "Tax Invoice" : "Invoice";
     const dueDate = invoice.due_date
       ? new Date(invoice.due_date).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
       : "Upon receipt";
@@ -78,20 +80,21 @@ serve(async (req) => {
     const emailHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
         <div style="background: #16a34a; padding: 24px; border-radius: 8px 8px 0 0;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">Invoice ${invoice.invoice_number || ""}</h1>
+          <h1 style="color: white; margin: 0; font-size: 24px;">${invoiceLabel} ${invoice.invoice_number || ""}</h1>
           <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0;">From ${businessName}</p>
+          ${isGst && contractor.abn ? `<p style="color: rgba(255,255,255,0.7); margin: 4px 0 0; font-size: 13px;">ABN: ${contractor.abn}</p>` : ""}
         </div>
         
         <div style="padding: 24px; background: #fff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
           <p>Hi ${client.name},</p>
-          <p>Please find your invoice below.</p>
+          <p>Please find your ${invoiceLabel.toLowerCase()} below.</p>
           
           <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
             <thead>
               <tr style="background: #f8f9fa;">
                 <th style="padding: 8px; text-align: left;">Description</th>
                 <th style="padding: 8px; text-align: center;">Qty</th>
-                <th style="padding: 8px; text-align: right;">Rate</th>
+                <th style="padding: 8px; text-align: right;">Rate${isGst ? " (ex GST)" : ""}</th>
                 <th style="padding: 8px; text-align: right;">Amount</th>
               </tr>
             </thead>
@@ -100,21 +103,22 @@ serve(async (req) => {
             </tbody>
           </table>
           
-          <div style="text-align: right; margin-top: 16px;">
+          <div style="text-align: right; margin-top: 16px; border-top: 2px solid #e5e7eb; padding-top: 12px;">
             <p style="margin: 4px 0;">Subtotal: <strong>$${Number(invoice.subtotal).toFixed(2)}</strong></p>
-            ${contractor.gst_registered ? `<p style="margin: 4px 0;">GST (10%): <strong>$${Number(invoice.gst_amount).toFixed(2)}</strong></p>` : ""}
-            <p style="margin: 4px 0; font-size: 18px;">Total: <strong>$${Number(invoice.total).toFixed(2)}</strong></p>
+            ${isGst ? `<p style="margin: 4px 0;">GST (10%): <strong>$${Number(invoice.gst_amount).toFixed(2)}</strong></p>` : ""}
+            <p style="margin: 8px 0 0; font-size: 20px; font-weight: bold;">Total: $${Number(invoice.total).toFixed(2)}</p>
           </div>
           
           <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-top: 20px;">
             <p style="margin: 0;"><strong>Due Date:</strong> ${dueDate}</p>
-            ${contractor.abn ? `<p style="margin: 4px 0 0;"><strong>ABN:</strong> ${contractor.abn}</p>` : ""}
+            ${isGst && contractor.abn ? `<p style="margin: 4px 0 0;"><strong>ABN:</strong> ${contractor.abn}</p>` : ""}
+            ${isGst ? `<p style="margin: 4px 0 0; font-size: 12px; color: #666;">All prices are in AUD. GST is included in the total.</p>` : ""}
           </div>
           
           ${invoice.notes ? `<p style="margin-top: 16px; color: #666;">${invoice.notes}</p>` : ""}
           
           <p style="color: #666; margin-top: 30px; font-size: 12px;">
-            This invoice was sent via Yardly. If you have any questions, please contact ${businessName} directly.
+            This ${invoiceLabel.toLowerCase()} was sent via Yardly. If you have any questions, please contact ${businessName} directly.
           </p>
         </div>
       </div>
@@ -129,7 +133,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: "Yardly <onboarding@resend.dev>",
         to: [client.email],
-        subject: `Invoice ${invoice.invoice_number || ""} from ${businessName}`,
+        subject: `${isGst ? "Tax Invoice" : "Invoice"} ${invoice.invoice_number || ""} from ${businessName}`,
         html: emailHtml,
       }),
     });
