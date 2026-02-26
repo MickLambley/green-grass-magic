@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
@@ -7,23 +7,26 @@ const pricingTiers = [
     name: "Free",
     description: "Get started at no cost",
     price: 0,
+    fee: "5%",
     features: [
-      "Up to 10 clients",
-      "Job scheduling",
-      "Basic invoicing",
+      "Unlimited clients & jobs",
+      "Basic scheduling",
+      "Invoicing & quotes",
       "Online payments (5% fee)",
+      "Business website",
     ],
     popular: false,
   },
   {
     name: "Starter",
     description: "For growing businesses",
-    price: 29,
+    price: 39,
+    fee: "2.5%",
     features: [
-      "Up to 50 clients",
+      "Everything in Free",
+      "Route Optimization (up to 25 stops/day)",
       "Recurring job scheduling",
-      "Quotes & invoices",
-      "Online payments (3% fee)",
+      "Online payments (2.5% fee)",
       "Email notifications",
     ],
     popular: false,
@@ -31,30 +34,16 @@ const pricingTiers = [
   {
     name: "Pro",
     description: "For established operators",
-    price: 59,
+    price: 79,
+    fee: "1%",
     features: [
-      "Unlimited clients",
       "Everything in Starter",
-      "Business website",
+      "Unlimited Route Optimization",
+      "Business insights & reporting",
       "Online payments (1% fee)",
       "Priority support",
-      "Business insights",
     ],
     popular: true,
-  },
-  {
-    name: "Team",
-    description: "For multi-crew operations",
-    price: 99,
-    features: [
-      "Everything in Pro",
-      "Multiple team members",
-      "Crew scheduling",
-      "Online payments (1% fee)",
-      "Custom branding",
-      "Dedicated support",
-    ],
-    popular: false,
   },
 ];
 
@@ -71,7 +60,7 @@ const PricingSection = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
           {pricingTiers.map((tier) => (
             <div
               key={tier.name}
@@ -83,7 +72,8 @@ const PricingSection = () => {
             >
               {tier.popular && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                  <span className="bg-sunshine text-foreground px-4 py-1 rounded-full text-sm font-semibold shadow-soft">
+                  <span className="bg-sunshine text-foreground px-4 py-1 rounded-full text-sm font-semibold shadow-soft flex items-center gap-1">
+                    <Zap className="w-3.5 h-3.5" />
                     Most Popular
                   </span>
                 </div>
@@ -124,6 +114,9 @@ const PricingSection = () => {
                     /mo
                   </span>
                 </div>
+                <p className={`text-xs mt-1 ${tier.popular ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                  {tier.fee} transaction fee
+                </p>
               </div>
 
               <ul className="space-y-3 mb-6">

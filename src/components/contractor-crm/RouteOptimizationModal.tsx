@@ -188,7 +188,7 @@ const RouteOptimizationModal = ({ open, onOpenChange, contractorId, onUpdated }:
           <div className="text-center py-8 text-muted-foreground">
             <MapPin className="w-10 h-10 mx-auto mb-3 opacity-40" />
             <p className="text-sm">No pending optimizations right now.</p>
-            <p className="text-xs mt-1">Optimizations run nightly for Pro & Team plans.</p>
+            <p className="text-xs mt-1">Optimizations run nightly for Pro plans.</p>
           </div>
         ) : (
           <div className="space-y-4">

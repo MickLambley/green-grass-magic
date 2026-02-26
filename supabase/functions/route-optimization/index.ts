@@ -574,7 +574,7 @@ serve(async (req) => {
         .from("contractors")
         .select("id, subscription_tier, user_id")
         .eq("id", requestedContractorId)
-        .in("subscription_tier", ["pro", "team"])
+        .in("subscription_tier", ["starter", "pro"])
         .eq("is_active", true)
         .single();
 
@@ -595,7 +595,7 @@ serve(async (req) => {
     const { data: contractors } = await supabase
       .from("contractors")
       .select("id, subscription_tier, user_id")
-      .in("subscription_tier", ["pro", "team"])
+      .in("subscription_tier", ["starter", "pro"])
       .eq("is_active", true);
 
     if (!contractors || contractors.length === 0) {
