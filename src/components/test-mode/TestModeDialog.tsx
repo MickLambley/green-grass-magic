@@ -39,8 +39,9 @@ const TestModeDialog = ({ open, onOpenChange }: TestModeDialogProps) => {
       // Sign out any existing session first
       await supabase.auth.signOut();
 
+      const testKey = import.meta.env.VITE_TEST_MODE_SECRET_KEY;
       const { data, error } = await supabase.functions.invoke("test-mode-login", {
-        body: { persona: persona.key, test_key: "G8ZSXNxsdymav5E" },
+        body: { persona: persona.key, test_key: testKey },
       });
 
       if (error) throw error;

@@ -17,7 +17,8 @@ export function isTestModeAllowed(): boolean {
     return false;
   }
 
-  const secretKey = "G8ZSXNxsdymav5E";
+  const secretKey = import.meta.env.VITE_TEST_MODE_SECRET_KEY;
+  if (!secretKey) return false;
 
   // If already activated this tab session, allow
   if (sessionStorage.getItem(SESSION_FLAG_KEY) === "true") {
