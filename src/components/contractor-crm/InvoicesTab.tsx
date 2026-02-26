@@ -184,9 +184,18 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
-        <h3 className="font-display font-semibold text-lg text-foreground">Invoices</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="font-display font-semibold text-lg text-foreground">
+            {gstRegistered ? "Tax Invoices" : "Invoices"}
+          </h3>
+          {gstRegistered && (
+            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+              GST Registered
+            </Badge>
+          )}
+        </div>
         <Button onClick={openCreateDialog} disabled={clients.length === 0}>
-          <Plus className="w-4 h-4 mr-2" /> New Invoice
+          <Plus className="w-4 h-4 mr-2" /> New {gstRegistered ? "Tax Invoice" : "Invoice"}
         </Button>
       </div>
 
@@ -267,7 +276,9 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingInvoice ? "Edit Invoice" : "New Invoice"}</DialogTitle>
+            <DialogTitle>
+              {editingInvoice ? "Edit" : "New"} {gstRegistered ? "Tax Invoice" : "Invoice"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">

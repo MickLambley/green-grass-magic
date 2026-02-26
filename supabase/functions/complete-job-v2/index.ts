@@ -35,7 +35,7 @@ serve(async (req) => {
     // Verify contractor
     const { data: contractor } = await supabase
       .from("contractors")
-      .select("id, user_id, business_name, stripe_account_id, gst_registered, subscription_tier")
+      .select("id, user_id, business_name, stripe_account_id, gst_registered, subscription_tier, abn")
       .eq("user_id", userId)
       .single();
     if (!contractor) throw new Error("Contractor not found");
@@ -183,15 +183,18 @@ serve(async (req) => {
                 html: `
                   <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto;">
                     <h1 style="color: #16a34a;">✅ Payment Receipt</h1>
+                    ${contractor.gst_registered ? `<p style="font-size: 13px; color: #666;">Tax Invoice</p>` : ""}
                     <p>Hi ${client.name},</p>
                     <p>Your ${job.title} has been completed by ${contractor.business_name || "your contractor"}.</p>
                     <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
                       <p><strong>Invoice:</strong> ${invoiceNumber}</p>
+                      ${contractor.gst_registered && contractor.abn ? `<p><strong>ABN:</strong> ${contractor.abn}</p>` : ""}
                       <p><strong>Service:</strong> ${job.title}</p>
                       <p><strong>Subtotal:</strong> $${subtotal.toFixed(2)}</p>
-                      ${gstAmount > 0 ? `<p><strong>GST:</strong> $${gstAmount.toFixed(2)}</p>` : ""}
-                      <p><strong>Total Charged:</strong> $${total.toFixed(2)}</p>
+                      ${gstAmount > 0 ? `<p><strong>GST (10%):</strong> $${gstAmount.toFixed(2)}</p>` : ""}
+                      <p style="font-size: 18px; margin-top: 8px;"><strong>Total Charged:</strong> $${total.toFixed(2)}</p>
                     </div>
+                    ${contractor.gst_registered ? `<p style="color: #999; font-size: 12px;">All prices in AUD. GST included.</p>` : ""}
                     <p style="color: #666; font-size: 14px;">Powered by Yardly</p>
                   </div>
                 `,
