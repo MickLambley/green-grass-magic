@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { CreditCard, Lock, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
-import { stripePromise } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 
 interface PaymentDialogProps {
   open: boolean;
@@ -172,15 +172,7 @@ const PaymentDialog = ({
   bookingDetails,
   clientSecret,
 }: PaymentDialogProps) => {
-  const [stripeReady, setStripeReady] = useState(false);
-
-  useEffect(() => {
-    if (stripePromise) {
-      setStripeReady(true);
-    }
-  }, []);
-
-  const stripeNotConfigured = !stripePromise;
+  const stripeInstance = getStripe();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -195,7 +187,7 @@ const PaymentDialog = ({
           </DialogDescription>
         </DialogHeader>
 
-        {stripeNotConfigured ? (
+        {!stripeInstance ? (
           <div className="py-8 text-center">
             <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-8 h-8 text-destructive" />
@@ -210,9 +202,9 @@ const PaymentDialog = ({
             <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
             <p className="text-muted-foreground">Preparing secure form...</p>
           </div>
-        ) : stripeReady && stripePromise ? (
+        ) : (
           <Elements
-            stripe={stripePromise}
+            stripe={stripeInstance}
             options={{
               clientSecret,
               appearance: {
@@ -229,7 +221,7 @@ const PaymentDialog = ({
               bookingDetails={bookingDetails}
             />
           </Elements>
-        ) : null}
+        )}
       </DialogContent>
     </Dialog>
   );

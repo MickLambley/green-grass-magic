@@ -10,7 +10,7 @@ import { Loader2, CheckCircle2, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import LawnDrawingMap, { type LawnDrawingMapRef } from "@/components/dashboard/LawnDrawingMap";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
-import { stripePromise } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 
 interface PublicBookingFormProps {
   contractorSlug: string;
@@ -284,13 +284,14 @@ const BookingFormContent = ({ contractorSlug, contractorName, onClose }: PublicB
 };
 
 const PublicBookingForm = (props: PublicBookingFormProps) => {
-  if (!stripePromise) {
+  const stripeInstance = getStripe();
+  if (!stripeInstance) {
     // Fallback if Stripe not configured — submit without payment
     return <BookingFormFallback {...props} />;
   }
 
   return (
-    <Elements stripe={stripePromise}>
+    <Elements stripe={stripeInstance}>
       <BookingFormContent {...props} />
     </Elements>
   );
