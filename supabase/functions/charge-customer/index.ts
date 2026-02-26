@@ -16,10 +16,9 @@ const logStep = (step: string, details?: Record<string, unknown>) => {
 function getApplicationFeePercent(subscriptionTier: string): number {
   switch (subscriptionTier) {
     case "pro":
-    case "team":
       return 0.01; // 1%
     case "starter":
-      return 0.03; // 3%
+      return 0.025; // 2.5%
     case "free":
     default:
       return 0.05; // 5%

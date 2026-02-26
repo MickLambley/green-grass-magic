@@ -88,9 +88,8 @@ serve(async (req) => {
         // Calculate application fee based on subscription tier
         const feePercentages: Record<string, number> = {
           free: 0.05,
-          starter: 0.03,
+          starter: 0.025,
           pro: 0.01,
-          team: 0.01,
         };
         const feePercent = feePercentages[contractor.subscription_tier] || 0.05;
         const amountCents = Math.round(Number(job.total_price) * 100);

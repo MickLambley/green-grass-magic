@@ -47,7 +47,7 @@ const RouteOptimizationBanner = ({ contractorId, subscriptionTier, onOpenOptimiz
     setTotalSaved(total);
 
     // Check for recent potential-saving notifications
-    if (subscriptionTier === "pro" || subscriptionTier === "team") {
+    if (subscriptionTier === "pro") {
       const { data: notifications } = await supabase
         .from("notifications")
         .select("message")
@@ -95,7 +95,7 @@ const RouteOptimizationBanner = ({ contractorId, subscriptionTier, onOpenOptimiz
     );
   }
 
-  // Pro/Team: full feature
+  // Pro: full feature
   return (
     <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
       <CardContent className="flex items-center justify-between p-4">

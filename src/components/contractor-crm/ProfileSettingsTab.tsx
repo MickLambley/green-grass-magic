@@ -21,9 +21,8 @@ interface ProfileSettingsTabProps {
 
 const TIER_LABELS: Record<string, { label: string; fee: string; color: string }> = {
   free: { label: "Free", fee: "5%", color: "bg-muted text-muted-foreground" },
-  starter: { label: "Starter", fee: "3%", color: "bg-sky/20 text-sky border-sky/30" },
+  starter: { label: "Starter", fee: "2.5%", color: "bg-sky/20 text-sky border-sky/30" },
   pro: { label: "Pro", fee: "1%", color: "bg-primary/20 text-primary border-primary/30" },
-  team: { label: "Team", fee: "1%", color: "bg-primary/20 text-primary border-primary/30" },
 };
 
 const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) => {
@@ -91,7 +90,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
   };
 
   const currentTier = TIER_LABELS[contractor.subscription_tier] || TIER_LABELS.free;
-  const allTiers = ["free", "starter", "pro", "team"];
+  const allTiers = ["free", "starter", "pro"];
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -102,10 +101,10 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
           <CardDescription>Choose your Yardly plan</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {allTiers.map((tier) => {
               const info = TIER_LABELS[tier];
-              const prices: Record<string, string> = { free: "$0", starter: "$29", pro: "$59", team: "$99" };
+              const prices: Record<string, string> = { free: "$0", starter: "$39", pro: "$79" };
               const isActive = contractor.subscription_tier === tier;
               return (
                 <Button
