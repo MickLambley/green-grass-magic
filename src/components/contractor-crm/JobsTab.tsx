@@ -507,7 +507,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               <List className="w-4 h-4" />
             </Button>
           </div>
-          {subscriptionTier && ["pro"].includes(subscriptionTier) && (
+          {subscriptionTier && ["starter", "pro"].includes(subscriptionTier) && (
             <Button variant="outline" onClick={handleRunOptimization} disabled={isOptimizing}>
               {isOptimizing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <MapPin className="w-4 h-4 mr-2" />}
               {isOptimizing ? "Optimizing..." : "Run Route Optimization"}
