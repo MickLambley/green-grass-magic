@@ -5,7 +5,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, Receipt, Link2, Copy, ExternalLink, Camera, X, ImagePlus } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Loader2, CheckCircle2, Receipt, Link2, Copy, ExternalLink, Camera, X, ImagePlus, CreditCard, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 interface JobCompletionDialogProps {
@@ -22,14 +23,17 @@ interface JobCompletionDialogProps {
   onCompleted: () => void;
 }
 
-type CompletionStep = "confirm" | "completing" | "options" | "done";
+type CompletionStep = "photos" | "confirm" | "completing" | "options" | "done";
+
+const RECOMMENDED_PHOTOS = 2; // recommended per type
 
 const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobCompletionDialogProps) => {
-  const [step, setStep] = useState<CompletionStep>("confirm");
+  const [step, setStep] = useState<CompletionStep>("photos");
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  const [photosAcknowledged, setPhotosAcknowledged] = useState(false);
 
   // Photo upload state
   const [beforePhotos, setBeforePhotos] = useState<File[]>([]);
@@ -55,7 +59,6 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
 
     setUploadingPhotos(true);
     try {
-      // Get contractor id
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data: contractor } = await supabase.from("contractors").select("id").eq("user_id", user.id).single();
@@ -98,7 +101,6 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
     setIsProcessing(true);
 
     try {
-      // Upload photos first if any
       if (beforePhotos.length > 0 || afterPhotos.length > 0) {
         await uploadPhotos();
       }
@@ -165,17 +167,28 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
   };
 
   const handleClose = () => {
-    setStep("confirm");
+    setStep("photos");
     setPaymentLinkUrl(null);
     setInvoiceNumber(null);
     setResult(null);
     setBeforePhotos([]);
     setAfterPhotos([]);
+    setPhotosAcknowledged(false);
     onOpenChange(false);
     onCompleted();
   };
 
   if (!job) return null;
+
+  const isWebsiteBooking = job.source === "website_booking";
+  const priceLabel = job.total_price ? `$${Number(job.total_price).toFixed(2)}` : null;
+
+  // Photo progress calculation
+  const beforeProgress = Math.min(beforePhotos.length / RECOMMENDED_PHOTOS, 1) * 100;
+  const afterProgress = Math.min(afterPhotos.length / RECOMMENDED_PHOTOS, 1) * 100;
+  const totalPhotoProgress = (beforeProgress + afterProgress) / 2;
+  const hasAnyPhotos = beforePhotos.length > 0 || afterPhotos.length > 0;
+  const canProceed = photosAcknowledged || hasAnyPhotos;
 
   const PhotoSection = ({ type, photos, inputRef, onAdd, onRemove }: {
     type: string;
@@ -183,43 +196,126 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
     inputRef: React.RefObject<HTMLInputElement>;
     onAdd: (files: FileList | null) => void;
     onRemove: (i: number) => void;
-  }) => (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-muted-foreground capitalize">{type} Photos</p>
-        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => inputRef.current?.click()}>
-          <ImagePlus className="w-3 h-3 mr-1" /> Add
-        </Button>
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => onAdd(e.target.files)}
-        />
-      </div>
-      {photos.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {photos.map((file, i) => (
-            <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border">
-              <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
-              <button
-                onClick={() => onRemove(i)}
-                className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
+  }) => {
+    const progress = Math.min(photos.length / RECOMMENDED_PHOTOS, 1) * 100;
+    const isComplete = photos.length >= RECOMMENDED_PHOTOS;
+
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-medium text-muted-foreground capitalize">{type} Photos</p>
+            <Badge
+              variant={isComplete ? "default" : "outline"}
+              className={`text-[10px] px-1.5 py-0 h-4 ${isComplete ? "bg-primary/20 text-primary border-primary/30" : ""}`}
+            >
+              {photos.length}/{RECOMMENDED_PHOTOS} {isComplete ? "✅" : ""}
+            </Badge>
+          </div>
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => inputRef.current?.click()}>
+            <ImagePlus className="w-3 h-3 mr-1" /> Add
+          </Button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => onAdd(e.target.files)}
+          />
         </div>
-      )}
-    </div>
-  );
+        <Progress value={progress} className="h-1.5" />
+        {photos.length > 0 && (
+          <div className="flex gap-2 flex-wrap">
+            {photos.map((file, i) => (
+              <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border">
+                <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
+                <button
+                  onClick={() => onRemove(i)}
+                  className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent className="sm:max-w-md">
+        {/* STEP: Photo Documentation */}
+        {step === "photos" && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="font-display flex items-center gap-2">
+                <Camera className="w-5 h-5 text-primary" />
+                Document This Job
+              </DialogTitle>
+              <DialogDescription>
+                Add before & after photos to build trust and protect against disputes.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-2">
+              {/* Overall progress */}
+              <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-foreground">Photo Progress</span>
+                  <span className="text-muted-foreground text-xs">
+                    {Math.round(totalPhotoProgress)}%
+                  </span>
+                </div>
+                <Progress value={totalPhotoProgress} className="h-2" />
+              </div>
+
+              <div className="p-3 rounded-lg border border-border space-y-3">
+                <PhotoSection
+                  type="before"
+                  photos={beforePhotos}
+                  inputRef={beforeInputRef as React.RefObject<HTMLInputElement>}
+                  onAdd={(files) => addPhotos(files, "before")}
+                  onRemove={(i) => removePhoto("before", i)}
+                />
+                <div className="border-t border-border" />
+                <PhotoSection
+                  type="after"
+                  photos={afterPhotos}
+                  inputRef={afterInputRef as React.RefObject<HTMLInputElement>}
+                  onAdd={(files) => addPhotos(files, "after")}
+                  onRemove={(i) => removePhoto("after", i)}
+                />
+              </div>
+
+              {!hasAnyPhotos && (
+                <label className="flex items-start gap-2 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/30 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={photosAcknowledged}
+                    onChange={(e) => setPhotosAcknowledged(e.target.checked)}
+                    className="mt-0.5 rounded border-border"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Skip photos — I understand this reduces dispute protection.
+                  </span>
+                </label>
+              )}
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                <Button
+                  onClick={() => setStep("confirm")}
+                  disabled={!canProceed}
+                >
+                  Continue to Completion
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* STEP: Confirm */}
         {step === "confirm" && (
           <>
@@ -242,55 +338,62 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Price</span>
                   <span className="font-medium text-foreground">
-                    {job.total_price ? `$${Number(job.total_price).toFixed(2)}` : "Not set"}
+                    {priceLabel || "Not set"}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Source</span>
                   <Badge variant="outline" className="text-xs">
-                    {job.source === "website_booking" ? "🌐 Website Booking" : "Manual"}
+                    {isWebsiteBooking ? "🌐 Website Booking" : "Manual"}
                   </Badge>
                 </div>
+                {hasAnyPhotos && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Photos</span>
+                    <span className="text-xs text-primary font-medium">
+                      Before: {beforePhotos.length} · After: {afterPhotos.length}
+                    </span>
+                  </div>
+                )}
               </div>
 
-              {/* Optional Photo Upload */}
-              <div className="p-3 rounded-lg border border-border space-y-3">
-                <div className="flex items-center gap-2">
-                  <Camera className="w-4 h-4 text-muted-foreground" />
-                  <p className="text-sm font-medium text-foreground">Photos (optional)</p>
+              {isWebsiteBooking && (
+                <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 flex items-start gap-3">
+                  <CreditCard className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Auto-charge enabled</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      The customer's saved payment method will be charged {priceLabel ? priceLabel : "the quoted amount"} automatically.
+                    </p>
+                  </div>
                 </div>
-                <PhotoSection
-                  type="before"
-                  photos={beforePhotos}
-                  inputRef={beforeInputRef as React.RefObject<HTMLInputElement>}
-                  onAdd={(files) => addPhotos(files, "before")}
-                  onRemove={(i) => removePhoto("before", i)}
-                />
-                <PhotoSection
-                  type="after"
-                  photos={afterPhotos}
-                  inputRef={afterInputRef as React.RefObject<HTMLInputElement>}
-                  onAdd={(files) => addPhotos(files, "after")}
-                  onRemove={(i) => removePhoto("after", i)}
-                />
-              </div>
-
-              {job.source === "website_booking" && (
-                <p className="text-sm text-muted-foreground">
-                  The customer's saved payment method will be charged automatically upon completion.
-                </p>
               )}
-              {job.source === "manual" && (
-                <p className="text-sm text-muted-foreground">
-                  After marking complete, you'll choose how to invoice this job.
-                </p>
+              {!isWebsiteBooking && (
+                <div className="bg-muted/50 border border-border rounded-lg p-3 flex items-start gap-3">
+                  <FileText className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Invoice options next</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      After marking complete, you'll choose how to invoice this job.
+                    </p>
+                  </div>
+                </div>
               )}
 
               <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                <Button onClick={handleComplete}>
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
-                  {job.source === "website_booking" ? "Complete & Charge" : "Complete Job"}
+                <Button variant="outline" onClick={() => setStep("photos")}>Back</Button>
+                <Button onClick={handleComplete} className={isWebsiteBooking ? "bg-primary hover:bg-primary/90" : ""}>
+                  {isWebsiteBooking ? (
+                    <>
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      Complete & Charge Customer {priceLabel ? `(${priceLabel})` : ""}
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-4 h-4 mr-2" />
+                      Complete & Create Invoice
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
@@ -305,7 +408,7 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
             <p className="text-sm text-muted-foreground mt-1">
               {uploadingPhotos
                 ? "Uploading photos..."
-                : job.source === "website_booking"
+                : isWebsiteBooking
                 ? "Charging customer and generating invoice..."
                 : "Marking job as complete..."}
             </p>
