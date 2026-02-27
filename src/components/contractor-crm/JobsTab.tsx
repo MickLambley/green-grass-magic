@@ -574,7 +574,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {pendingJobs.map((job) => (
-              <Card key={job.id} className="border-sunshine/30 bg-sunshine/5">
+              <Card key={job.id} className={`bg-sunshine/5 ${pendingSuggestionJobIds.has(job.id) ? "border-sky/40 ring-1 ring-sky/20" : "border-sunshine/30"}`}>
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-start justify-between">
                     <div>
@@ -585,6 +585,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                       {job.source === "platform" ? "🌐 Website" : "Manual"}
                     </Badge>
                   </div>
+                  {/* Pending alternative suggestions indicator */}
+                  {pendingSuggestionJobIds.has(job.id) && (
+                    <div className="flex items-center gap-2 p-2 rounded-md bg-sky/10 border border-sky/20">
+                      <MessageSquare className="w-3.5 h-3.5 text-sky shrink-0" />
+                      <span className="text-[11px] text-sky font-medium">Alternative times sent — awaiting customer response</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
@@ -596,7 +603,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                   </div>
                   <div className="flex items-center gap-2">
                     <Button size="sm" className="flex-1" onClick={() => handleConfirmJob(job.id, job.source)}>
-                      <Check className="w-3.5 h-3.5 mr-1" /> Confirm
+                      <Check className="w-3.5 h-3.5 mr-1" /> {pendingSuggestionJobIds.has(job.id) ? "Override & Confirm" : "Confirm"}
                     </Button>
                     <Button size="sm" variant="outline" className="flex-1" onClick={() => handleSuggestTime(job)}>
                       <Calendar className="w-3.5 h-3.5 mr-1" /> Reschedule
