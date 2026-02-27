@@ -280,7 +280,7 @@ serve(async (req) => {
                         <p style="margin: 5px 0;"><strong>Amount:</strong> $${Number(booking.total_price).toFixed(2)}</p>
                       </div>
                       <p>Payment will be released after customer approval or automatically in 48 hours.</p>
-                      <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawnly Team</p>
+                      <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
                     </div>
                   `,
                 }),

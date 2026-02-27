@@ -88,7 +88,7 @@ serve(async (req) => {
     const { action } = await req.json().catch(() => ({ action: "status" }));
 
     if (action === "create_account_link") {
-      const origin = req.headers.get("origin") || "https://lawnly.com.au";
+      const origin = req.headers.get("origin") || "https://yardly.com.au";
       const accountLink = await stripe.accountLinks.create({
         account: stripeAccountId,
         refresh_url: `${origin}/contractor`,

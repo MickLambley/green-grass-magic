@@ -149,7 +149,7 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               from: "Yardly <onboarding@resend.dev>",
-              to: ["admin@lawnly.com.au"],
+              to: ["admin@yardly.com.au"],
               subject: `${isPostPayment ? "⚠️ Post-Payment " : ""}Dispute Raised - Job #${bookingId.slice(0, 8)}`,
               html: `
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">

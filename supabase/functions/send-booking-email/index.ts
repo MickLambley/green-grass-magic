@@ -268,7 +268,7 @@ serve(async (req) => {
   } catch (error: any) {
     console.error("Error in send-booking-email function:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "An internal error occurred" }),
       {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },
