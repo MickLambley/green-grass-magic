@@ -149,10 +149,10 @@ export const PortalJobDetail = ({ job, contractor, userId, onBack }: PortalJobDe
       )}
 
       {/* Notes */}
-      {job.notes && (
+      {currentJob.notes && (
         <div className="bg-card rounded-xl p-5 shadow-sm border border-border">
           <h3 className="font-semibold text-foreground text-sm mb-2">Notes</h3>
-          <p className="text-sm text-muted-foreground">{job.notes}</p>
+          <p className="text-sm text-muted-foreground">{currentJob.notes}</p>
         </div>
       )}
 
