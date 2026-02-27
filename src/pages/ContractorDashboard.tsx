@@ -23,7 +23,7 @@ import DisputeManagementTab from "@/components/contractor-crm/DisputeManagementT
 import AlternativeTimeTab from "@/components/contractor-crm/AlternativeTimeTab";
 import RouteOptimizationBanner from "@/components/contractor-crm/RouteOptimizationBanner";
 import RouteOptimizationModal from "@/components/contractor-crm/RouteOptimizationModal";
-import OptimizationPreviewDialog from "@/components/contractor-crm/OptimizationPreviewDialog";
+import StripeConnectBanner from "@/components/contractor-crm/StripeConnectBanner";
 type Contractor = Tables<"contractors">;
 
 const NAV_ITEMS = [
