@@ -17,6 +17,8 @@ import {
   CheckCircle2, User as UserIcon, Plus, MapPin, Search,
 } from "lucide-react";
 import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "@/components/contractor-crm/WorkingHoursEditor";
+import { GeographicReachStep } from "@/components/contractor-onboarding/GeographicReachStep";
+import type { GeographicData } from "@/components/contractor-onboarding/types";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -38,12 +40,7 @@ const STEPS: StepConfig[] = [
   { key: "job", title: "First Job", subtitle: "Schedule your first job", icon: Calendar },
 ];
 
-interface SuburbEntry {
-  suburb: string;
-  postcode: string;
-  state: string;
-  selected: boolean;
-}
+
 
 const ContractorOnboarding = () => {
   const navigate = useNavigate();
@@ -62,18 +59,14 @@ const ContractorOnboarding = () => {
   });
   const [workingHours, setWorkingHours] = useState<WorkingHours>(DEFAULT_WORKING_HOURS);
 
-  // Service Area form
-  const [serviceAreaAddress, setServiceAreaAddress] = useState("");
-  const [serviceAreaLat, setServiceAreaLat] = useState<number | null>(null);
-  const [serviceAreaLng, setServiceAreaLng] = useState<number | null>(null);
-  const [serviceRadiusKm, setServiceRadiusKm] = useState(15);
-  const [suburbs, setSuburbs] = useState<SuburbEntry[]>([]);
-  const [isLoadingSuburbs, setIsLoadingSuburbs] = useState(false);
-  const [suburbsLoaded, setSuburbsLoaded] = useState(false);
-  const [manualSuburbQuery, setManualSuburbQuery] = useState("");
-  const [manualSuburbResults, setManualSuburbResults] = useState<{ suburb: string; postcode: string; state: string }[]>([]);
-  const [isSearchingSuburb, setIsSearchingSuburb] = useState(false);
-  const [isSavingServiceArea, setIsSavingServiceArea] = useState(false);
+  // Geographic data for service area step
+  const [geoData, setGeoData] = useState<GeographicData>({
+    maxTravelDistanceKm: 15,
+    baseAddress: "",
+    baseAddressLat: null,
+    baseAddressLng: null,
+    servicedSuburbs: [],
+  });
 
   // Client form
   const [clientForm, setClientForm] = useState({
@@ -144,17 +137,14 @@ const ContractorOnboarding = () => {
           }
         }
       }
-      // Pre-fill service area from business address
-      if (contractorData.business_address) {
-        setServiceAreaAddress(contractorData.business_address);
-      }
-      if (contractorData.service_center_lat && contractorData.service_center_lng) {
-        setServiceAreaLat(contractorData.service_center_lat);
-        setServiceAreaLng(contractorData.service_center_lng);
-      }
-      if (contractorData.service_radius_km) {
-        setServiceRadiusKm(contractorData.service_radius_km);
-      }
+      // Pre-fill geographic data from contractor record
+      setGeoData(prev => ({
+        ...prev,
+        baseAddress: contractorData.business_address || "",
+        baseAddressLat: contractorData.service_center_lat || null,
+        baseAddressLng: contractorData.service_center_lng || null,
+        maxTravelDistanceKm: contractorData.service_radius_km || 15,
+      }));
     }
 
     setIsLoading(false);
@@ -245,144 +235,35 @@ const ContractorOnboarding = () => {
     setCurrentStep(3);
   };
 
-  // ── Service Area Handlers ──
-
-  const handleGeocodeAddress = async () => {
-    if (!serviceAreaAddress.trim()) {
-      toast.error("Please enter your home base address");
-      return;
-    }
-
-    setIsLoadingSuburbs(true);
-    try {
-      // Geocode the address
-      const { data: geocodeData, error: geocodeError } = await supabase.functions.invoke("geocode-address", {
-        body: { address: serviceAreaAddress.trim() },
-      });
-
-      if (geocodeError || !geocodeData?.lat) {
-        toast.error("Could not find that address. Please try a more specific address.");
-        setIsLoadingSuburbs(false);
-        return;
-      }
-
-      setServiceAreaLat(geocodeData.lat);
-      setServiceAreaLng(geocodeData.lng);
-      if (geocodeData.formatted_address) {
-        setServiceAreaAddress(geocodeData.formatted_address);
-      }
-
-      // Update contractor with service center
-      if (contractor) {
-        await supabase.from("contractors").update({
-          service_center_lat: geocodeData.lat,
-          service_center_lng: geocodeData.lng,
-          service_radius_km: serviceRadiusKm,
-        }).eq("id", contractor.id);
-      }
-
-      // Get suburbs in radius
-      const { data: suburbData, error: suburbError } = await supabase.functions.invoke("get-suburbs-in-radius", {
-        body: { lat: geocodeData.lat, lng: geocodeData.lng, radius_km: serviceRadiusKm },
-      });
-
-      if (suburbError || !suburbData?.suburbs) {
-        toast.error("Failed to find suburbs. The postcode database may not be seeded yet.");
-        setIsLoadingSuburbs(false);
-        return;
-      }
-
-      setSuburbs(suburbData.suburbs.map((s: any) => ({ ...s, selected: true })));
-      setSuburbsLoaded(true);
-      toast.success(`Found ${suburbData.count} suburbs within ${serviceRadiusKm}km`);
-    } catch (err) {
-      console.error("Service area error:", err);
-      toast.error("Something went wrong. Please try again.");
-    }
-    setIsLoadingSuburbs(false);
-  };
-
-  const handleManualSuburbSearch = async (query: string) => {
-    setManualSuburbQuery(query);
-    if (query.length < 2) {
-      setManualSuburbResults([]);
-      return;
-    }
-
-    setIsSearchingSuburb(true);
-    const { data } = await supabase
-      .from("australian_postcodes")
-      .select("suburb, postcode, state")
-      .ilike("suburb", `${query}%`)
-      .limit(10);
-
-    if (data) {
-      // Deduplicate
-      const seen = new Set<string>();
-      setManualSuburbResults(
-        data.filter((d) => {
-          const key = `${d.suburb}-${d.postcode}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        })
-      );
-    }
-    setIsSearchingSuburb(false);
-  };
-
-  const handleAddManualSuburb = (s: { suburb: string; postcode: string; state: string }) => {
-    // Check if already in list
-    if (suburbs.find((x) => x.suburb === s.suburb && x.postcode === s.postcode)) {
-      toast.info(`${s.suburb} is already in your list`);
-      return;
-    }
-    setSuburbs((prev) => [...prev, { ...s, selected: true }].sort((a, b) => a.suburb.localeCompare(b.suburb)));
-    setManualSuburbQuery("");
-    setManualSuburbResults([]);
-    toast.success(`Added ${s.suburb}`);
-  };
-
-  const toggleSuburb = (index: number) => {
-    setSuburbs((prev) => prev.map((s, i) => (i === index ? { ...s, selected: !s.selected } : s)));
-  };
-
-  const selectAllSuburbs = () => setSuburbs((prev) => prev.map((s) => ({ ...s, selected: true })));
-  const deselectAllSuburbs = () => setSuburbs((prev) => prev.map((s) => ({ ...s, selected: false })));
+  // ── Service Area Handler ──
 
   const handleSaveServiceArea = async () => {
-    const selected = suburbs.filter((s) => s.selected);
-    if (selected.length === 0) {
-      toast.error("Please select at least one suburb");
-      return;
-    }
+    if (!geoData.baseAddressLat || !geoData.baseAddressLng) return;
 
-    setIsSavingServiceArea(true);
     try {
-      const { error } = await supabase.functions.invoke("update-service-areas", {
-        body: {
-          suburbs: selected.map((s) => ({ suburb: s.suburb, postcode: s.postcode })),
-        },
-      });
-
-      if (error) throw error;
+      // Save suburbs via edge function
+      const suburbPayload = geoData.servicedSuburbs.map(s => ({ suburb: s, postcode: "" }));
+      if (suburbPayload.length > 0) {
+        await supabase.functions.invoke("update-service-areas", {
+          body: { suburbs: suburbPayload },
+        });
+      }
 
       // Update contractor with radius info
       if (contractor) {
         await supabase.from("contractors").update({
-          service_radius_km: serviceRadiusKm,
-          service_center_lat: serviceAreaLat,
-          service_center_lng: serviceAreaLng,
+          service_radius_km: geoData.maxTravelDistanceKm,
+          service_center_lat: geoData.baseAddressLat,
+          service_center_lng: geoData.baseAddressLng,
         }).eq("id", contractor.id);
       }
 
-      toast.success(`Saved ${selected.length} service suburbs!`);
+      toast.success(`Saved ${geoData.servicedSuburbs.length} service suburbs!`);
       setCurrentStep(4);
     } catch (err) {
       console.error("Save service area error:", err);
       toast.error("Failed to save service areas");
     }
-    setIsSavingServiceArea(false);
   };
 
   const handleCreateClient = async () => {
@@ -464,7 +345,7 @@ const ContractorOnboarding = () => {
 
   const step = STEPS[currentStep];
   const progress = ((currentStep + 1) / STEPS.length) * 100;
-  const selectedSuburbCount = suburbs.filter((s) => s.selected).length;
+  const selectedSuburbCount = geoData.servicedSuburbs.length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -639,159 +520,12 @@ const ContractorOnboarding = () => {
 
         {/* ── Step 4: Service Area ── */}
         {currentStep === 3 && (
-          <Card>
-            <CardContent className="pt-6 space-y-5">
-              {/* Part 1: Home Base & Radius */}
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Home Base Address *</Label>
-                  <p className="text-xs text-muted-foreground">Where you'll travel from to reach jobs</p>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      value={serviceAreaAddress}
-                      onChange={(e) => setServiceAreaAddress(e.target.value)}
-                      placeholder="123 Main St, Melbourne VIC 3000"
-                      className="pl-10"
-                    />
-                  </div>
-                  {serviceAreaLat && (
-                    <p className="text-xs text-primary flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> Location found
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-3">
-                  <Label>Service Radius</Label>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">5 km</span>
-                    <span className="text-2xl font-bold text-primary">{serviceRadiusKm} km</span>
-                    <span className="text-sm text-muted-foreground">50 km</span>
-                  </div>
-                  <Slider
-                    value={[serviceRadiusKm]}
-                    onValueChange={([v]) => setServiceRadiusKm(v)}
-                    min={5}
-                    max={50}
-                    step={5}
-                  />
-                </div>
-
-                <Button
-                  onClick={handleGeocodeAddress}
-                  disabled={isLoadingSuburbs || !serviceAreaAddress.trim()}
-                  className="w-full"
-                  variant="outline"
-                  size="lg"
-                >
-                  {isLoadingSuburbs ? (
-                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                  ) : (
-                    <Search className="w-5 h-5 mr-2" />
-                  )}
-                  Find Suburbs
-                </Button>
-              </div>
-
-              {/* Part 2: Suburb Selection */}
-              {suburbsLoaded && (
-                <div className="space-y-3 animate-fade-in">
-                  <div className="flex items-center justify-between">
-                    <Label>
-                      Suburbs in your area
-                      <Badge variant="outline" className="ml-2">{selectedSuburbCount} selected</Badge>
-                    </Label>
-                  </div>
-
-                  {/* Manual Add */}
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      value={manualSuburbQuery}
-                      onChange={(e) => handleManualSuburbSearch(e.target.value)}
-                      placeholder="Manually add a suburb..."
-                      className="pl-10"
-                    />
-                    {manualSuburbResults.length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-popover border border-border rounded-lg shadow-lg max-h-48 overflow-auto">
-                        {manualSuburbResults.map((s, i) => (
-                          <button
-                            key={`${s.suburb}-${s.postcode}-${i}`}
-                            className="w-full text-left px-3 py-2 hover:bg-muted text-sm flex items-center justify-between"
-                            onClick={() => handleAddManualSuburb(s)}
-                          >
-                            <span>{s.suburb}</span>
-                            <span className="text-muted-foreground text-xs">{s.postcode}, {s.state}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Select/Deselect All */}
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={selectAllSuburbs} disabled={selectedSuburbCount === suburbs.length}>
-                      Select All
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={deselectAllSuburbs} disabled={selectedSuburbCount === 0}>
-                      Deselect All
-                    </Button>
-                  </div>
-
-                  {/* Suburb Table */}
-                  <ScrollArea className="h-64 rounded-lg border border-border">
-                    <div className="divide-y divide-border">
-                      {suburbs.map((s, i) => (
-                        <div
-                          key={`${s.suburb}-${s.postcode}`}
-                          className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer"
-                          onClick={() => toggleSuburb(i)}
-                        >
-                          <Checkbox
-                            checked={s.selected}
-                            onCheckedChange={() => toggleSuburb(i)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                          <span className={`text-sm flex-1 ${s.selected ? "text-foreground" : "text-muted-foreground"}`}>
-                            {s.suburb}
-                          </span>
-                          <span className="text-xs text-muted-foreground">{s.postcode}</span>
-                          <span className="text-xs text-muted-foreground">{s.state}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-
-                  <p className="text-xs text-muted-foreground">
-                    Uncheck suburbs you don't want to service. You can update this later in Settings.
-                  </p>
-                </div>
-              )}
-
-              {/* Save & Navigation */}
-              {suburbsLoaded && (
-                <Button
-                  onClick={handleSaveServiceArea}
-                  disabled={isSavingServiceArea || selectedSuburbCount === 0}
-                  className="w-full"
-                  size="lg"
-                >
-                  {isSavingServiceArea ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Check className="w-5 h-5 mr-2" />}
-                  Save {selectedSuburbCount} Suburbs & Continue
-                </Button>
-              )}
-
-              <div className="flex gap-3">
-                <Button variant="ghost" onClick={() => setCurrentStep(2)} className="flex-1">
-                  <ArrowLeft className="w-4 h-4 mr-2" /> Back
-                </Button>
-                <Button onClick={handleSkip} variant="outline" className="flex-1">
-                  Skip for now <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <GeographicReachStep
+            data={geoData}
+            onChange={setGeoData}
+            onNext={handleSaveServiceArea}
+            onBack={() => setCurrentStep(2)}
+          />
         )}
 
         {/* ── Step 5: First Client ── */}

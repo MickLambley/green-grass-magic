@@ -8,17 +8,16 @@ import { ArrowRight, ArrowLeft, MapPin, Loader2, Navigation, X } from "lucide-re
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { GeographicData, IdentityBusinessData } from "./types";
+import type { GeographicData } from "./types";
 
 interface GeographicReachStepProps {
   data: GeographicData;
   onChange: (data: GeographicData) => void;
-  identityData?: IdentityBusinessData;
   onNext: () => void;
   onBack: () => void;
 }
 
- export const GeographicReachStep = ({ data, onChange, identityData, onNext, onBack }: GeographicReachStepProps) => {
+ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: GeographicReachStepProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
   const circleRef = useRef<google.maps.Circle | null>(null);
@@ -319,66 +318,16 @@ interface GeographicReachStepProps {
           </p>
           <div className="relative">
             <Navigation className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
+          <Input
               ref={inputRef}
               id="base-address"
-              placeholder={identityData?.businessAddress || "Start typing your address..."}
+              placeholder="Start typing your address..."
               defaultValue={data.baseAddress}
               className="pl-10"
             />
           </div>
-          {identityData?.businessAddress && !data.baseAddress && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                onChange({
-                  ...data,
-                  baseAddress: identityData.businessAddress,
-                  baseAddressLat: identityData.businessAddressLat,
-                  baseAddressLng: identityData.businessAddressLng,
-                });
-                // Trigger map update
-                if (inputRef.current) {
-                  inputRef.current.value = identityData.businessAddress;
-                }
-                if (googleMapRef.current && circleRef.current && identityData.businessAddressLat && identityData.businessAddressLng) {
-                  const newCenter = { lat: identityData.businessAddressLat, lng: identityData.businessAddressLng };
-                  googleMapRef.current.setCenter(newCenter);
-                  circleRef.current.setCenter(newCenter);
-                  
-                  if (markerRef.current) {
-                    markerRef.current.setPosition(newCenter);
-                  } else {
-                    markerRef.current = new google.maps.Marker({
-                      map: googleMapRef.current,
-                      position: newCenter,
-                      icon: {
-                        path: google.maps.SymbolPath.CIRCLE,
-                        scale: 10,
-                        fillColor: "#16a34a",
-                        fillOpacity: 1,
-                        strokeColor: "#ffffff",
-                        strokeWeight: 3,
-                      },
-                    });
-                  }
-                  
-                  const bounds = circleRef.current.getBounds();
-                  if (bounds) {
-                    googleMapRef.current.fitBounds(bounds);
-                  }
-                }
-              }}
-              className="gap-2"
-            >
-              <MapPin className="w-3 h-3" />
-              Use business address
-            </Button>
-          )}
           {data.baseAddress && (
-            <p className="text-sm text-green-600 flex items-center gap-1">
+            <p className="text-sm text-primary flex items-center gap-1">
               <MapPin className="w-3 h-3" />
               {data.baseAddress}
             </p>
