@@ -222,6 +222,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           description: j.description,
           notes: j.notes,
           recurrence_rule: j.recurrence_rule,
+          recurring_job_id: (j as any).recurring_job_id || null,
           source: "crm",
           client_id: j.client_id,
           duration_minutes: j.duration_minutes,
