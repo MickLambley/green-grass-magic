@@ -375,6 +375,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                 const isExpanded = expandedJobId === job.id;
                 const wasShifted = !!job.original_scheduled_time && job.original_scheduled_time !== startTime;
                 const originalTopPx = wasShifted ? getTopPx(timeToMinutes(job.original_scheduled_time!)) : 0;
+                const hasTravelWarning = travelWarningJobIds.has(job.id);
 
                 return (
                   <div key={job.id}>
