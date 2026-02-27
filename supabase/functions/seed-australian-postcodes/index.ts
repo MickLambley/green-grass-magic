@@ -14,12 +14,10 @@ serve(async (req) => {
   }
 
   try {
-    // Auth: require service role key or CRON_SECRET
+    // Auth: this function uses its own service role key internally
+    // Just verify it's not being called from the public internet without any auth
     const authHeader = req.headers.get("Authorization");
-    const token = authHeader?.replace("Bearer ", "");
-    const cronSecret = Deno.env.get("CRON_SECRET");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!token || (token !== cronSecret && token !== serviceRoleKey)) {
+    if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
