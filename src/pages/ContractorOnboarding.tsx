@@ -350,7 +350,7 @@ const ContractorOnboarding = () => {
 
   const step = STEPS[currentStep];
   const progress = ((currentStep + 1) / STEPS.length) * 100;
-  const selectedSuburbCount = suburbs.filter((s) => s.selected).length;
+  const selectedSuburbCount = geoData.servicedSuburbs.length;
 
   return (
     <div className="min-h-screen bg-background">
