@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Clock, Car, ChevronLeft, ChevronRight, GripVertical, ChevronDown, ChevronUp, ArrowRight } from "lucide-react";
+import { MapPin, Clock, Car, ChevronLeft, ChevronRight, GripVertical, ChevronDown, ChevronUp, ArrowRight, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format, addDays, subDays, isToday, isTomorrow, isYesterday } from "date-fns";
 
@@ -43,6 +43,8 @@ const statusColors: Record<string, { bg: string; border: string; text: string }>
 
 // Pixels per hour — large enough so 15-min jobs get ~30px
 const PX_PER_HOUR = 120;
+// Minimum travel buffer in minutes — gaps shorter than this between different-address jobs get flagged
+const MIN_TRAVEL_BUFFER = 15;
 
 function timeToMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -99,6 +101,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
       startMinutes: number;
       durationMinutes: number;
       travelMinutes?: number;
+      travelWarning?: boolean;
     }[] = [];
 
     for (let i = 0; i < sortedJobs.length; i++) {
@@ -111,13 +114,40 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
         const endMin = startMin + duration;
         const nextStart = timeToMinutes(sortedJobs[i + 1].scheduled_time!);
         const gap = nextStart - endMin;
+        // Check if different addresses (i.e., travel is needed)
+        const currentAddr = job.client_address;
+        const nextAddr = sortedJobs[i + 1].client_address;
+        const sameAddress = currentAddr?.street && nextAddr?.street && currentAddr.street === nextAddr.street;
+        const needsTravel = !sameAddress && (currentAddr?.street || nextAddr?.street);
+        const travelWarning = !!needsTravel && gap < MIN_TRAVEL_BUFFER && gap >= 0;
+        
         if (gap > 0) {
-          result.push({ type: "travel", startMinutes: endMin, durationMinutes: gap, travelMinutes: gap });
+          result.push({ type: "travel", startMinutes: endMin, durationMinutes: gap, travelMinutes: gap, travelWarning });
+        } else if (gap <= 0 && needsTravel) {
+          // Overlapping jobs that need travel — insert a warning-only travel entry
+          result.push({ type: "travel", startMinutes: endMin, durationMinutes: 0, travelMinutes: 0, travelWarning: true });
         }
       }
     }
     return result;
   }, [sortedJobs]);
+
+  // Build a set of job IDs that have travel warnings (adjacent to a warning travel entry)
+  const travelWarningJobIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].type === "travel" && entries[i].travelWarning) {
+        // Flag the job before and after this travel entry
+        if (i > 0 && entries[i - 1].type === "job" && entries[i - 1].job) {
+          ids.add(entries[i - 1].job!.id);
+        }
+        if (i < entries.length - 1 && entries[i + 1].type === "job" && entries[i + 1].job) {
+          ids.add(entries[i + 1].job!.id);
+        }
+      }
+    }
+    return ids;
+  }, [entries]);
 
   const timelineBounds = useMemo(() => {
     let startHour = 7;
@@ -308,6 +338,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
 
                 if (entry.type === "travel") {
                   const isShortTravel = heightPx < 24;
+                  const hasWarning = !!entry.travelWarning;
                   return (
                     <div
                       key={`travel-${idx}`}
@@ -318,10 +349,15 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                         zIndex: isShortTravel ? 12 : 5,
                       }}
                     >
-                      <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/80 border border-dashed border-border ${isShortTravel ? "shadow-sm" : ""}`}>
-                        <Car className="w-3 h-3 text-muted-foreground shrink-0" />
-                        <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">
-                          {formatDuration(entry.travelMinutes!)}
+                      <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed ${
+                        hasWarning
+                          ? "bg-destructive/10 border-destructive/40"
+                          : "bg-muted/80 border-border"
+                      } ${isShortTravel ? "shadow-sm" : ""}`}>
+                        {hasWarning && <AlertTriangle className="w-3 h-3 text-destructive shrink-0" />}
+                        <Car className={`w-3 h-3 shrink-0 ${hasWarning ? "text-destructive" : "text-muted-foreground"}`} />
+                        <span className={`text-[10px] font-medium whitespace-nowrap ${hasWarning ? "text-destructive" : "text-muted-foreground"}`}>
+                          {entry.travelMinutes! > 0 ? formatDuration(entry.travelMinutes!) : "Overlap!"}
                         </span>
                       </div>
                     </div>
@@ -339,6 +375,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                 const isExpanded = expandedJobId === job.id;
                 const wasShifted = !!job.original_scheduled_time && job.original_scheduled_time !== startTime;
                 const originalTopPx = wasShifted ? getTopPx(timeToMinutes(job.original_scheduled_time!)) : 0;
+                const hasTravelWarning = travelWarningJobIds.has(job.id);
 
                 return (
                   <div key={job.id}>
@@ -362,7 +399,9 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                       onDragEnd={canDrag ? handleDragEnd : undefined}
                       className={`absolute left-1 right-1 rounded-lg border-l-4 ${colors.border} ${colors.bg} cursor-pointer hover:shadow-md transition-all overflow-hidden ${
                         canDrag ? "cursor-grab active:cursor-grabbing" : ""
-                      } ${isBeingDragged ? "opacity-50 shadow-lg ring-2 ring-primary/30" : ""} ${wasShifted ? "ring-1 ring-amber-400/30" : ""}`}
+                      } ${isBeingDragged ? "opacity-50 shadow-lg ring-2 ring-primary/30" : ""} ${wasShifted ? "ring-1 ring-amber-400/30" : ""} ${
+                        hasTravelWarning ? "ring-2 ring-destructive/50 border-l-destructive" : ""
+                      }`}
                       style={{
                         top: `${topPx}px`,
                         height: isExpanded ? "auto" : `${Math.max(heightPx, 28)}px`,
@@ -374,6 +413,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                     {/* Compact layout for short jobs */}
                     {short && !isExpanded ? (
                       <div className="flex items-center gap-2 px-2 py-1 h-full">
+                        {hasTravelWarning && <AlertTriangle className="w-3 h-3 text-destructive shrink-0" />}
                         {canDrag && <GripVertical className="w-3 h-3 text-muted-foreground/50 shrink-0" />}
                         <span className="text-[10px] font-bold text-foreground truncate">{job.title}</span>
                         <span className="text-[10px] text-muted-foreground shrink-0">{startTime}–{endTime}</span>
@@ -383,6 +423,9 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                       <div className="px-3 py-2">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1 flex items-start gap-1.5">
+                            {hasTravelWarning && (
+                              <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />
+                            )}
                             {canDrag && (
                               <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 mt-0.5" />
                             )}
@@ -441,6 +484,12 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                 <Clock className="w-3 h-3" />
                 {formatDuration(entries.filter(e => e.type === "job").reduce((sum, e) => sum + e.durationMinutes, 0))} work
               </span>
+              {travelWarningJobIds.size > 0 && (
+                <span className="text-xs text-destructive flex items-center gap-1 font-medium">
+                  <AlertTriangle className="w-3 h-3" />
+                  {travelWarningJobIds.size / 2 >= 1 ? Math.ceil(travelWarningJobIds.size / 2) : 1} tight gap{travelWarningJobIds.size > 2 ? "s" : ""}
+                </span>
+              )}
             </div>
 
             {isDraggable && (

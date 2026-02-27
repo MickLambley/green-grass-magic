@@ -26,7 +26,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock, Trash2, MessageSquare } from "lucide-react";
 import DayTimeline from "./DayTimeline";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, endOfWeek, isToday } from "date-fns";
@@ -123,6 +123,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [pendingSuggestionJobIds, setPendingSuggestionJobIds] = useState<Set<string>>(new Set());
 
   const handleRunOptimization = async () => {
     setIsOptimizing(true);
@@ -165,7 +166,25 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
 
   useEffect(() => {
     fetchData();
+    fetchPendingSuggestions();
   }, [contractorId]);
+
+  const fetchPendingSuggestions = async () => {
+    // Fetch alternative_suggestions with status='pending' for this contractor
+    const { data } = await supabase
+      .from("alternative_suggestions")
+      .select("job_id, booking_id")
+      .eq("contractor_id", contractorId)
+      .eq("status", "pending");
+    if (data) {
+      const ids = new Set<string>();
+      data.forEach(s => {
+        if (s.job_id) ids.add(s.job_id);
+        if (s.booking_id) ids.add(s.booking_id);
+      });
+      setPendingSuggestionJobIds(ids);
+    }
+  };
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -386,19 +405,27 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   };
 
   const handleConfirmJob = async (jobId: string, source: "crm" | "platform") => {
+    // Clean up any pending alternative suggestions for this job
+    if (pendingSuggestionJobIds.has(jobId)) {
+      if (source === "platform") {
+        await supabase.from("alternative_suggestions").update({ status: "dismissed" }).eq("booking_id", jobId).eq("status", "pending");
+      } else {
+        await supabase.from("alternative_suggestions").update({ status: "dismissed" }).eq("job_id", jobId).eq("status", "pending");
+      }
+    }
+
     if (source === "platform") {
-      // Accept a platform booking - set contractor_id and confirm
       const { error } = await supabase.from("bookings").update({ 
         contractor_id: contractorId, 
         status: "confirmed" as any,
         contractor_accepted_at: new Date().toISOString(),
       }).eq("id", jobId);
       if (error) toast.error("Failed to accept booking");
-      else { toast.success("Booking accepted"); fetchData(); }
+      else { toast.success("Booking accepted"); fetchData(); fetchPendingSuggestions(); }
     } else {
       const { error } = await supabase.from("jobs").update({ status: "scheduled" }).eq("id", jobId);
       if (error) toast.error("Failed to confirm job");
-      else { toast.success("Job confirmed"); fetchData(); }
+      else { toast.success("Job confirmed"); fetchData(); fetchPendingSuggestions(); }
     }
   };
 
@@ -555,7 +582,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {pendingJobs.map((job) => (
-              <Card key={job.id} className="border-sunshine/30 bg-sunshine/5">
+              <Card key={job.id} className={`bg-sunshine/5 ${pendingSuggestionJobIds.has(job.id) ? "border-sky/40 ring-1 ring-sky/20" : "border-sunshine/30"}`}>
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-start justify-between">
                     <div>
@@ -566,6 +593,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                       {job.source === "platform" ? "🌐 Website" : "Manual"}
                     </Badge>
                   </div>
+                  {/* Pending alternative suggestions indicator */}
+                  {pendingSuggestionJobIds.has(job.id) && (
+                    <div className="flex items-center gap-2 p-2 rounded-md bg-sky/10 border border-sky/20">
+                      <MessageSquare className="w-3.5 h-3.5 text-sky shrink-0" />
+                      <span className="text-[11px] text-sky font-medium">Alternative times sent — awaiting customer response</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
@@ -577,7 +611,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                   </div>
                   <div className="flex items-center gap-2">
                     <Button size="sm" className="flex-1" onClick={() => handleConfirmJob(job.id, job.source)}>
-                      <Check className="w-3.5 h-3.5 mr-1" /> Confirm
+                      <Check className="w-3.5 h-3.5 mr-1" /> {pendingSuggestionJobIds.has(job.id) ? "Override & Confirm" : "Confirm"}
                     </Button>
                     <Button size="sm" variant="outline" className="flex-1" onClick={() => handleSuggestTime(job)}>
                       <Calendar className="w-3.5 h-3.5 mr-1" /> Reschedule
