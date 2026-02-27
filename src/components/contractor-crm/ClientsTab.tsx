@@ -219,7 +219,7 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((client) => {
+              {paginatedClients.map((client) => {
                 const addr = client.address as any;
                 return (
                   <TableRow key={client.id}>
@@ -260,6 +260,22 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
               })}
             </TableBody>
           </Table>
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <p className="text-sm text-muted-foreground">
+                Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+              </p>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+                </Button>
+                <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+                  Next <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
 
