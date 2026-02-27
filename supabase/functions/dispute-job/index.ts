@@ -189,7 +189,7 @@ serve(async (req) => {
                     <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
                       <p style="margin: 5px 0;"><strong>Issue:</strong> ${description}</p>
                     </div>
-                    <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawnly Team</p>
+                    <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
                   </div>
                 `,
               }),
