@@ -120,6 +120,9 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [markPaidJob, setMarkPaidJob] = useState<{
     id: string; title: string; client_name: string; total_price: number | null;
   } | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleRunOptimization = async () => {
     setIsOptimizing(true);
