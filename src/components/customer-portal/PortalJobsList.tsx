@@ -58,6 +58,7 @@ export const PortalJobsList = ({ userId, contractor }: PortalJobsListProps) => {
   const [loading, setLoading] = useState(true);
   const [suggestions, setSuggestions] = useState<Record<string, AlternativeSuggestion[]>>({});
   const [selectedJob, setSelectedJob] = useState<PortalJob | null>(null);
+  const [cancellingJob, setCancellingJob] = useState<PortalJob | null>(null);
 
   useEffect(() => {
     loadJobs();
