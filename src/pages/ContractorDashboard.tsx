@@ -334,7 +334,7 @@ const ContractorDashboard = () => {
                 onRunOptimization={handleRunOptimization}
                 isOptimizing={isOptimizing}
               />
-              <DashboardOverview contractorId={contractor.id} />
+              <DashboardOverview contractorId={contractor.id} onNavigateToJob={() => switchTab("jobs")} />
             </div>
           )}
           {activeTab === "clients" && <ClientsTab contractorId={contractor.id} />}
