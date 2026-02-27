@@ -33,8 +33,8 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
     unpaidInvoices: 0,
     revenue: 0,
   });
-  const [todaysJobs, setTodaysJobs] = useState<(Job & { client_name?: string })[]>([]);
-  const [upcomingJobs, setUpcomingJobs] = useState<(Job & { client_name?: string })[]>([]);
+  const [todaysJobs, setTodaysJobs] = useState<(Job & { client_name?: string; client_address?: ClientAddress | null })[]>([]);
+  const [upcomingJobs, setUpcomingJobs] = useState<(Job & { client_name?: string; client_address?: ClientAddress | null })[]>([]);
   const [websiteBookings, setWebsiteBookings] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
