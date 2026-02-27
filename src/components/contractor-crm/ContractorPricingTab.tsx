@@ -21,7 +21,8 @@ interface PricingConfig {
   base_price: number;
   price_per_sqm: number;
   clippings_removal_fee: number;
-  weekend_surcharge_pct: number;
+  saturday_surcharge_pct: number;
+  sunday_surcharge_pct: number;
   enable_weekend_surcharge: boolean;
   minimum_price: number;
 }
@@ -30,7 +31,8 @@ const DEFAULT_PRICING: PricingConfig = {
   base_price: 50,
   price_per_sqm: 0.15,
   clippings_removal_fee: 20,
-  weekend_surcharge_pct: 15,
+  saturday_surcharge_pct: 10,
+  sunday_surcharge_pct: 15,
   enable_weekend_surcharge: false,
   minimum_price: 40,
 };
