@@ -240,144 +240,35 @@ const ContractorOnboarding = () => {
     setCurrentStep(3);
   };
 
-  // ── Service Area Handlers ──
-
-  const handleGeocodeAddress = async () => {
-    if (!serviceAreaAddress.trim()) {
-      toast.error("Please enter your home base address");
-      return;
-    }
-
-    setIsLoadingSuburbs(true);
-    try {
-      // Geocode the address
-      const { data: geocodeData, error: geocodeError } = await supabase.functions.invoke("geocode-address", {
-        body: { address: serviceAreaAddress.trim() },
-      });
-
-      if (geocodeError || !geocodeData?.lat) {
-        toast.error("Could not find that address. Please try a more specific address.");
-        setIsLoadingSuburbs(false);
-        return;
-      }
-
-      setServiceAreaLat(geocodeData.lat);
-      setServiceAreaLng(geocodeData.lng);
-      if (geocodeData.formatted_address) {
-        setServiceAreaAddress(geocodeData.formatted_address);
-      }
-
-      // Update contractor with service center
-      if (contractor) {
-        await supabase.from("contractors").update({
-          service_center_lat: geocodeData.lat,
-          service_center_lng: geocodeData.lng,
-          service_radius_km: serviceRadiusKm,
-        }).eq("id", contractor.id);
-      }
-
-      // Get suburbs in radius
-      const { data: suburbData, error: suburbError } = await supabase.functions.invoke("get-suburbs-in-radius", {
-        body: { lat: geocodeData.lat, lng: geocodeData.lng, radius_km: serviceRadiusKm },
-      });
-
-      if (suburbError || !suburbData?.suburbs) {
-        toast.error("Failed to find suburbs. The postcode database may not be seeded yet.");
-        setIsLoadingSuburbs(false);
-        return;
-      }
-
-      setSuburbs(suburbData.suburbs.map((s: any) => ({ ...s, selected: true })));
-      setSuburbsLoaded(true);
-      toast.success(`Found ${suburbData.count} suburbs within ${serviceRadiusKm}km`);
-    } catch (err) {
-      console.error("Service area error:", err);
-      toast.error("Something went wrong. Please try again.");
-    }
-    setIsLoadingSuburbs(false);
-  };
-
-  const handleManualSuburbSearch = async (query: string) => {
-    setManualSuburbQuery(query);
-    if (query.length < 2) {
-      setManualSuburbResults([]);
-      return;
-    }
-
-    setIsSearchingSuburb(true);
-    const { data } = await supabase
-      .from("australian_postcodes")
-      .select("suburb, postcode, state")
-      .ilike("suburb", `${query}%`)
-      .limit(10);
-
-    if (data) {
-      // Deduplicate
-      const seen = new Set<string>();
-      setManualSuburbResults(
-        data.filter((d) => {
-          const key = `${d.suburb}-${d.postcode}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        })
-      );
-    }
-    setIsSearchingSuburb(false);
-  };
-
-  const handleAddManualSuburb = (s: { suburb: string; postcode: string; state: string }) => {
-    // Check if already in list
-    if (suburbs.find((x) => x.suburb === s.suburb && x.postcode === s.postcode)) {
-      toast.info(`${s.suburb} is already in your list`);
-      return;
-    }
-    setSuburbs((prev) => [...prev, { ...s, selected: true }].sort((a, b) => a.suburb.localeCompare(b.suburb)));
-    setManualSuburbQuery("");
-    setManualSuburbResults([]);
-    toast.success(`Added ${s.suburb}`);
-  };
-
-  const toggleSuburb = (index: number) => {
-    setSuburbs((prev) => prev.map((s, i) => (i === index ? { ...s, selected: !s.selected } : s)));
-  };
-
-  const selectAllSuburbs = () => setSuburbs((prev) => prev.map((s) => ({ ...s, selected: true })));
-  const deselectAllSuburbs = () => setSuburbs((prev) => prev.map((s) => ({ ...s, selected: false })));
+  // ── Service Area Handler ──
 
   const handleSaveServiceArea = async () => {
-    const selected = suburbs.filter((s) => s.selected);
-    if (selected.length === 0) {
-      toast.error("Please select at least one suburb");
-      return;
-    }
+    if (!geoData.baseAddressLat || !geoData.baseAddressLng) return;
 
-    setIsSavingServiceArea(true);
     try {
-      const { error } = await supabase.functions.invoke("update-service-areas", {
-        body: {
-          suburbs: selected.map((s) => ({ suburb: s.suburb, postcode: s.postcode })),
-        },
-      });
-
-      if (error) throw error;
+      // Save suburbs via edge function
+      const suburbPayload = geoData.servicedSuburbs.map(s => ({ suburb: s, postcode: "" }));
+      if (suburbPayload.length > 0) {
+        await supabase.functions.invoke("update-service-areas", {
+          body: { suburbs: suburbPayload },
+        });
+      }
 
       // Update contractor with radius info
       if (contractor) {
         await supabase.from("contractors").update({
-          service_radius_km: serviceRadiusKm,
-          service_center_lat: serviceAreaLat,
-          service_center_lng: serviceAreaLng,
+          service_radius_km: geoData.maxTravelDistanceKm,
+          service_center_lat: geoData.baseAddressLat,
+          service_center_lng: geoData.baseAddressLng,
         }).eq("id", contractor.id);
       }
 
-      toast.success(`Saved ${selected.length} service suburbs!`);
+      toast.success(`Saved ${geoData.servicedSuburbs.length} service suburbs!`);
       setCurrentStep(4);
     } catch (err) {
       console.error("Save service area error:", err);
       toast.error("Failed to save service areas");
     }
-    setIsSavingServiceArea(false);
   };
 
   const handleCreateClient = async () => {
