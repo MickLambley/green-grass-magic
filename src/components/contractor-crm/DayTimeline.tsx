@@ -413,6 +413,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                     {/* Compact layout for short jobs */}
                     {short && !isExpanded ? (
                       <div className="flex items-center gap-2 px-2 py-1 h-full">
+                        {hasTravelWarning && <AlertTriangle className="w-3 h-3 text-destructive shrink-0" />}
                         {canDrag && <GripVertical className="w-3 h-3 text-muted-foreground/50 shrink-0" />}
                         <span className="text-[10px] font-bold text-foreground truncate">{job.title}</span>
                         <span className="text-[10px] text-muted-foreground shrink-0">{startTime}–{endTime}</span>
