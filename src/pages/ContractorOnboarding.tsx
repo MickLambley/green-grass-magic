@@ -20,7 +20,6 @@ import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "@/
 import { GeographicReachStep } from "@/components/contractor-onboarding/GeographicReachStep";
 import type { GeographicData } from "@/components/contractor-onboarding/types";
 import { toast } from "sonner";
-import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contractor = Tables<"contractors">;
