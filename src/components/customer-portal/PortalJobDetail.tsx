@@ -95,31 +95,36 @@ export const PortalJobDetail = ({ job, contractor, userId, onBack }: PortalJobDe
       <div className="bg-card rounded-2xl p-6 shadow-sm border border-border">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
-            <h2 className="font-display text-xl font-bold text-foreground mb-1">{job.title}</h2>
-            {job.description && <p className="text-sm text-muted-foreground mb-3">{job.description}</p>}
+            <h2 className="font-display text-xl font-bold text-foreground mb-1">{currentJob.title}</h2>
+            {currentJob.description && <p className="text-sm text-muted-foreground mb-3">{currentJob.description}</p>}
             <div className="flex flex-wrap items-center gap-4 text-sm">
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Calendar className="w-4 h-4" />
                 <span>
-                  {new Date(job.scheduled_date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                  {new Date(currentJob.scheduled_date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
                 </span>
               </div>
-              {job.scheduled_time && (
+              {currentJob.scheduled_time && (
                 <div className="flex items-center gap-1.5 text-muted-foreground">
                   <Clock className="w-4 h-4" />
-                  <span>{job.scheduled_time}</span>
+                  <span>{currentJob.scheduled_time}</span>
                 </div>
               )}
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <Badge variant={job.status === "completed" ? "outline" : job.status === "cancelled" ? "destructive" : "default"}>
-              {job.status === "completed" ? "Completed" : job.status === "cancelled" ? "Cancelled" : job.status === "scheduled" ? "Scheduled" : job.status === "in_progress" ? "In Progress" : job.status.replace(/_/g, " ")}
+            <Badge variant={currentJob.status === "completed" ? "outline" : currentJob.status === "cancelled" ? "destructive" : "default"}>
+              {currentJob.status === "completed" ? "Completed" : currentJob.status === "cancelled" ? "Cancelled" : currentJob.status === "scheduled" ? "Scheduled" : currentJob.status === "in_progress" ? "In Progress" : currentJob.status === "pending_confirmation" ? "Pending Confirmation" : currentJob.status.replace(/_/g, " ")}
             </Badge>
-            {job.total_price != null && (
+            {currentJob.total_price != null && (
               <span className="text-lg font-bold" style={{ color: contractor.primary_color }}>
-                ${job.total_price.toFixed(2)}
+                ${currentJob.total_price.toFixed(2)}
               </span>
+            )}
+            {canCancel && (
+              <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setCancelFlowOpen(true)}>
+                <XCircle className="w-3.5 h-3.5 mr-1" /> Cancel Booking
+              </Button>
             )}
           </div>
         </div>
