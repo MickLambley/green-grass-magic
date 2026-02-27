@@ -76,7 +76,7 @@ const getEmailContent = (
             <p><strong>Your card has been saved but you will not be charged until a contractor accepts your job.</strong></p>
             <p>You will be charged <strong>$${booking.total_price?.toFixed(2) || "0.00"}</strong> when a contractor accepts.</p>
             <p>You'll receive another email once a contractor is assigned.</p>
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawnly Team</p>
+            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
           </div>
         `,
       };
