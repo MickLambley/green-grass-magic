@@ -83,6 +83,7 @@ interface UnifiedJob {
   description: string | null;
   notes: string | null;
   recurrence_rule: Json | null;
+  recurring_job_id: string | null;
   source: "crm" | "platform";
   // CRM-only fields
   client_id?: string;
