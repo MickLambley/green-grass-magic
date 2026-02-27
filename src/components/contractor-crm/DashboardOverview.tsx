@@ -160,22 +160,35 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
               <p className="text-muted-foreground text-sm py-4 text-center">No jobs scheduled for today. 🎉</p>
             ) : (
               <div className="space-y-3">
-                {todaysJobs.map((job) => (
-                  <div key={job.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-sm text-foreground">{job.title}</p>
-                      <p className="text-xs text-muted-foreground">{job.client_name}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {job.scheduled_time && (
-                        <span className="text-xs text-muted-foreground">{job.scheduled_time}</span>
-                      )}
-                      <Badge variant="outline" className={`text-[10px] ${statusColors[job.status] || ""}`}>
-                        {job.status === "in_progress" ? "In Progress" : "Scheduled"}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
+                {todaysJobs.map((job) => {
+                  const addressParts = [job.client_address?.street, job.client_address?.city, job.client_address?.state, job.client_address?.postcode].filter(Boolean);
+                  return (
+                    <button
+                      key={job.id}
+                      onClick={() => onNavigateToJob?.(job.id)}
+                      className="w-full flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors text-left cursor-pointer"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm text-foreground">{job.title}</p>
+                        <p className="text-xs text-muted-foreground">{job.client_name}</p>
+                        {addressParts.length > 0 && (
+                          <p className="flex items-center gap-1 text-xs text-muted-foreground/70 mt-0.5">
+                            <MapPin className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{addressParts.join(", ")}</span>
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {job.scheduled_time && (
+                          <span className="text-xs text-muted-foreground">{job.scheduled_time}</span>
+                        )}
+                        <Badge variant="outline" className={`text-[10px] ${statusColors[job.status] || ""}`}>
+                          {job.status === "in_progress" ? "In Progress" : "Scheduled"}
+                        </Badge>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </CardContent>
