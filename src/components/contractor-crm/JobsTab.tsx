@@ -462,7 +462,6 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     setDeleteConfirmOpen(false);
     setDeletingJobId(null);
   };
-  };
 
   const filtered = jobs.filter((j) => {
     const matchesSearch =
