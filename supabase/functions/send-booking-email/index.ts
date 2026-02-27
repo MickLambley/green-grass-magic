@@ -122,7 +122,7 @@ const getEmailContent = (
             <p>Your lawn mowing booking has been cancelled.</p>
             ${baseInfo}
             <p>If this was a mistake or you'd like to rebook, please visit our website.</p>
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawn Care Team</p>
+            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
           </div>
         `,
       };
