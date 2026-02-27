@@ -41,14 +41,13 @@ const ContractorAuth = () => {
             .eq("role", "contractor");
 
           if (roles && roles.length > 0) {
-            // Check if contractor profile exists and has completed onboarding
             const { data: contractor } = await supabase
               .from("contractors")
               .select("*")
               .eq("user_id", session.user.id)
               .single();
 
-            if (contractor && contractor.abn) {
+            if (contractor && contractor.onboarding_completed) {
               navigate("/contractor");
             } else {
               navigate("/contractor-onboarding");
