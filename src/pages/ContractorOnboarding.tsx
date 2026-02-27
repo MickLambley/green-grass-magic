@@ -65,18 +65,14 @@ const ContractorOnboarding = () => {
   });
   const [workingHours, setWorkingHours] = useState<WorkingHours>(DEFAULT_WORKING_HOURS);
 
-  // Service Area form
-  const [serviceAreaAddress, setServiceAreaAddress] = useState("");
-  const [serviceAreaLat, setServiceAreaLat] = useState<number | null>(null);
-  const [serviceAreaLng, setServiceAreaLng] = useState<number | null>(null);
-  const [serviceRadiusKm, setServiceRadiusKm] = useState(15);
-  const [suburbs, setSuburbs] = useState<SuburbEntry[]>([]);
-  const [isLoadingSuburbs, setIsLoadingSuburbs] = useState(false);
-  const [suburbsLoaded, setSuburbsLoaded] = useState(false);
-  const [manualSuburbQuery, setManualSuburbQuery] = useState("");
-  const [manualSuburbResults, setManualSuburbResults] = useState<{ suburb: string; postcode: string; state: string }[]>([]);
-  const [isSearchingSuburb, setIsSearchingSuburb] = useState(false);
-  const [isSavingServiceArea, setIsSavingServiceArea] = useState(false);
+  // Geographic data for service area step
+  const [geoData, setGeoData] = useState<GeographicData>({
+    maxTravelDistanceKm: 15,
+    baseAddress: "",
+    baseAddressLat: null,
+    baseAddressLng: null,
+    servicedSuburbs: [],
+  });
 
   // Client form
   const [clientForm, setClientForm] = useState({
