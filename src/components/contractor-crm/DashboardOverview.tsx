@@ -259,6 +259,13 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
           </CardContent>
         </Card>
       </div>
+
+      <JobCompletionDialog
+        open={completionDialogOpen}
+        onOpenChange={setCompletionDialogOpen}
+        job={completionJob}
+        onCompleted={fetchAll}
+      />
     </div>
   );
 };
