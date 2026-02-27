@@ -1078,6 +1078,14 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Recurring Edit Dialog */}
+      <RecurringEditDialog
+        open={recurringEditOpen}
+        onOpenChange={setRecurringEditOpen}
+        onThisOnly={handleRecurringThisOnly}
+        onAllFuture={handleRecurringAllFuture}
+      />
     </div>
   );
 };
