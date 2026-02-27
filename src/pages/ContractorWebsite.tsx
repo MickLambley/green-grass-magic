@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Leaf, Phone, MapPin, Mail, ChevronRight, Loader2, User } from "lucide-react";
 
 
@@ -47,6 +48,7 @@ const ContractorWebsite = () => {
   const [contractor, setContractor] = useState<ContractorSite | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [serviceSuburbs, setServiceSuburbs] = useState<{ suburb: string; postcode: string }[]>([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -79,6 +81,15 @@ const ContractorWebsite = () => {
         ...data,
         website_copy: data.website_copy as unknown as WebsiteCopy | null,
       });
+
+      // Fetch service suburbs
+      const { data: suburbs } = await supabase
+        .from("contractor_service_suburbs")
+        .select("suburb, postcode")
+        .eq("contractor_id", data.id)
+        .order("suburb");
+      
+      if (suburbs) setServiceSuburbs(suburbs);
     }
     setLoading(false);
   };
@@ -201,6 +212,23 @@ const ContractorWebsite = () => {
           </div>
         </div>
       </section>
+
+      {/* Service Areas */}
+      {serviceSuburbs.length > 0 && (
+        <section className="py-16 sm:py-20">
+          <div className="max-w-5xl mx-auto px-4">
+            <h2 className="font-display text-3xl font-bold text-foreground text-center mb-6">Service Areas</h2>
+            <p className="text-muted-foreground text-center mb-8">We proudly serve the following suburbs:</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {serviceSuburbs.map((s, i) => (
+                <Badge key={i} variant="outline" className="text-sm px-3 py-1.5">
+                  {s.suburb} ({s.postcode})
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* CTA */}
       <section className="py-16 sm:py-20">

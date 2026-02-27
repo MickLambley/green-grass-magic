@@ -32,3 +32,15 @@ verify_jwt = false
 
 [functions.get-quote-by-token]
 verify_jwt = false
+
+[functions.seed-australian-postcodes]
+verify_jwt = false
+
+[functions.geocode-address]
+verify_jwt = false
+
+[functions.get-suburbs-in-radius]
+verify_jwt = false
+
+[functions.update-service-areas]
+verify_jwt = false
