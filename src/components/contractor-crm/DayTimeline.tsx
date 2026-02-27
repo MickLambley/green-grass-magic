@@ -399,7 +399,9 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                       onDragEnd={canDrag ? handleDragEnd : undefined}
                       className={`absolute left-1 right-1 rounded-lg border-l-4 ${colors.border} ${colors.bg} cursor-pointer hover:shadow-md transition-all overflow-hidden ${
                         canDrag ? "cursor-grab active:cursor-grabbing" : ""
-                      } ${isBeingDragged ? "opacity-50 shadow-lg ring-2 ring-primary/30" : ""} ${wasShifted ? "ring-1 ring-amber-400/30" : ""}`}
+                      } ${isBeingDragged ? "opacity-50 shadow-lg ring-2 ring-primary/30" : ""} ${wasShifted ? "ring-1 ring-amber-400/30" : ""} ${
+                        hasTravelWarning ? "ring-2 ring-destructive/50 border-l-destructive" : ""
+                      }`}
                       style={{
                         top: `${topPx}px`,
                         height: isExpanded ? "auto" : `${Math.max(heightPx, 28)}px`,
