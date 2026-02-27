@@ -569,6 +569,40 @@ serve(async (req) => {
     }
 
     if (requestedContractorId) {
+      // ── User-invoked: require JWT auth and verify ownership ──
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
+      const userClient = createClient(SUPABASE_URL, anonKey!, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const token = authHeader.replace("Bearer ", "");
+      const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const userId = claimsData.claims.sub;
+
+      // Verify this user owns the contractor record
+      const { data: ownerCheck } = await supabase
+        .from("contractors")
+        .select("id")
+        .eq("id", requestedContractorId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (!ownerCheck) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       // ── On-demand run: preview (dry run) or apply ──
       const { data: contractor } = await supabase
         .from("contractors")
@@ -591,7 +625,19 @@ serve(async (req) => {
       });
     }
 
-    // ── Cron/batch run: DRY RUN only — calculate potential savings and notify ──
+    // ── Cron/batch run: require CRON_SECRET or service role key ──
+    const cronAuthHeader = req.headers.get("Authorization");
+    const cronToken = cronAuthHeader?.replace("Bearer ", "");
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const isCronAuthorized = cronToken && (cronToken === cronSecret || cronToken === serviceRoleKey);
+    if (!isCronAuthorized) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // DRY RUN only — calculate potential savings and notify
     const { data: contractors } = await supabase
       .from("contractors")
       .select("id, subscription_tier, user_id")
