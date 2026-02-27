@@ -327,6 +327,7 @@ export type Database = {
           insurance_verified: boolean
           is_active: boolean
           last_active_at: string | null
+          onboarding_completed: boolean
           phone: string | null
           primary_color: string | null
           questionnaire_responses: Json | null
@@ -373,6 +374,7 @@ export type Database = {
           insurance_verified?: boolean
           is_active?: boolean
           last_active_at?: string | null
+          onboarding_completed?: boolean
           phone?: string | null
           primary_color?: string | null
           questionnaire_responses?: Json | null
@@ -419,6 +421,7 @@ export type Database = {
           insurance_verified?: boolean
           is_active?: boolean
           last_active_at?: string | null
+          onboarding_completed?: boolean
           phone?: string | null
           primary_color?: string | null
           questionnaire_responses?: Json | null
