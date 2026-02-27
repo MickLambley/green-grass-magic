@@ -75,11 +75,13 @@ export const PortalJobDetail = ({ job, contractor, userId, onBack }: PortalJobDe
 
   const beforePhotos = photos.filter((p) => p.photo_type === "before");
   const afterPhotos = photos.filter((p) => p.photo_type === "after");
-  const paymentInfo = paymentLabels[job.payment_status] || paymentLabels.unpaid;
+  const paymentInfo = paymentLabels[currentJob.payment_status] || paymentLabels.unpaid;
   const PaymentIcon = paymentInfo.icon;
 
-  const isCompleted = job.status === "completed";
-  const isRecentlyCompleted = isCompleted && job.completed_at && (Date.now() - new Date(job.completed_at).getTime()) < 7 * 24 * 60 * 60 * 1000;
+  const isCompleted = currentJob.status === "completed";
+  const isCancelled = currentJob.status === "cancelled";
+  const isRecentlyCompleted = isCompleted && currentJob.completed_at && (Date.now() - new Date(currentJob.completed_at).getTime()) < 7 * 24 * 60 * 60 * 1000;
+  const canCancel = !isCompleted && !isCancelled;
 
   return (
     <div className="space-y-6">
