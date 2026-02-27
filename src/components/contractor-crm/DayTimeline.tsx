@@ -101,6 +101,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
       startMinutes: number;
       durationMinutes: number;
       travelMinutes?: number;
+      travelWarning?: boolean;
     }[] = [];
 
     for (let i = 0; i < sortedJobs.length; i++) {
@@ -113,13 +114,40 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
         const endMin = startMin + duration;
         const nextStart = timeToMinutes(sortedJobs[i + 1].scheduled_time!);
         const gap = nextStart - endMin;
+        // Check if different addresses (i.e., travel is needed)
+        const currentAddr = job.client_address;
+        const nextAddr = sortedJobs[i + 1].client_address;
+        const sameAddress = currentAddr?.street && nextAddr?.street && currentAddr.street === nextAddr.street;
+        const needsTravel = !sameAddress && (currentAddr?.street || nextAddr?.street);
+        const travelWarning = !!needsTravel && gap < MIN_TRAVEL_BUFFER && gap >= 0;
+        
         if (gap > 0) {
-          result.push({ type: "travel", startMinutes: endMin, durationMinutes: gap, travelMinutes: gap });
+          result.push({ type: "travel", startMinutes: endMin, durationMinutes: gap, travelMinutes: gap, travelWarning });
+        } else if (gap <= 0 && needsTravel) {
+          // Overlapping jobs that need travel — insert a warning-only travel entry
+          result.push({ type: "travel", startMinutes: endMin, durationMinutes: 0, travelMinutes: 0, travelWarning: true });
         }
       }
     }
     return result;
   }, [sortedJobs]);
+
+  // Build a set of job IDs that have travel warnings (adjacent to a warning travel entry)
+  const travelWarningJobIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].type === "travel" && entries[i].travelWarning) {
+        // Flag the job before and after this travel entry
+        if (i > 0 && entries[i - 1].type === "job" && entries[i - 1].job) {
+          ids.add(entries[i - 1].job!.id);
+        }
+        if (i < entries.length - 1 && entries[i + 1].type === "job" && entries[i + 1].job) {
+          ids.add(entries[i + 1].job!.id);
+        }
+      }
+    }
+    return ids;
+  }, [entries]);
 
   const timelineBounds = useMemo(() => {
     let startHour = 7;
