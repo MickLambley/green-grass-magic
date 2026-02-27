@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
             body: JSON.stringify({
-              from: "Lawnly <notifications@updates.lovable.app>",
+              from: "Yardly <notifications@updates.lovable.app>",
               to: [emailMap[contractor.user_id]],
               subject: `⚠️ Insurance Expiring in ${daysUntilExpiry} Days - Action Required`,
               html: `<p>Hi ${contractorName},</p><p>Your public liability insurance expires on ${expiryDate.toLocaleDateString()} (${daysUntilExpiry} days). You've been suspended from accepting new jobs. Please renew and upload your new certificate.</p>`,
