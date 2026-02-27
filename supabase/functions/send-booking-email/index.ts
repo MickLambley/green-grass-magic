@@ -91,7 +91,7 @@ const getEmailContent = (
             <p>Great news! Your payment has been received and your lawn mowing booking is now confirmed.</p>
             ${baseInfo}
             <p>A contractor will arrive during your selected time slot. Please ensure access to your lawn on the scheduled date.</p>
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawn Care Team</p>
+            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
           </div>
         `,
       };
