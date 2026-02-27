@@ -4,11 +4,16 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, ArrowLeft, MapPin, Loader2, Navigation, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ArrowRight, ArrowLeft, MapPin, Loader2, Navigation } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { GeographicData } from "./types";
+
+interface SuburbWithCoords {
+  name: string;
+  lat: number;
+  lng: number;
+}
 
 interface GeographicReachStepProps {
   data: GeographicData;
@@ -17,22 +22,22 @@ interface GeographicReachStepProps {
   onBack: () => void;
 }
 
- export const GeographicReachStep = ({ data, onChange, onNext, onBack }: GeographicReachStepProps) => {
+export const GeographicReachStep = ({ data, onChange, onNext, onBack }: GeographicReachStepProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
-  const circleRef = useRef<google.maps.Circle | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dataRef = useRef(data);
-  
+  const polygonsRef = useRef<google.maps.Polygon[]>([]);
+  const hasAutoGeocodedRef = useRef(false);
+
   const [isLoadingSuburbs, setIsLoadingSuburbs] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [allDiscoveredSuburbs, setAllDiscoveredSuburbs] = useState<string[]>([]);
+  const [allDiscoveredSuburbs, setAllDiscoveredSuburbs] = useState<SuburbWithCoords[]>([]);
 
   const isValid = data.maxTravelDistanceKm >= 5 && data.baseAddress && data.baseAddressLat !== null;
 
-  // Keep ref in sync with latest data
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
@@ -40,15 +45,8 @@ interface GeographicReachStepProps {
   // Load Google Maps script
   useEffect(() => {
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) {
-      console.error("Google Maps API key not found");
-      return;
-    }
-
-    if (window.google?.maps) {
-      setMapLoaded(true);
-      return;
-    }
+    if (!apiKey) { console.error("Google Maps API key not found"); return; }
+    if (window.google?.maps) { setMapLoaded(true); return; }
 
     const script = document.createElement("script");
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry`;
@@ -56,18 +54,14 @@ interface GeographicReachStepProps {
     script.defer = true;
     script.onload = () => setMapLoaded(true);
     document.head.appendChild(script);
-
-    return () => {
-      // Don't remove the script on cleanup as it may be used elsewhere
-    };
   }, []);
 
-  // Initialize map once loaded
+  // Initialize map
   useEffect(() => {
     if (!mapLoaded || !mapRef.current || googleMapRef.current) return;
 
-    const defaultCenter = { lat: -33.8688, lng: 151.2093 }; // Sydney default
-    const center = data.baseAddressLat && data.baseAddressLng 
+    const defaultCenter = { lat: -33.8688, lng: 151.2093 };
+    const center = data.baseAddressLat && data.baseAddressLng
       ? { lat: data.baseAddressLat, lng: data.baseAddressLng }
       : defaultCenter;
 
@@ -77,50 +71,150 @@ interface GeographicReachStepProps {
       mapTypeId: "roadmap",
       disableDefaultUI: true,
       zoomControl: true,
-      styles: [
-        {
-          featureType: "poi",
-          elementType: "labels",
-          stylers: [{ visibility: "off" }],
-        },
-      ],
+      styles: [{ featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }],
     });
 
-    // Create circle for service radius
-    circleRef.current = new google.maps.Circle({
-      map: googleMapRef.current,
-      center,
-      radius: data.maxTravelDistanceKm * 1000,
-      fillColor: "#22c55e",
-      fillOpacity: 0.15,
-      strokeColor: "#16a34a",
-      strokeWeight: 2,
-    });
-
-    // Create marker for base location
     if (data.baseAddressLat && data.baseAddressLng) {
-      markerRef.current = new google.maps.Marker({
-        map: googleMapRef.current,
-        position: center,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 10,
-          fillColor: "#16a34a",
-          fillOpacity: 1,
-          strokeColor: "#ffffff",
-          strokeWeight: 3,
-        },
-      });
-    }
-
-    // Fit bounds to circle
-    if (data.baseAddressLat && data.baseAddressLng) {
-      const bounds = circleRef.current.getBounds();
-      if (bounds) {
-        googleMapRef.current.fitBounds(bounds);
-      }
+      createMarker({ lat: data.baseAddressLat, lng: data.baseAddressLng });
     }
   }, [mapLoaded]);
+
+  // Auto-geocode pre-filled address on mount
+  useEffect(() => {
+    if (!mapLoaded || hasAutoGeocodedRef.current) return;
+    if (!data.baseAddress) return;
+
+    // If we already have coords, just ensure map is centered
+    if (data.baseAddressLat && data.baseAddressLng) {
+      hasAutoGeocodedRef.current = true;
+      return;
+    }
+
+    // Geocode the pre-filled address
+    hasAutoGeocodedRef.current = true;
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ address: data.baseAddress, componentRestrictions: { country: "au" } }, (results, status) => {
+      if (status === "OK" && results?.[0]?.geometry?.location) {
+        const lat = results[0].geometry.location.lat();
+        const lng = results[0].geometry.location.lng();
+        const address = results[0].formatted_address || data.baseAddress;
+        onChange({ ...dataRef.current, baseAddress: address, baseAddressLat: lat, baseAddressLng: lng });
+        updateMapCenter({ lat, lng });
+      }
+    });
+  }, [mapLoaded, data.baseAddress]);
+
+  const createMarker = (position: google.maps.LatLngLiteral) => {
+    if (markerRef.current) markerRef.current.setMap(null);
+    if (!googleMapRef.current) return;
+    markerRef.current = new google.maps.Marker({
+      map: googleMapRef.current,
+      position,
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 10,
+        fillColor: "#16a34a",
+        fillOpacity: 1,
+        strokeColor: "#ffffff",
+        strokeWeight: 3,
+      },
+    });
+  };
+
+  const updateMapCenter = (center: google.maps.LatLngLiteral) => {
+    if (!googleMapRef.current) return;
+    googleMapRef.current.setCenter(center);
+    createMarker(center);
+    // Fit to radius bounds
+    const circle = new google.maps.Circle({ center, radius: dataRef.current.maxTravelDistanceKm * 1000 });
+    const bounds = circle.getBounds();
+    if (bounds) googleMapRef.current.fitBounds(bounds);
+  };
+
+  // Draw suburb outlines on map
+  const drawSuburbOutlines = useCallback((suburbs: SuburbWithCoords[], selectedNames: string[]) => {
+    // Clear existing polygons
+    polygonsRef.current.forEach(p => p.setMap(null));
+    polygonsRef.current = [];
+    if (!googleMapRef.current || suburbs.length === 0) return;
+
+    const selected = suburbs.filter(s => selectedNames.includes(s.name));
+    const deselected = suburbs.filter(s => !selectedNames.includes(s.name));
+
+    // Draw approximate suburb areas as circles converted to polygons
+    const drawSuburbArea = (suburb: SuburbWithCoords, isSelected: boolean) => {
+      // Create a small polygon circle around each suburb point (~2km radius, 12 sides)
+      const points: google.maps.LatLngLiteral[] = [];
+      const radiusKm = Math.max(1.5, dataRef.current.maxTravelDistanceKm * 0.06);
+      for (let i = 0; i < 12; i++) {
+        const angle = (i * 360) / 12;
+        const point = google.maps.geometry.spherical.computeOffset(
+          new google.maps.LatLng(suburb.lat, suburb.lng),
+          radiusKm * 1000,
+          angle
+        );
+        points.push({ lat: point.lat(), lng: point.lng() });
+      }
+
+      const polygon = new google.maps.Polygon({
+        paths: points,
+        map: googleMapRef.current,
+        fillColor: isSelected ? "#22c55e" : "#94a3b8",
+        fillOpacity: isSelected ? 0.25 : 0.08,
+        strokeColor: isSelected ? "#16a34a" : "#94a3b8",
+        strokeWeight: isSelected ? 1.5 : 0.5,
+        strokeOpacity: isSelected ? 0.8 : 0.3,
+      });
+      polygonsRef.current.push(polygon);
+    };
+
+    deselected.forEach(s => drawSuburbArea(s, false));
+    selected.forEach(s => drawSuburbArea(s, true));
+
+    // If we have selected suburbs, also draw an outer boundary (convex hull)
+    if (selected.length >= 3) {
+      const outerPoints = computeConvexHull(selected.map(s => ({ lat: s.lat, lng: s.lng })));
+      // Expand the hull slightly
+      if (outerPoints.length >= 3) {
+        const center = {
+          lat: outerPoints.reduce((s, p) => s + p.lat, 0) / outerPoints.length,
+          lng: outerPoints.reduce((s, p) => s + p.lng, 0) / outerPoints.length,
+        };
+        const expanded = outerPoints.map(p => {
+          const dlat = p.lat - center.lat;
+          const dlng = p.lng - center.lng;
+          return { lat: center.lat + dlat * 1.15, lng: center.lng + dlng * 1.15 };
+        });
+        const boundary = new google.maps.Polygon({
+          paths: expanded,
+          map: googleMapRef.current,
+          fillColor: "#22c55e",
+          fillOpacity: 0.05,
+          strokeColor: "#16a34a",
+          strokeWeight: 2,
+          strokeOpacity: 0.6,
+        });
+        polygonsRef.current.push(boundary);
+      }
+    }
+
+    // Fit map to show all suburbs
+    if (suburbs.length > 0) {
+      const bounds = new google.maps.LatLngBounds();
+      suburbs.forEach(s => bounds.extend({ lat: s.lat, lng: s.lng }));
+      if (data.baseAddressLat && data.baseAddressLng) {
+        bounds.extend({ lat: data.baseAddressLat, lng: data.baseAddressLng });
+      }
+      googleMapRef.current.fitBounds(bounds, 40);
+    }
+  }, [data.baseAddressLat, data.baseAddressLng]);
+
+  // Redraw outlines when selection changes
+  useEffect(() => {
+    if (allDiscoveredSuburbs.length > 0) {
+      drawSuburbOutlines(allDiscoveredSuburbs, data.servicedSuburbs);
+    }
+  }, [data.servicedSuburbs, allDiscoveredSuburbs, drawSuburbOutlines]);
 
   // Initialize autocomplete
   useEffect(() => {
@@ -137,81 +231,36 @@ interface GeographicReachStepProps {
         const lat = place.geometry.location.lat();
         const lng = place.geometry.location.lng();
         const address = place.formatted_address || "";
-
-        onChange({
-          ...data,
-          baseAddress: address,
-          baseAddressLat: lat,
-          baseAddressLng: lng,
-        });
-
-        // Update map
-        if (googleMapRef.current && circleRef.current) {
-          const newCenter = { lat, lng };
-          googleMapRef.current.setCenter(newCenter);
-          circleRef.current.setCenter(newCenter);
-
-          // Update or create marker
-          if (markerRef.current) {
-            markerRef.current.setPosition(newCenter);
-          } else {
-            markerRef.current = new google.maps.Marker({
-              map: googleMapRef.current,
-              position: newCenter,
-              icon: {
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: 10,
-                fillColor: "#16a34a",
-                fillOpacity: 1,
-                strokeColor: "#ffffff",
-                strokeWeight: 3,
-              },
-            });
-          }
-
-          // Fit bounds
-          const bounds = circleRef.current.getBounds();
-          if (bounds) {
-            googleMapRef.current.fitBounds(bounds);
-          }
-        }
+        onChange({ ...dataRef.current, baseAddress: address, baseAddressLat: lat, baseAddressLng: lng });
+        updateMapCenter({ lat, lng });
       }
     });
-  }, [mapLoaded, data, onChange]);
+  }, [mapLoaded]);
 
-  // Update circle radius when slider changes
-  useEffect(() => {
-    if (circleRef.current) {
-      circleRef.current.setRadius(data.maxTravelDistanceKm * 1000);
-    }
-  }, [data.maxTravelDistanceKm, data.baseAddressLat, data.baseAddressLng]);
-
-  // Fetch suburbs within radius using reverse geocoding
+  // Suburb discovery via reverse geocoding
   const fetchSuburbsInRadius = useCallback(async (lat: number, lng: number, radiusKm: number) => {
     if (!mapLoaded) return;
-
     setIsLoadingSuburbs(true);
-    
+
     try {
-      // Generate points around the circle to find suburbs
-      const suburbs = new Set<string>();
-      const center = { lat, lng };
-      
-      // Sample points at different distances and angles
-      const distances = [0, radiusKm * 0.25, radiusKm * 0.5, radiusKm * 0.75, radiusKm];
+      const suburbMap = new Map<string, SuburbWithCoords>();
+      const center = new google.maps.LatLng(lat, lng);
+      const distances = [0, 0.25, 0.5, 0.75, 1];
       const angles = [0, 45, 90, 135, 180, 225, 270, 315];
-      
       const geocoder = new google.maps.Geocoder();
-      
-      const geocodePoint = (lat: number, lng: number): Promise<string | null> => {
+
+      const geocodePoint = (latP: number, lngP: number): Promise<SuburbWithCoords | null> => {
         return new Promise((resolve) => {
-          geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+          geocoder.geocode({ location: { lat: latP, lng: lngP } }, (results, status) => {
             if (status === "OK" && results?.[0]) {
-              // Find suburb/locality from address components
-              const suburbComponent = results[0].address_components.find(
-                (c) => c.types.includes("locality") || c.types.includes("sublocality")
+              const comp = results[0].address_components.find(
+                c => c.types.includes("locality") || c.types.includes("sublocality")
               );
-              resolve(suburbComponent?.long_name || null);
+              if (comp) {
+                resolve({ name: comp.long_name, lat: latP, lng: lngP });
+              } else {
+                resolve(null);
+              }
             } else {
               resolve(null);
             }
@@ -219,44 +268,25 @@ interface GeographicReachStepProps {
         });
       };
 
-      // Get suburb at center
-      const centerSuburb = await geocodePoint(center.lat, center.lng);
-      if (centerSuburb) suburbs.add(centerSuburb);
+      // Center point
+      const centerResult = await geocodePoint(lat, lng);
+      if (centerResult) suburbMap.set(centerResult.name, centerResult);
 
-      // Sample points around the circle
-      for (const distance of distances) {
+      for (const distFrac of distances) {
         for (const angle of angles) {
-          if (distance === 0) continue; // Skip center for each angle
-          
-          // Calculate point at distance km and angle degrees from center
-          const radians = (angle * Math.PI) / 180;
-          const earthRadiusKm = 6371;
-          const lat1 = (center.lat * Math.PI) / 180;
-          const lng1 = (center.lng * Math.PI) / 180;
-          
-          const lat2 = Math.asin(
-            Math.sin(lat1) * Math.cos(distance / earthRadiusKm) +
-            Math.cos(lat1) * Math.sin(distance / earthRadiusKm) * Math.cos(radians)
-          );
-          const lng2 = lng1 + Math.atan2(
-            Math.sin(radians) * Math.sin(distance / earthRadiusKm) * Math.cos(lat1),
-            Math.cos(distance / earthRadiusKm) - Math.sin(lat1) * Math.sin(lat2)
-          );
-          
-          const newLat = (lat2 * 180) / Math.PI;
-          const newLng = (lng2 * 180) / Math.PI;
-          
-          // Add a small delay to avoid rate limiting
+          if (distFrac === 0) continue;
+          const point = google.maps.geometry.spherical.computeOffset(center, radiusKm * 1000 * distFrac, angle);
           await new Promise(r => setTimeout(r, 50));
-          const suburb = await geocodePoint(newLat, newLng);
-          if (suburb) suburbs.add(suburb);
+          const result = await geocodePoint(point.lat(), point.lng());
+          if (result && !suburbMap.has(result.name)) {
+            suburbMap.set(result.name, result);
+          }
         }
       }
 
-      const suburbsArray = Array.from(suburbs).sort();
+      const suburbsArray = Array.from(suburbMap.values()).sort((a, b) => a.name.localeCompare(b.name));
       setAllDiscoveredSuburbs(suburbsArray);
-      // All suburbs selected by default
-      onChange({ ...dataRef.current, servicedSuburbs: suburbsArray });
+      onChange({ ...dataRef.current, servicedSuburbs: suburbsArray.map(s => s.name) });
     } catch (error) {
       console.error("Error fetching suburbs:", error);
     } finally {
@@ -264,14 +294,12 @@ interface GeographicReachStepProps {
     }
   }, [mapLoaded, onChange]);
 
-  // Debounced suburb fetch when radius or location changes
+  // Debounced suburb fetch
   useEffect(() => {
     if (!data.baseAddressLat || !data.baseAddressLng) return;
-
     const timer = setTimeout(() => {
       fetchSuburbsInRadius(data.baseAddressLat!, data.baseAddressLng!, data.maxTravelDistanceKm);
     }, 500);
-
     return () => clearTimeout(timer);
   }, [data.baseAddressLat, data.baseAddressLng, data.maxTravelDistanceKm, fetchSuburbsInRadius]);
 
@@ -284,13 +312,8 @@ interface GeographicReachStepProps {
     }
   };
 
-  const selectAllSuburbs = () => {
-    onChange({ ...data, servicedSuburbs: [...allDiscoveredSuburbs] });
-  };
-
-  const deselectAllSuburbs = () => {
-    onChange({ ...data, servicedSuburbs: [] });
-  };
+  const selectAllSuburbs = () => onChange({ ...data, servicedSuburbs: allDiscoveredSuburbs.map(s => s.name) });
+  const deselectAllSuburbs = () => onChange({ ...data, servicedSuburbs: [] });
 
   return (
     <Card>
@@ -301,9 +324,7 @@ interface GeographicReachStepProps {
           </div>
           <div>
             <CardTitle>Geographic Reach</CardTitle>
-            <CardDescription>
-              Set your maximum travel distance for jobs
-            </CardDescription>
+            <CardDescription>Set your maximum travel distance for jobs</CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -314,11 +335,11 @@ interface GeographicReachStepProps {
             Base address for service area <span className="text-destructive">*</span>
           </Label>
           <p className="text-sm text-muted-foreground">
-            This is where you'll travel from to reach jobs. It defaults to your business address but can be changed.
+            This is where you'll travel from to reach jobs.
           </p>
           <div className="relative">
             <Navigation className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
+            <Input
               ref={inputRef}
               id="base-address"
               placeholder="Start typing your address..."
@@ -326,7 +347,7 @@ interface GeographicReachStepProps {
               className="pl-10"
             />
           </div>
-          {data.baseAddress && (
+          {data.baseAddress && data.baseAddressLat && (
             <p className="text-sm text-primary flex items-center gap-1">
               <MapPin className="w-3 h-3" />
               {data.baseAddress}
@@ -334,12 +355,12 @@ interface GeographicReachStepProps {
           )}
         </div>
 
-        {/* Map with Radius */}
+        {/* Map */}
         <div className="space-y-3">
           <Label>Service Area Preview</Label>
-          <div 
-            ref={mapRef} 
-            className="w-full h-64 rounded-lg border border-border bg-muted"
+          <div
+            ref={mapRef}
+            className="w-full h-64 md:h-80 rounded-lg border border-border bg-muted"
             style={{ minHeight: "256px" }}
           >
             {!mapLoaded && (
@@ -352,21 +373,15 @@ interface GeographicReachStepProps {
 
         {/* Radius Slider */}
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Maximum travel distance from your base</Label>
-          </div>
-
+          <Label>Maximum travel distance from your base</Label>
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">5 km</span>
             <span className="text-2xl font-bold text-primary">{data.maxTravelDistanceKm} km</span>
             <span className="text-sm text-muted-foreground">50 km</span>
           </div>
-          
           <Slider
             value={[data.maxTravelDistanceKm]}
-            onValueChange={([value]) => {
-              onChange({ ...data, maxTravelDistanceKm: value });
-            }}
+            onValueChange={([value]) => onChange({ ...data, maxTravelDistanceKm: value })}
             min={5}
             max={50}
             step={5}
@@ -374,7 +389,7 @@ interface GeographicReachStepProps {
           />
         </div>
 
-        {/* Serviced Suburbs */}
+        {/* Suburbs */}
         {data.baseAddressLat && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -386,47 +401,39 @@ interface GeographicReachStepProps {
                 </span>
               )}
             </div>
-            
+
             {allDiscoveredSuburbs.length > 0 ? (
               <>
                 <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={selectAllSuburbs}
-                    disabled={data.servicedSuburbs.length === allDiscoveredSuburbs.length}
-                  >
+                  <Button variant="outline" size="sm" onClick={selectAllSuburbs}
+                    disabled={data.servicedSuburbs.length === allDiscoveredSuburbs.length}>
                     Select All
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={deselectAllSuburbs}
-                    disabled={data.servicedSuburbs.length === 0}
-                  >
+                  <Button variant="outline" size="sm" onClick={deselectAllSuburbs}
+                    disabled={data.servicedSuburbs.length === 0}>
                     Deselect All
                   </Button>
                   <span className="text-xs text-muted-foreground ml-auto">
                     {data.servicedSuburbs.length} of {allDiscoveredSuburbs.length} selected
                   </span>
                 </div>
-                <ScrollArea className="h-48 rounded-lg border border-border p-3">
-                  <div className="space-y-2">
+                <ScrollArea className="h-48 md:h-56 rounded-lg border border-border p-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-1">
                     {allDiscoveredSuburbs.map((suburb) => {
-                      const isSelected = data.servicedSuburbs.includes(suburb);
+                      const isSelected = data.servicedSuburbs.includes(suburb.name);
                       return (
-                        <div 
-                          key={suburb} 
-                          className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1.5 rounded-md -mx-1.5"
-                          onClick={() => toggleSuburb(suburb)}
+                        <div
+                          key={suburb.name}
+                          className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1.5 rounded-md"
+                          onClick={() => toggleSuburb(suburb.name)}
                         >
-                          <Checkbox 
+                          <Checkbox
                             checked={isSelected}
-                            onCheckedChange={() => toggleSuburb(suburb)}
+                            onCheckedChange={() => toggleSuburb(suburb.name)}
                             onClick={(e) => e.stopPropagation()}
                           />
-                          <span className={`text-sm ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`}>
-                            {suburb}
+                          <span className={`text-sm truncate ${isSelected ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                            {suburb.name}
                           </span>
                         </div>
                       );
@@ -441,7 +448,7 @@ interface GeographicReachStepProps {
                 </p>
               </div>
             )}
-            
+
             <p className="text-xs text-muted-foreground">
               Click to deselect any suburbs you don't want to service. You'll only receive job notifications for selected suburbs.
             </p>
@@ -458,15 +465,38 @@ interface GeographicReachStepProps {
         {/* Navigation */}
         <div className="flex justify-between pt-4">
           <Button variant="outline" onClick={onBack} className="gap-2">
-            <ArrowLeft className="w-4 h-4" />
-            Back
+            <ArrowLeft className="w-4 h-4" /> Back
           </Button>
           <Button onClick={onNext} disabled={!isValid} className="gap-2">
-            Continue
-            <ArrowRight className="w-4 h-4" />
+            Continue <ArrowRight className="w-4 h-4" />
           </Button>
         </div>
       </CardContent>
     </Card>
   );
 };
+
+// Convex hull (Graham scan)
+function computeConvexHull(points: { lat: number; lng: number }[]): { lat: number; lng: number }[] {
+  if (points.length < 3) return points;
+  const pts = [...points].sort((a, b) => a.lng - b.lng || a.lat - b.lat);
+
+  const cross = (o: { lat: number; lng: number }, a: { lat: number; lng: number }, b: { lat: number; lng: number }) =>
+    (a.lng - o.lng) * (b.lat - o.lat) - (a.lat - o.lat) * (b.lng - o.lng);
+
+  const lower: { lat: number; lng: number }[] = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+
+  const upper: { lat: number; lng: number }[] = [];
+  for (const p of pts.reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+
+  lower.pop();
+  upper.pop();
+  return lower.concat(upper);
+}

@@ -364,7 +364,7 @@ const ContractorOnboarding = () => {
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-8">
+      <main className="max-w-lg md:max-w-2xl lg:max-w-3xl mx-auto px-4 py-8">
         {/* Progress */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
