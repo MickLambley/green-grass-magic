@@ -41,7 +41,7 @@ serve(async (req) => {
     // Verify contractor owns this quote
     const { data: contractor } = await supabase
       .from("contractors")
-      .select("id, business_name, gst_registered, abn, primary_color")
+      .select("id, business_name, gst_registered, abn, primary_color, business_logo_url")
       .eq("user_id", userData.user.id)
       .single();
 
