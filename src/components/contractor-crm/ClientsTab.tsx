@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Pencil, Trash2, Loader2, Users, MapPin, CheckCircle2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Loader2, Users, MapPin, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
@@ -30,6 +30,8 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 25;
 
   const [form, setForm] = useState({
     name: "",
@@ -154,6 +156,12 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
     (c.phone && c.phone.includes(searchQuery))
   );
 
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginatedClients = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  // Reset page when search changes
+  useEffect(() => { setPage(0); }, [searchQuery]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -211,7 +219,7 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((client) => {
+              {paginatedClients.map((client) => {
                 const addr = client.address as any;
                 return (
                   <TableRow key={client.id}>
@@ -252,6 +260,22 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
               })}
             </TableBody>
           </Table>
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <p className="text-sm text-muted-foreground">
+                Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+              </p>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+                </Button>
+                <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+                  Next <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
 

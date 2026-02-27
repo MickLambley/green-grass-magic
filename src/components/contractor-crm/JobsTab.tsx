@@ -129,6 +129,8 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [recurringEditOpen, setRecurringEditOpen] = useState(false);
   const [recurringEditScope, setRecurringEditScope] = useState<"this" | "future" | null>(null);
   const [pendingEditJob, setPendingEditJob] = useState<Job | null>(null);
+  const [listPage, setListPage] = useState(0);
+  const PAGE_SIZE = 25;
 
   const handleRunOptimization = async () => {
     setIsOptimizing(true);
@@ -562,6 +564,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     return matchesSearch && matchesStatus;
   });
 
+  // Paginated slice for list view
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginatedJobs = filtered.slice(listPage * PAGE_SIZE, (listPage + 1) * PAGE_SIZE);
+
+  // Reset page when filters change
+  useEffect(() => { setListPage(0); }, [searchQuery, statusFilter]);
+
   // Pending confirmation jobs for the hero section
   const pendingJobs = jobs.filter(j => j.status === "pending_confirmation" || j.status === "pending");
 
@@ -846,7 +855,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((job) => (
+                {paginatedJobs.map((job) => (
                   <TableRow key={job.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { if (job.source === "platform") { setSelectedPlatformBookingId(job.id); setPlatformDetailOpen(true); } else { openEditDialog(job as any); } }}>
                     <TableCell className="font-medium">
                       {job.title}
@@ -911,6 +920,22 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                 ))}
               </TableBody>
             </Table>
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                <p className="text-sm text-muted-foreground">
+                  Showing {listPage * PAGE_SIZE + 1}–{Math.min((listPage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+                </p>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" disabled={listPage === 0} onClick={() => setListPage(p => p - 1)}>
+                    <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+                  </Button>
+                  <Button variant="outline" size="sm" disabled={listPage >= totalPages - 1} onClick={() => setListPage(p => p + 1)}>
+                    Next <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         )
       )}
