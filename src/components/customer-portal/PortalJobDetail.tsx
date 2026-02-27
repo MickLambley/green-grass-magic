@@ -57,11 +57,20 @@ export const PortalJobDetail = ({ job, contractor, userId, onBack }: PortalJobDe
     const { data } = await supabase
       .from("job_photos")
       .select("id, photo_url, photo_type, uploaded_at")
-      .eq("job_id", job.id)
+      .eq("job_id", currentJob.id)
       .order("uploaded_at");
 
     setPhotos(data || []);
     setPhotosLoading(false);
+  };
+
+  const reloadJob = async () => {
+    const { data } = await supabase
+      .from("jobs")
+      .select("*")
+      .eq("id", currentJob.id)
+      .single();
+    if (data) setCurrentJob(data as PortalJob);
   };
 
   const beforePhotos = photos.filter((p) => p.photo_type === "before");
