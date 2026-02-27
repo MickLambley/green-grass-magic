@@ -7,10 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Save, CreditCard, Clock } from "lucide-react";
+import { Loader2, Save, CreditCard, Clock, Mail, Lock } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "./WorkingHoursEditor";
+import { z } from "zod";
 
 type Contractor = Tables<"contractors">;
 
