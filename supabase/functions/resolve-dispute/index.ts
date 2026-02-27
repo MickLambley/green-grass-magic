@@ -112,7 +112,7 @@ serve(async (req) => {
     const wrapEmail = (content: string) => `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
         ${content}
-        <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawnly Team</p>
+        <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
       </div>
     `;
 
