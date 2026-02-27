@@ -107,7 +107,7 @@ const getEmailContent = (
             ${baseInfo}
             <p><strong>Status:</strong> ${booking.status}</p>
             <p>If you have any questions, please don't hesitate to contact us.</p>
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawn Care Team</p>
+            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
           </div>
         `,
       };
