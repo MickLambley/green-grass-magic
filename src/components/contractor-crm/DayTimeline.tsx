@@ -43,6 +43,8 @@ const statusColors: Record<string, { bg: string; border: string; text: string }>
 
 // Pixels per hour — large enough so 15-min jobs get ~30px
 const PX_PER_HOUR = 120;
+// Minimum travel buffer in minutes — gaps shorter than this between different-address jobs get flagged
+const MIN_TRAVEL_BUFFER = 15;
 
 function timeToMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
