@@ -152,7 +152,7 @@ serve(async (req) => {
                         <p style="margin: 5px 0;">The 48-hour review period has elapsed and payment was released automatically.</p>
                       </div>
                       <p>You can still report an issue within 7 days if needed by visiting your dashboard.</p>
-                      <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawnly Team</p>
+                      <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
                     </div>
                   `,
                 }),
