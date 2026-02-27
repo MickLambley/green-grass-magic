@@ -46,6 +46,8 @@ const paymentLabels: Record<string, { label: string; icon: typeof CheckCircle2; 
 export const PortalJobDetail = ({ job, contractor, userId, onBack }: PortalJobDetailProps) => {
   const [photos, setPhotos] = useState<JobPhoto[]>([]);
   const [photosLoading, setPhotosLoading] = useState(true);
+  const [cancelFlowOpen, setCancelFlowOpen] = useState(false);
+  const [currentJob, setCurrentJob] = useState(job);
 
   useEffect(() => {
     loadPhotos();
