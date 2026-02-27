@@ -2,14 +2,22 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Calendar, FileText, DollarSign, Loader2, Clock, AlertCircle } from "lucide-react";
+import { Users, Calendar, FileText, DollarSign, Loader2, Clock, AlertCircle, MapPin } from "lucide-react";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Job = Tables<"jobs">;
 
+interface ClientAddress {
+  street?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
+}
+
 interface DashboardOverviewProps {
   contractorId: string;
+  onNavigateToJob?: (jobId: string) => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -18,21 +26,40 @@ const statusColors: Record<string, string> = {
   pending_confirmation: "bg-muted text-muted-foreground",
 };
 
-const DashboardOverview = ({ contractorId }: DashboardOverviewProps) => {
+const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewProps) => {
   const [stats, setStats] = useState({
     clientCount: 0,
     scheduledJobs: 0,
     unpaidInvoices: 0,
     revenue: 0,
   });
-  const [todaysJobs, setTodaysJobs] = useState<(Job & { client_name?: string })[]>([]);
-  const [upcomingJobs, setUpcomingJobs] = useState<(Job & { client_name?: string })[]>([]);
+  const [todaysJobs, setTodaysJobs] = useState<(Job & { client_name?: string; client_address?: ClientAddress | null })[]>([]);
+  const [upcomingJobs, setUpcomingJobs] = useState<(Job & { client_name?: string; client_address?: ClientAddress | null })[]>([]);
   const [websiteBookings, setWebsiteBookings] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchAll();
   }, [contractorId]);
+
+  // Realtime: remove completed/cancelled jobs from today's list
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-jobs')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'jobs' },
+        (payload) => {
+          const updated = payload.new as Job;
+          if (updated.status === 'completed' || updated.status === 'cancelled') {
+            setTodaysJobs((prev) => prev.filter((j) => j.id !== updated.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const fetchAll = async () => {
     const today = new Date().toISOString().split("T")[0];
@@ -54,9 +81,9 @@ const DashboardOverview = ({ contractorId }: DashboardOverviewProps) => {
 
     const revenue = (paidRes.data || []).reduce((sum, inv) => sum + Number(inv.total), 0);
 
-    // Fetch client names for today's and upcoming jobs
-    const { data: clients } = await supabase.from("clients").select("id, name").eq("contractor_id", contractorId);
-    const clientMap = new Map((clients || []).map((c) => [c.id, c.name]));
+    // Fetch client names and addresses for today's and upcoming jobs
+    const { data: clients } = await supabase.from("clients").select("id, name, address").eq("contractor_id", contractorId);
+    const clientMap = new Map((clients || []).map((c) => [c.id, c]));
 
     setStats({
       clientCount: clientsRes.count || 0,
@@ -64,8 +91,14 @@ const DashboardOverview = ({ contractorId }: DashboardOverviewProps) => {
       unpaidInvoices: unpaidRes.count || 0,
       revenue,
     });
-    setTodaysJobs((todayRes.data || []).map((j) => ({ ...j, client_name: clientMap.get(j.client_id) || "Unknown" })));
-    setUpcomingJobs((upcomingRes.data || []).map((j) => ({ ...j, client_name: clientMap.get(j.client_id) || "Unknown" })));
+    setTodaysJobs((todayRes.data || []).map((j) => {
+      const client = clientMap.get(j.client_id);
+      return { ...j, client_name: client?.name || "Unknown", client_address: client?.address as ClientAddress | null };
+    }));
+    setUpcomingJobs((upcomingRes.data || []).map((j) => {
+      const client = clientMap.get(j.client_id);
+      return { ...j, client_name: client?.name || "Unknown", client_address: client?.address as ClientAddress | null };
+    }));
     setWebsiteBookings(websiteRes.count || 0);
     setIsLoading(false);
   };
@@ -127,22 +160,35 @@ const DashboardOverview = ({ contractorId }: DashboardOverviewProps) => {
               <p className="text-muted-foreground text-sm py-4 text-center">No jobs scheduled for today. 🎉</p>
             ) : (
               <div className="space-y-3">
-                {todaysJobs.map((job) => (
-                  <div key={job.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-sm text-foreground">{job.title}</p>
-                      <p className="text-xs text-muted-foreground">{job.client_name}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {job.scheduled_time && (
-                        <span className="text-xs text-muted-foreground">{job.scheduled_time}</span>
-                      )}
-                      <Badge variant="outline" className={`text-[10px] ${statusColors[job.status] || ""}`}>
-                        {job.status === "in_progress" ? "In Progress" : "Scheduled"}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
+                {todaysJobs.map((job) => {
+                  const addressParts = [job.client_address?.street, job.client_address?.city, job.client_address?.state, job.client_address?.postcode].filter(Boolean);
+                  return (
+                    <button
+                      key={job.id}
+                      onClick={() => onNavigateToJob?.(job.id)}
+                      className="w-full flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors text-left cursor-pointer"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm text-foreground">{job.title}</p>
+                        <p className="text-xs text-muted-foreground">{job.client_name}</p>
+                        {addressParts.length > 0 && (
+                          <p className="flex items-center gap-1 text-xs text-muted-foreground/70 mt-0.5">
+                            <MapPin className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{addressParts.join(", ")}</span>
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {job.scheduled_time && (
+                          <span className="text-xs text-muted-foreground">{job.scheduled_time}</span>
+                        )}
+                        <Badge variant="outline" className={`text-[10px] ${statusColors[job.status] || ""}`}>
+                          {job.status === "in_progress" ? "In Progress" : "Scheduled"}
+                        </Badge>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </CardContent>
