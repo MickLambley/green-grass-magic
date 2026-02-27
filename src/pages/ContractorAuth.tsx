@@ -96,7 +96,7 @@ const ContractorAuth = () => {
             .eq("user_id", session.user.id)
             .single();
 
-          if (contractor && contractor.abn) {
+          if (contractor && contractor.onboarding_completed) {
             navigate("/contractor");
           } else {
             navigate("/contractor-onboarding");

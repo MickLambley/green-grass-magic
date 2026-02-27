@@ -258,11 +258,18 @@ const ContractorOnboarding = () => {
 
     toast.success("First job scheduled! 🎉 You're all set.");
     setIsSaving(false);
+    await markOnboardingComplete();
     navigate("/contractor");
+  };
+
+  const markOnboardingComplete = async () => {
+    if (!user) return;
+    await supabase.from("contractors").update({ onboarding_completed: true }).eq("user_id", user.id);
   };
 
   const handleSkip = () => {
     if (currentStep === STEPS.length - 1) {
+      markOnboardingComplete();
       navigate("/contractor");
     } else {
       setCurrentStep(currentStep + 1);

@@ -133,7 +133,7 @@ const ContractorDashboard = () => {
       .eq("user_id", user.id).single();
     if (!contractorData) { toast.error("Profile not found"); navigate("/contractor-auth"); return; }
 
-    if (!contractorData.business_name && !contractorData.abn) {
+    if (!contractorData.onboarding_completed) {
       navigate("/contractor-onboarding");
       return;
     }
