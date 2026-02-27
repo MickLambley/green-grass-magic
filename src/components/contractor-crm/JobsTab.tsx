@@ -292,7 +292,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
 
   const openEditDialog = (job: Job) => {
     // Check if this job belongs to a recurring series
-    const recurringId = (job as any).recurring_job_id;
+    const recurringId = job.recurring_job_id;
     if (recurringId) {
       setPendingEditJob(job);
       setRecurringEditScope(null);
