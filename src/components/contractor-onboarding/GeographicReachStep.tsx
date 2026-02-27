@@ -17,7 +17,7 @@ interface GeographicReachStepProps {
   onBack: () => void;
 }
 
- export const GeographicReachStep = ({ data, onChange, identityData, onNext, onBack }: GeographicReachStepProps) => {
+ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: GeographicReachStepProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
   const circleRef = useRef<google.maps.Circle | null>(null);
