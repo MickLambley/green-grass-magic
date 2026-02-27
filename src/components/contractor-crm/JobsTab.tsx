@@ -225,7 +225,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           description: j.description,
           notes: j.notes,
           recurrence_rule: j.recurrence_rule,
-          recurring_job_id: (j as any).recurring_job_id || null,
+          recurring_job_id: j.recurring_job_id || null,
           source: "crm",
           client_id: j.client_id,
           duration_minutes: j.duration_minutes,
@@ -292,7 +292,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
 
   const openEditDialog = (job: Job) => {
     // Check if this job belongs to a recurring series
-    const recurringId = (job as any).recurring_job_id;
+    const recurringId = job.recurring_job_id;
     if (recurringId) {
       setPendingEditJob(job);
       setRecurringEditScope(null);
@@ -396,7 +396,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       if (error) { toast.error("Failed to update job"); setIsSaving(false); return; }
 
       // If "all future" scope, also update all future jobs in the series
-      const recurringId = (editingJob as any).recurring_job_id;
+      const recurringId = editingJob.recurring_job_id;
       if (recurringEditScope === "future" && recurringId) {
         const today = new Date().toISOString().split("T")[0];
         const futurePayload = {
@@ -408,9 +408,9 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           notes: payload.notes,
           original_scheduled_time: payload.original_scheduled_time,
         };
-        const { error: futureError } = await (supabase
+        const { error: futureError } = await supabase
           .from("jobs")
-          .update(futurePayload) as any)
+          .update(futurePayload)
           .eq("recurring_job_id", recurringId)
           .neq("id", editingJob.id)
           .gte("scheduled_date", today);
@@ -429,7 +429,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       const createPayload = { ...payload, ...(seriesId ? { recurring_job_id: seriesId } : {}) };
 
       // Create the initial job
-      const { error } = await supabase.from("jobs").insert(createPayload as any);
+      const { error } = await supabase.from("jobs").insert(createPayload);
       if (error) { toast.error("Failed to create job"); setIsSaving(false); return; }
 
       // If recurring, create additional jobs
