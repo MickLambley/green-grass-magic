@@ -14,15 +14,19 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock, Trash2 } from "lucide-react";
 import DayTimeline from "./DayTimeline";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, endOfWeek, isToday } from "date-fns";
@@ -116,6 +120,9 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [markPaidJob, setMarkPaidJob] = useState<{
     id: string; title: string; client_name: string; total_price: number | null;
   } | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleRunOptimization = async () => {
     setIsOptimizing(true);
@@ -438,6 +445,22 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       payment_status: "unpaid",
     });
     setCompletionDialogOpen(true);
+  };
+
+  const handleDeleteJob = async () => {
+    if (!deletingJobId) return;
+    setIsDeleting(true);
+    const { error } = await supabase.from("jobs").delete().eq("id", deletingJobId);
+    if (error) {
+      toast.error("Failed to delete job");
+    } else {
+      toast.success("Job deleted");
+      setDialogOpen(false);
+      fetchData();
+    }
+    setIsDeleting(false);
+    setDeleteConfirmOpen(false);
+    setDeletingJobId(null);
   };
 
   const filtered = jobs.filter((j) => {
@@ -887,11 +910,22 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Job notes..." rows={2} />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingJob ? "Save Changes" : form.is_recurring ? `Create ${form.recurrence_count} Jobs` : "Create Job"}
-            </Button>
+          <DialogFooter className={editingJob ? "flex justify-between sm:justify-between" : ""}>
+            {editingJob && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => { setDeletingJobId(editingJob.id); setDeleteConfirmOpen(true); }}
+              >
+                <Trash2 className="w-4 h-4 mr-1" /> Delete
+              </Button>
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleSave} disabled={isSaving}>
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingJob ? "Save Changes" : form.is_recurring ? `Create ${form.recurrence_count} Jobs` : "Create Job"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -929,6 +963,23 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
         job={markPaidJob}
         onMarked={fetchData}
       />
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to permanently delete this job?</AlertDialogTitle>
+            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteJob} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

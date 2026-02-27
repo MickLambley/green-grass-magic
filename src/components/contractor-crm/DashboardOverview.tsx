@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Calendar, FileText, DollarSign, Loader2, Clock, AlertCircle, MapPin } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, Calendar, FileText, DollarSign, Loader2, Clock, AlertCircle, MapPin, CheckCircle2 } from "lucide-react";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
 import type { Tables } from "@/integrations/supabase/types";
+import JobCompletionDialog from "./JobCompletionDialog";
 
 type Job = Tables<"jobs">;
 
@@ -37,6 +39,22 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
   const [upcomingJobs, setUpcomingJobs] = useState<(Job & { client_name?: string; client_address?: ClientAddress | null })[]>([]);
   const [websiteBookings, setWebsiteBookings] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
+  const [completionJob, setCompletionJob] = useState<{
+    id: string; title: string; source: string; total_price: number | null; client_name: string; payment_status: string;
+  } | null>(null);
+
+  const handleQuickComplete = (job: Job & { client_name?: string }) => {
+    setCompletionJob({
+      id: job.id,
+      title: job.title,
+      source: job.source === "website_booking" ? "website_booking" : "manual",
+      total_price: job.total_price,
+      client_name: job.client_name || "Unknown",
+      payment_status: job.payment_status,
+    });
+    setCompletionDialogOpen(true);
+  };
 
   useEffect(() => {
     fetchAll();
@@ -163,12 +181,14 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
                 {todaysJobs.map((job) => {
                   const addressParts = [job.client_address?.street, job.client_address?.city, job.client_address?.state, job.client_address?.postcode].filter(Boolean);
                   return (
-                    <button
+                    <div
                       key={job.id}
-                      onClick={() => onNavigateToJob?.(job.id)}
-                      className="w-full flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors text-left cursor-pointer"
+                      className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors"
                     >
-                      <div className="min-w-0 flex-1">
+                      <button
+                        onClick={() => onNavigateToJob?.(job.id)}
+                        className="min-w-0 flex-1 text-left cursor-pointer"
+                      >
                         <p className="font-medium text-sm text-foreground">{job.title}</p>
                         <p className="text-xs text-muted-foreground">{job.client_name}</p>
                         {addressParts.length > 0 && (
@@ -177,7 +197,7 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
                             <span className="truncate">{addressParts.join(", ")}</span>
                           </p>
                         )}
-                      </div>
+                      </button>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {job.scheduled_time && (
                           <span className="text-xs text-muted-foreground">{job.scheduled_time}</span>
@@ -185,8 +205,19 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
                         <Badge variant="outline" className={`text-[10px] ${statusColors[job.status] || ""}`}>
                           {job.status === "in_progress" ? "In Progress" : "Scheduled"}
                         </Badge>
+                        {(job.status === "scheduled" || job.status === "in_progress") && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-primary hover:text-primary"
+                            onClick={(e) => { e.stopPropagation(); handleQuickComplete(job); }}
+                            title="Complete Job"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -228,6 +259,13 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
           </CardContent>
         </Card>
       </div>
+
+      <JobCompletionDialog
+        open={completionDialogOpen}
+        onOpenChange={setCompletionDialogOpen}
+        job={completionJob}
+        onCompleted={fetchAll}
+      />
     </div>
   );
 };
