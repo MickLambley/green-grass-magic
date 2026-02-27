@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Globe, Sparkles, ExternalLink, Eye, Check, Copy } from "lucide-react";
+import { Loader2, Globe, Sparkles, ExternalLink, Eye, Check, Copy, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
