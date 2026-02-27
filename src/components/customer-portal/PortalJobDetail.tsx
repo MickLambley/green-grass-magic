@@ -137,7 +137,7 @@ export const PortalJobDetail = ({ job, contractor, userId, onBack }: PortalJobDe
             <PaymentIcon className="w-5 h-5" />
             <div>
               <p className="font-semibold text-sm">{paymentInfo.label}</p>
-              {job.payment_status === "paid" && job.source === "website_booking" && (
+              {currentJob.payment_status === "paid" && currentJob.source === "website_booking" && (
                 <p className="text-xs opacity-75">Payment was captured automatically upon job completion.</p>
               )}
               {job.payment_status === "invoiced" && (
