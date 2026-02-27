@@ -123,6 +123,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [pendingSuggestionJobIds, setPendingSuggestionJobIds] = useState<Set<string>>(new Set());
 
   const handleRunOptimization = async () => {
     setIsOptimizing(true);
