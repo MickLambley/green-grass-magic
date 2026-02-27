@@ -166,7 +166,25 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
 
   useEffect(() => {
     fetchData();
+    fetchPendingSuggestions();
   }, [contractorId]);
+
+  const fetchPendingSuggestions = async () => {
+    // Fetch alternative_suggestions with status='pending' for this contractor
+    const { data } = await supabase
+      .from("alternative_suggestions")
+      .select("job_id, booking_id")
+      .eq("contractor_id", contractorId)
+      .eq("status", "pending");
+    if (data) {
+      const ids = new Set<string>();
+      data.forEach(s => {
+        if (s.job_id) ids.add(s.job_id);
+        if (s.booking_id) ids.add(s.booking_id);
+      });
+      setPendingSuggestionJobIds(ids);
+    }
+  };
 
   const fetchData = async () => {
     setIsLoading(true);
