@@ -408,10 +408,10 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           notes: payload.notes,
           original_scheduled_time: payload.original_scheduled_time,
         };
-        const { error: futureError } = await supabase
+        const { error: futureError } = await (supabase
           .from("jobs")
-          .update(futurePayload)
-          .eq("recurring_job_id" as any, recurringId)
+          .update(futurePayload) as any)
+          .eq("recurring_job_id", recurringId)
           .neq("id", editingJob.id)
           .gte("scheduled_date", today);
         if (futureError) toast.error("Some future jobs failed to update");
