@@ -81,6 +81,15 @@ const ContractorWebsite = () => {
         ...data,
         website_copy: data.website_copy as unknown as WebsiteCopy | null,
       });
+
+      // Fetch service suburbs
+      const { data: suburbs } = await supabase
+        .from("contractor_service_suburbs")
+        .select("suburb, postcode")
+        .eq("contractor_id", data.id)
+        .order("suburb");
+      
+      if (suburbs) setServiceSuburbs(suburbs);
     }
     setLoading(false);
   };
