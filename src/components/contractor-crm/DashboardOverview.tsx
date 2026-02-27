@@ -8,8 +8,16 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type Job = Tables<"jobs">;
 
+interface ClientAddress {
+  street?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
+}
+
 interface DashboardOverviewProps {
   contractorId: string;
+  onNavigateToJob?: (jobId: string) => void;
 }
 
 const statusColors: Record<string, string> = {
