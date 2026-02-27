@@ -910,11 +910,22 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Job notes..." rows={2} />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingJob ? "Save Changes" : form.is_recurring ? `Create ${form.recurrence_count} Jobs` : "Create Job"}
-            </Button>
+          <DialogFooter className={editingJob ? "flex justify-between sm:justify-between" : ""}>
+            {editingJob && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => { setDeletingJobId(editingJob.id); setDeleteConfirmOpen(true); }}
+              >
+                <Trash2 className="w-4 h-4 mr-1" /> Delete
+              </Button>
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleSave} disabled={isSaving}>
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingJob ? "Save Changes" : form.is_recurring ? `Create ${form.recurrence_count} Jobs` : "Create Job"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
