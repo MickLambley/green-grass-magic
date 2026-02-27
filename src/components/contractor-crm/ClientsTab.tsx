@@ -30,6 +30,8 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 25;
 
   const [form, setForm] = useState({
     name: "",
