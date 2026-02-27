@@ -129,6 +129,8 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [recurringEditOpen, setRecurringEditOpen] = useState(false);
   const [recurringEditScope, setRecurringEditScope] = useState<"this" | "future" | null>(null);
   const [pendingEditJob, setPendingEditJob] = useState<Job | null>(null);
+  const [listPage, setListPage] = useState(0);
+  const PAGE_SIZE = 25;
 
   const handleRunOptimization = async () => {
     setIsOptimizing(true);
