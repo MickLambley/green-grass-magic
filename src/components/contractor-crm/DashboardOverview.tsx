@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Calendar, FileText, DollarSign, Loader2, Clock, AlertCircle, MapPin } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, Calendar, FileText, DollarSign, Loader2, Clock, AlertCircle, MapPin, CheckCircle2 } from "lucide-react";
 import { format, isToday, isTomorrow, parseISO } from "date-fns";
 import type { Tables } from "@/integrations/supabase/types";
+import JobCompletionDialog from "./JobCompletionDialog";
 
 type Job = Tables<"jobs">;
 
