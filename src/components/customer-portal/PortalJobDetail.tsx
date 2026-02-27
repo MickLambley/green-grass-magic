@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Calendar, Clock, DollarSign, CheckCircle2, Image, FileText } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, DollarSign, CheckCircle2, Image, FileText, XCircle } from "lucide-react";
 import PortalDisputeSection from "./PortalDisputeSection";
+import CancelBookingFlow from "./CancelBookingFlow";
 import type { ContractorBrand } from "./PortalLayout";
 
 interface PortalJob {
@@ -45,29 +46,42 @@ const paymentLabels: Record<string, { label: string; icon: typeof CheckCircle2; 
 export const PortalJobDetail = ({ job, contractor, userId, onBack }: PortalJobDetailProps) => {
   const [photos, setPhotos] = useState<JobPhoto[]>([]);
   const [photosLoading, setPhotosLoading] = useState(true);
+  const [cancelFlowOpen, setCancelFlowOpen] = useState(false);
+  const [currentJob, setCurrentJob] = useState(job);
 
   useEffect(() => {
     loadPhotos();
-  }, [job.id]);
+  }, [currentJob.id]);
 
   const loadPhotos = async () => {
     const { data } = await supabase
       .from("job_photos")
       .select("id, photo_url, photo_type, uploaded_at")
-      .eq("job_id", job.id)
+      .eq("job_id", currentJob.id)
       .order("uploaded_at");
 
     setPhotos(data || []);
     setPhotosLoading(false);
   };
 
+  const reloadJob = async () => {
+    const { data } = await supabase
+      .from("jobs")
+      .select("*")
+      .eq("id", currentJob.id)
+      .single();
+    if (data) setCurrentJob(data as PortalJob);
+  };
+
   const beforePhotos = photos.filter((p) => p.photo_type === "before");
   const afterPhotos = photos.filter((p) => p.photo_type === "after");
-  const paymentInfo = paymentLabels[job.payment_status] || paymentLabels.unpaid;
+  const paymentInfo = paymentLabels[currentJob.payment_status] || paymentLabels.unpaid;
   const PaymentIcon = paymentInfo.icon;
 
-  const isCompleted = job.status === "completed";
-  const isRecentlyCompleted = isCompleted && job.completed_at && (Date.now() - new Date(job.completed_at).getTime()) < 7 * 24 * 60 * 60 * 1000;
+  const isCompleted = currentJob.status === "completed";
+  const isCancelled = currentJob.status === "cancelled";
+  const isRecentlyCompleted = isCompleted && currentJob.completed_at && (Date.now() - new Date(currentJob.completed_at).getTime()) < 7 * 24 * 60 * 60 * 1000;
+  const canCancel = !isCompleted && !isCancelled;
 
   return (
     <div className="space-y-6">
@@ -81,31 +95,36 @@ export const PortalJobDetail = ({ job, contractor, userId, onBack }: PortalJobDe
       <div className="bg-card rounded-2xl p-6 shadow-sm border border-border">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
-            <h2 className="font-display text-xl font-bold text-foreground mb-1">{job.title}</h2>
-            {job.description && <p className="text-sm text-muted-foreground mb-3">{job.description}</p>}
+            <h2 className="font-display text-xl font-bold text-foreground mb-1">{currentJob.title}</h2>
+            {currentJob.description && <p className="text-sm text-muted-foreground mb-3">{currentJob.description}</p>}
             <div className="flex flex-wrap items-center gap-4 text-sm">
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Calendar className="w-4 h-4" />
                 <span>
-                  {new Date(job.scheduled_date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                  {new Date(currentJob.scheduled_date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
                 </span>
               </div>
-              {job.scheduled_time && (
+              {currentJob.scheduled_time && (
                 <div className="flex items-center gap-1.5 text-muted-foreground">
                   <Clock className="w-4 h-4" />
-                  <span>{job.scheduled_time}</span>
+                  <span>{currentJob.scheduled_time}</span>
                 </div>
               )}
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <Badge variant={job.status === "completed" ? "outline" : job.status === "cancelled" ? "destructive" : "default"}>
-              {job.status === "completed" ? "Completed" : job.status === "cancelled" ? "Cancelled" : job.status === "scheduled" ? "Scheduled" : job.status === "in_progress" ? "In Progress" : job.status.replace(/_/g, " ")}
+            <Badge variant={currentJob.status === "completed" ? "outline" : currentJob.status === "cancelled" ? "destructive" : "default"}>
+              {currentJob.status === "completed" ? "Completed" : currentJob.status === "cancelled" ? "Cancelled" : currentJob.status === "scheduled" ? "Scheduled" : currentJob.status === "in_progress" ? "In Progress" : currentJob.status === "pending_confirmation" ? "Pending Confirmation" : currentJob.status.replace(/_/g, " ")}
             </Badge>
-            {job.total_price != null && (
+            {currentJob.total_price != null && (
               <span className="text-lg font-bold" style={{ color: contractor.primary_color }}>
-                ${job.total_price.toFixed(2)}
+                ${currentJob.total_price.toFixed(2)}
               </span>
+            )}
+            {canCancel && (
+              <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setCancelFlowOpen(true)}>
+                <XCircle className="w-3.5 h-3.5 mr-1" /> Cancel Booking
+              </Button>
             )}
           </div>
         </div>
@@ -118,10 +137,10 @@ export const PortalJobDetail = ({ job, contractor, userId, onBack }: PortalJobDe
             <PaymentIcon className="w-5 h-5" />
             <div>
               <p className="font-semibold text-sm">{paymentInfo.label}</p>
-              {job.payment_status === "paid" && job.source === "website_booking" && (
+              {currentJob.payment_status === "paid" && currentJob.source === "website_booking" && (
                 <p className="text-xs opacity-75">Payment was captured automatically upon job completion.</p>
               )}
-              {job.payment_status === "invoiced" && (
+              {currentJob.payment_status === "invoiced" && (
                 <p className="text-xs opacity-75">An invoice has been sent. Check your email for payment details.</p>
               )}
             </div>
@@ -130,10 +149,10 @@ export const PortalJobDetail = ({ job, contractor, userId, onBack }: PortalJobDe
       )}
 
       {/* Notes */}
-      {job.notes && (
+      {currentJob.notes && (
         <div className="bg-card rounded-xl p-5 shadow-sm border border-border">
           <h3 className="font-semibold text-foreground text-sm mb-2">Notes</h3>
-          <p className="text-sm text-muted-foreground">{job.notes}</p>
+          <p className="text-sm text-muted-foreground">{currentJob.notes}</p>
         </div>
       )}
 
@@ -183,13 +202,25 @@ export const PortalJobDetail = ({ job, contractor, userId, onBack }: PortalJobDe
         <div className="bg-card rounded-xl p-5 shadow-sm border border-border">
           <h3 className="font-semibold text-foreground text-sm mb-3">Have an issue?</h3>
           <PortalDisputeSection
-            jobId={job.id}
-            contractorId={job.contractor_id}
+            jobId={currentJob.id}
+            contractorId={currentJob.contractor_id}
             userId={userId}
-            jobTotal={job.total_price}
+            jobTotal={currentJob.total_price}
           />
         </div>
       )}
+
+      {/* Cancel Booking Flow */}
+      <CancelBookingFlow
+        open={cancelFlowOpen}
+        onOpenChange={setCancelFlowOpen}
+        jobId={currentJob.id}
+        jobTitle={currentJob.title}
+        contractorId={currentJob.contractor_id}
+        source="job"
+        onCancelled={() => { reloadJob(); }}
+        onRescheduled={() => { reloadJob(); }}
+      />
     </div>
   );
 };

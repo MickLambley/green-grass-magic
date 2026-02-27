@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, DollarSign, MapPin, ChevronRight, Image, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Calendar, Clock, DollarSign, MapPin, ChevronRight, Image, Loader2, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
 import PortalAlternativeTimesCard from "./PortalAlternativeTimesCard";
 import PortalJobDetail from "./PortalJobDetail";
+import CancelBookingFlow from "./CancelBookingFlow";
 import type { ContractorBrand } from "./PortalLayout";
 
 interface PortalJob {
@@ -57,6 +58,7 @@ export const PortalJobsList = ({ userId, contractor }: PortalJobsListProps) => {
   const [loading, setLoading] = useState(true);
   const [suggestions, setSuggestions] = useState<Record<string, AlternativeSuggestion[]>>({});
   const [selectedJob, setSelectedJob] = useState<PortalJob | null>(null);
+  const [cancellingJob, setCancellingJob] = useState<PortalJob | null>(null);
 
   useEffect(() => {
     loadJobs();
@@ -175,6 +177,17 @@ export const PortalJobsList = ({ userId, contractor }: PortalJobsListProps) => {
                         <span className="text-sm font-medium" style={{ color: contractor.primary_color }}>${job.total_price.toFixed(2)}</span>
                       )}
                       <Badge variant={variant}>{label}</Badge>
+                      {job.status !== "completed" && job.status !== "cancelled" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive h-8 w-8"
+                          onClick={(e) => { e.stopPropagation(); setCancellingJob(job); }}
+                          title="Cancel Booking"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </Button>
+                      )}
                       <ChevronRight className="w-4 h-4 text-muted-foreground" />
                     </div>
                   </div>
@@ -236,7 +249,21 @@ export const PortalJobsList = ({ userId, contractor }: PortalJobsListProps) => {
               );
             })}
           </div>
-        </div>
+    </div>
+      )}
+
+      {/* Cancel Booking Flow */}
+      {cancellingJob && (
+        <CancelBookingFlow
+          open={!!cancellingJob}
+          onOpenChange={(o) => { if (!o) setCancellingJob(null); }}
+          jobId={cancellingJob.id}
+          jobTitle={cancellingJob.title}
+          contractorId={cancellingJob.contractor_id}
+          source="job"
+          onCancelled={loadJobs}
+          onRescheduled={loadJobs}
+        />
       )}
     </div>
   );
