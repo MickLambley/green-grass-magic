@@ -625,10 +625,13 @@ serve(async (req) => {
       });
     }
 
-    // ── Cron/batch run: require CRON_SECRET ──
+    // ── Cron/batch run: require CRON_SECRET or service role key ──
     const cronAuthHeader = req.headers.get("Authorization");
+    const cronToken = cronAuthHeader?.replace("Bearer ", "");
     const cronSecret = Deno.env.get("CRON_SECRET");
-    if (!cronSecret || cronAuthHeader !== `Bearer ${cronSecret}`) {
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const isCronAuthorized = cronToken && (cronToken === cronSecret || cronToken === serviceRoleKey);
+    if (!isCronAuthorized) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
