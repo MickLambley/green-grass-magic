@@ -26,7 +26,7 @@ const statusColors: Record<string, string> = {
   pending_confirmation: "bg-muted text-muted-foreground",
 };
 
-const DashboardOverview = ({ contractorId }: DashboardOverviewProps) => {
+const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewProps) => {
   const [stats, setStats] = useState({
     clientCount: 0,
     scheduledJobs: 0,
