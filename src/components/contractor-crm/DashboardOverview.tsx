@@ -42,6 +42,25 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
     fetchAll();
   }, [contractorId]);
 
+  // Realtime: remove completed/cancelled jobs from today's list
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-jobs')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'jobs' },
+        (payload) => {
+          const updated = payload.new as Job;
+          if (updated.status === 'completed' || updated.status === 'cancelled') {
+            setTodaysJobs((prev) => prev.filter((j) => j.id !== updated.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   const fetchAll = async () => {
     const today = new Date().toISOString().split("T")[0];
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
