@@ -41,7 +41,7 @@ serve(async (req) => {
     // Verify contractor owns this quote
     const { data: contractor } = await supabase
       .from("contractors")
-      .select("id, business_name, gst_registered, abn, primary_color")
+      .select("id, business_name, gst_registered, abn, primary_color, business_logo_url")
       .eq("user_id", userData.user.id)
       .single();
 
@@ -83,10 +83,14 @@ serve(async (req) => {
       ? new Date(quote.valid_until).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
       : null;
 
+    const logoHtml = contractor.business_logo_url
+      ? `<img src="${contractor.business_logo_url}" alt="${businessName}" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; margin-right: 12px; vertical-align: middle;" />`
+      : "";
+
     const emailHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
         <div style="background: ${brandColor}; padding: 24px; border-radius: 8px 8px 0 0;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">Quote from ${businessName}</h1>
+          <h1 style="color: white; margin: 0; font-size: 24px;">${logoHtml}Quote from ${businessName}</h1>
           ${isGst && contractor.abn ? `<p style="color: rgba(255,255,255,0.7); margin: 4px 0 0; font-size: 13px;">ABN: ${contractor.abn}</p>` : ""}
         </div>
         

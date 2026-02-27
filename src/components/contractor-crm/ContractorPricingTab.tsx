@@ -21,7 +21,8 @@ interface PricingConfig {
   base_price: number;
   price_per_sqm: number;
   clippings_removal_fee: number;
-  weekend_surcharge_pct: number;
+  saturday_surcharge_pct: number;
+  sunday_surcharge_pct: number;
   enable_weekend_surcharge: boolean;
   minimum_price: number;
 }
@@ -30,7 +31,8 @@ const DEFAULT_PRICING: PricingConfig = {
   base_price: 50,
   price_per_sqm: 0.15,
   clippings_removal_fee: 20,
-  weekend_surcharge_pct: 15,
+  saturday_surcharge_pct: 10,
+  sunday_surcharge_pct: 15,
   enable_weekend_surcharge: false,
   minimum_price: 40,
 };
@@ -43,7 +45,13 @@ const ContractorPricingTab = ({ contractor, onUpdate }: ContractorPricingTabProp
     // Load existing pricing from contractor's questionnaire_responses or a dedicated field
     const stored = (contractor.questionnaire_responses as any)?.pricing as PricingConfig | undefined;
     if (stored) {
-      setPricing({ ...DEFAULT_PRICING, ...stored });
+      // Migrate old single weekend_surcharge_pct to split fields
+      const migrated = { ...DEFAULT_PRICING, ...stored };
+      if ((stored as any).weekend_surcharge_pct !== undefined && stored.saturday_surcharge_pct === undefined) {
+        migrated.saturday_surcharge_pct = (stored as any).weekend_surcharge_pct;
+        migrated.sunday_surcharge_pct = (stored as any).weekend_surcharge_pct;
+      }
+      setPricing(migrated);
     }
   }, [contractor]);
 
@@ -160,18 +168,33 @@ const ContractorPricingTab = ({ contractor, onUpdate }: ContractorPricingTabProp
               <Label htmlFor="weekend-surcharge" className="cursor-pointer">Enable weekend surcharge</Label>
             </div>
             {pricing.enable_weekend_surcharge && (
-              <div className="space-y-2">
-                <Label>Weekend Surcharge (%)</Label>
-                <Input
-                  type="number"
-                  step="1"
-                  min="0"
-                  max="100"
-                  value={pricing.weekend_surcharge_pct}
-                  onChange={(e) => handleChange("weekend_surcharge_pct", e.target.value)}
-                  className="font-mono max-w-[200px]"
-                />
-                <p className="text-xs text-muted-foreground">Percentage added for Saturday/Sunday jobs</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Saturday Surcharge (%)</Label>
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="100"
+                    value={pricing.saturday_surcharge_pct}
+                    onChange={(e) => handleChange("saturday_surcharge_pct", e.target.value)}
+                    className="font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">Percentage added for Saturday jobs</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Sunday Surcharge (%)</Label>
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="100"
+                    value={pricing.sunday_surcharge_pct}
+                    onChange={(e) => handleChange("sunday_surcharge_pct", e.target.value)}
+                    className="font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">Percentage added for Sunday jobs</p>
+                </div>
               </div>
             )}
           </div>

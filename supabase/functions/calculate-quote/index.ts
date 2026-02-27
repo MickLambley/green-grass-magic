@@ -124,9 +124,10 @@ Deno.serve(async (req) => {
         settings.tier_multiplier = 0.05;
         // Weekend surcharge from contractor settings
         if (pricing.enable_weekend_surcharge) {
-          const pct = pricing.weekend_surcharge_pct ?? 15;
-          settings.saturday_surcharge = 1 + pct / 100;
-          settings.sunday_surcharge = 1 + pct / 100;
+          const satPct = pricing.saturday_surcharge_pct ?? pricing.weekend_surcharge_pct ?? 10;
+          const sunPct = pricing.sunday_surcharge_pct ?? pricing.weekend_surcharge_pct ?? 15;
+          settings.saturday_surcharge = 1 + satPct / 100;
+          settings.sunday_surcharge = 1 + sunPct / 100;
         } else {
           settings.saturday_surcharge = 1;
           settings.sunday_surcharge = 1;
