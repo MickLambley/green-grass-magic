@@ -156,6 +156,12 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
     (c.phone && c.phone.includes(searchQuery))
   );
 
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginatedClients = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  // Reset page when search changes
+  useEffect(() => { setPage(0); }, [searchQuery]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
