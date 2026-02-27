@@ -391,9 +391,38 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     };
 
     if (editingJob) {
+      // Update this job
       const { error } = await supabase.from("jobs").update(payload).eq("id", editingJob.id);
-      if (error) toast.error("Failed to update job");
-      else { toast.success("Job updated"); setDialogOpen(false); fetchData(); }
+      if (error) { toast.error("Failed to update job"); setIsSaving(false); return; }
+
+      // If "all future" scope, also update all future jobs in the series
+      const recurringId = (editingJob as any).recurring_job_id;
+      if (recurringEditScope === "future" && recurringId) {
+        const today = new Date().toISOString().split("T")[0];
+        const futurePayload = {
+          title: payload.title,
+          description: payload.description,
+          scheduled_time: payload.scheduled_time,
+          duration_minutes: payload.duration_minutes,
+          total_price: payload.total_price,
+          notes: payload.notes,
+          original_scheduled_time: payload.original_scheduled_time,
+        };
+        const { error: futureError } = await supabase
+          .from("jobs")
+          .update(futurePayload)
+          .eq("recurring_job_id" as any, recurringId)
+          .neq("id", editingJob.id)
+          .gte("scheduled_date", today);
+        if (futureError) toast.error("Some future jobs failed to update");
+        else toast.success("Updated this job and all future jobs in the series");
+      } else {
+        toast.success("Job updated");
+      }
+      setRecurringEditScope(null);
+      setPendingEditJob(null);
+      setDialogOpen(false);
+      fetchData();
     } else {
       // Create the initial job
       const { error } = await supabase.from("jobs").insert(payload);
