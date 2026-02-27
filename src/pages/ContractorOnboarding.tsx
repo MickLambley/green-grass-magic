@@ -40,12 +40,7 @@ const STEPS: StepConfig[] = [
   { key: "job", title: "First Job", subtitle: "Schedule your first job", icon: Calendar },
 ];
 
-interface SuburbEntry {
-  suburb: string;
-  postcode: string;
-  state: string;
-  selected: boolean;
-}
+
 
 const ContractorOnboarding = () => {
   const navigate = useNavigate();
