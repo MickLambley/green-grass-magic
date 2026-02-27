@@ -423,6 +423,9 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                       <div className="px-3 py-2">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1 flex items-start gap-1.5">
+                            {hasTravelWarning && (
+                              <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />
+                            )}
                             {canDrag && (
                               <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 mt-0.5" />
                             )}
