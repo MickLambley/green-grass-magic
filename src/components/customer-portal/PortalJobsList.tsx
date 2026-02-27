@@ -177,6 +177,17 @@ export const PortalJobsList = ({ userId, contractor }: PortalJobsListProps) => {
                         <span className="text-sm font-medium" style={{ color: contractor.primary_color }}>${job.total_price.toFixed(2)}</span>
                       )}
                       <Badge variant={variant}>{label}</Badge>
+                      {job.status !== "completed" && job.status !== "cancelled" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive h-8 w-8"
+                          onClick={(e) => { e.stopPropagation(); setCancellingJob(job); }}
+                          title="Cancel Booking"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </Button>
+                      )}
                       <ChevronRight className="w-4 h-4 text-muted-foreground" />
                     </div>
                   </div>
