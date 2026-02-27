@@ -253,6 +253,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           description: null,
           notes: b.notes,
           recurrence_rule: null,
+          recurring_job_id: null,
           source: "platform",
           address_street: addr?.street_address,
           address_city: addr?.city,
