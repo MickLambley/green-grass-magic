@@ -175,8 +175,8 @@ serve(async (req) => {
               Authorization: `Bearer ${resendApiKey}`,
             },
             body: JSON.stringify({
-              from: "Lawn Care <onboarding@resend.dev>",
-              to: ["admin@lawnly.com.au"],
+              from: "Yardly <onboarding@resend.dev>",
+              to: ["admin@yardly.com.au"],
               subject: `⚠️ Job #${bookingId.slice(0, 8)} Completed with Issues - Review Required`,
               html: `
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
