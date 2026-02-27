@@ -26,3 +26,9 @@ verify_jwt = false
 
 [functions.test-mode-login]
 verify_jwt = false
+
+[functions.respond-quote]
+verify_jwt = false
+
+[functions.get-quote-by-token]
+verify_jwt = false

@@ -84,6 +84,7 @@ const App = () => (
             <Route path="/payment-success" element={<PaymentSuccess />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
+            <Route path="/quote" element={<QuoteResponse />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>

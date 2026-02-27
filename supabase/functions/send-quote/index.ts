@@ -29,7 +29,7 @@ serve(async (req) => {
     const { quoteId } = await req.json();
     if (!quoteId) throw new Error("Missing quoteId");
 
-    // Fetch quote
+    // Fetch quote (including token)
     const { data: quote, error: qError } = await supabase
       .from("quotes")
       .select("*")
@@ -41,7 +41,7 @@ serve(async (req) => {
     // Verify contractor owns this quote
     const { data: contractor } = await supabase
       .from("contractors")
-      .select("id, business_name, gst_registered, abn")
+      .select("id, business_name, gst_registered, abn, primary_color")
       .eq("user_id", userData.user.id)
       .single();
 
@@ -58,6 +58,12 @@ serve(async (req) => {
 
     if (!client?.email) throw new Error("Client has no email address");
 
+    // Build quote response URL
+    // Determine the app origin from the Referer header or fallback
+    const referer = req.headers.get("referer") || req.headers.get("origin") || "";
+    const appOrigin = referer ? new URL(referer).origin : "https://green-grass-magic.lovable.app";
+    const quoteUrl = `${appOrigin}/quote?token=${quote.token}`;
+
     // Build line items HTML
     const lineItems = Array.isArray(quote.line_items) ? quote.line_items : [];
     const lineItemsHtml = (lineItems as Array<{ description: string; quantity: number; unit_price: number }>)
@@ -71,6 +77,7 @@ serve(async (req) => {
       `).join("");
 
     const businessName = contractor.business_name || "Your Contractor";
+    const brandColor = contractor.primary_color || "#16a34a";
     const isGst = contractor.gst_registered;
     const validUntil = quote.valid_until
       ? new Date(quote.valid_until).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
@@ -78,12 +85,12 @@ serve(async (req) => {
 
     const emailHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-        <div style="background: #16a34a; padding: 24px; border-radius: 8px 8px 0 0;">
+        <div style="background: ${brandColor}; padding: 24px; border-radius: 8px 8px 0 0;">
           <h1 style="color: white; margin: 0; font-size: 24px;">Quote from ${businessName}</h1>
           ${isGst && contractor.abn ? `<p style="color: rgba(255,255,255,0.7); margin: 4px 0 0; font-size: 13px;">ABN: ${contractor.abn}</p>` : ""}
         </div>
         
-        <div style="padding: 24px; background: #fff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+        <div style="padding: 24px; background: #fff; border: 1px solid #e5e7eb; border-top: none;">
           <p>Hi ${client.name},</p>
           <p>Please find your quote below. We'd love to work with you!</p>
           
@@ -113,8 +120,23 @@ serve(async (req) => {
           
           ${quote.notes ? `<p style="margin-top: 16px; color: #666;">${quote.notes}</p>` : ""}
           
-          <p style="color: #666; margin-top: 30px; font-size: 12px;">
-            This quote was sent via Yardly. If you have any questions, please contact ${businessName} directly.
+          <!-- Accept / Decline Buttons -->
+          <div style="margin-top: 32px; text-align: center;">
+            <a href="${quoteUrl}" style="display: inline-block; background: ${brandColor}; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; margin-right: 12px;">
+              ✓ Accept Quote
+            </a>
+            <a href="${quoteUrl}" style="display: inline-block; background: #fff; color: #333; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; border: 2px solid #d1d5db;">
+              ✗ Decline Quote
+            </a>
+          </div>
+          <p style="text-align: center; color: #999; font-size: 12px; margin-top: 12px;">
+            Click either button to view the full quote and confirm your decision.
+          </p>
+        </div>
+        
+        <div style="padding: 16px; text-align: center; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; background: #fafafa;">
+          <p style="color: #666; margin: 0; font-size: 12px;">
+            This quote was sent via Yardly. If you have questions, contact ${businessName} directly.
           </p>
         </div>
       </div>
@@ -139,7 +161,7 @@ serve(async (req) => {
       throw new Error(`Email send failed: ${errText}`);
     }
 
-    console.log("[SEND-QUOTE] Email sent to", client.email);
+    console.log("[SEND-QUOTE] Email sent to", client.email, "with quote URL:", quoteUrl);
 
     return new Response(
       JSON.stringify({ success: true }),
