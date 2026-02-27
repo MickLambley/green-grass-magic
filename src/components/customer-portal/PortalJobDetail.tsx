@@ -202,13 +202,25 @@ export const PortalJobDetail = ({ job, contractor, userId, onBack }: PortalJobDe
         <div className="bg-card rounded-xl p-5 shadow-sm border border-border">
           <h3 className="font-semibold text-foreground text-sm mb-3">Have an issue?</h3>
           <PortalDisputeSection
-            jobId={job.id}
-            contractorId={job.contractor_id}
+            jobId={currentJob.id}
+            contractorId={currentJob.contractor_id}
             userId={userId}
-            jobTotal={job.total_price}
+            jobTotal={currentJob.total_price}
           />
         </div>
       )}
+
+      {/* Cancel Booking Flow */}
+      <CancelBookingFlow
+        open={cancelFlowOpen}
+        onOpenChange={setCancelFlowOpen}
+        jobId={currentJob.id}
+        jobTitle={currentJob.title}
+        contractorId={currentJob.contractor_id}
+        source="job"
+        onCancelled={() => { reloadJob(); }}
+        onRescheduled={() => { reloadJob(); }}
+      />
     </div>
   );
 };
