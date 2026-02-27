@@ -151,10 +151,10 @@ serve(async (req) => {
 
     if (existingClient) {
       clientId = existingClient.id;
-      if (customer_user_id) {
+      if (validatedCustomerUserId) {
         await supabase
           .from("clients")
-          .update({ user_id: customer_user_id })
+          .update({ user_id: validatedCustomerUserId })
           .eq("id", existingClient.id)
           .is("user_id", null);
       }
