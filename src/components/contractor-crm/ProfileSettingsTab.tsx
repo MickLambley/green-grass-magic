@@ -202,7 +202,124 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
         {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
         Save Settings
       </Button>
+
+      {/* Account Section */}
+      <AccountSection />
     </div>
+  );
+};
+
+const emailChangeSchema = z.string().trim().email("Please enter a valid email address").max(255);
+const passwordSchema = z.string().min(6, "Password must be at least 6 characters");
+
+const AccountSection = () => {
+  const [newEmail, setNewEmail] = useState("");
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
+  const handleChangeEmail = async () => {
+    const result = emailChangeSchema.safeParse(newEmail);
+    if (!result.success) {
+      toast.error(result.error.errors[0].message);
+      return;
+    }
+    setEmailLoading(true);
+    const { error } = await supabase.auth.updateUser({
+      email: result.data,
+    });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Confirmation link sent to your new email address. Please check your inbox.");
+      setNewEmail("");
+    }
+    setEmailLoading(false);
+  };
+
+  const handleChangePassword = async () => {
+    const pwResult = passwordSchema.safeParse(newPassword);
+    if (!pwResult.success) {
+      toast.error(pwResult.error.errors[0].message);
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    setPasswordLoading(true);
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Password updated successfully");
+      setNewPassword("");
+      setConfirmPassword("");
+    }
+    setPasswordLoading(false);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="font-display text-lg">Account</CardTitle>
+        <CardDescription>Update your email address or password</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Change Email */}
+        <div className="space-y-3">
+          <Label className="flex items-center gap-2 text-sm font-semibold">
+            <Mail className="w-4 h-4" /> Change Email
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              type="email"
+              placeholder="new@example.com"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              className="flex-1"
+            />
+            <Button onClick={handleChangeEmail} disabled={emailLoading || !newEmail.trim()} size="sm">
+              {emailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send Link"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">A confirmation link will be sent to the new address. The change takes effect after you click the link.</p>
+        </div>
+
+        <Separator />
+
+        {/* Change Password */}
+        <div className="space-y-3">
+          <Label className="flex items-center gap-2 text-sm font-semibold">
+            <Lock className="w-4 h-4" /> Change Password
+          </Label>
+          <div className="space-y-2">
+            <Input
+              type="password"
+              placeholder="New password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+            <Input
+              type="password"
+              placeholder="Confirm new password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+          </div>
+          <Button
+            onClick={handleChangePassword}
+            disabled={passwordLoading || !newPassword || !confirmPassword}
+            size="sm"
+          >
+            {passwordLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Update Password"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
