@@ -138,6 +138,33 @@ export type Database = {
           },
         ]
       }
+      australian_postcodes: {
+        Row: {
+          id: string
+          lat: number
+          lng: number
+          postcode: string
+          state: string
+          suburb: string
+        }
+        Insert: {
+          id?: string
+          lat: number
+          lng: number
+          postcode: string
+          state: string
+          suburb: string
+        }
+        Update: {
+          id?: string
+          lat?: number
+          lng?: number
+          postcode?: string
+          state?: string
+          suburb?: string
+        }
+        Relationships: []
+      }
       bookings: {
         Row: {
           address_id: string
@@ -297,6 +324,38 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "clients_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contractor_service_suburbs: {
+        Row: {
+          contractor_id: string
+          created_at: string
+          id: string
+          postcode: string
+          suburb: string
+        }
+        Insert: {
+          contractor_id: string
+          created_at?: string
+          id?: string
+          postcode: string
+          suburb: string
+        }
+        Update: {
+          contractor_id?: string
+          created_at?: string
+          id?: string
+          postcode?: string
+          suburb?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contractor_service_suburbs_contractor_id_fkey"
             columns: ["contractor_id"]
             isOneToOne: false
             referencedRelation: "contractors"
