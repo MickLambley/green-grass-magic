@@ -33,6 +33,8 @@ const WebsiteBuilderTab = ({ contractor, onUpdate }: WebsiteBuilderTabProps) => 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [logoUrl, setLogoUrl] = useState(contractor.business_logo_url || "");
   const [subdomain, setSubdomain] = useState(contractor.subdomain || "");
   const [copy, setCopy] = useState<WebsiteCopy | null>(
     (contractor.website_copy as unknown as WebsiteCopy) || null
