@@ -338,6 +338,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
 
                 if (entry.type === "travel") {
                   const isShortTravel = heightPx < 24;
+                  const hasWarning = !!entry.travelWarning;
                   return (
                     <div
                       key={`travel-${idx}`}
@@ -348,10 +349,15 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                         zIndex: isShortTravel ? 12 : 5,
                       }}
                     >
-                      <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/80 border border-dashed border-border ${isShortTravel ? "shadow-sm" : ""}`}>
-                        <Car className="w-3 h-3 text-muted-foreground shrink-0" />
-                        <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">
-                          {formatDuration(entry.travelMinutes!)}
+                      <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed ${
+                        hasWarning
+                          ? "bg-destructive/10 border-destructive/40"
+                          : "bg-muted/80 border-border"
+                      } ${isShortTravel ? "shadow-sm" : ""}`}>
+                        {hasWarning && <AlertTriangle className="w-3 h-3 text-destructive shrink-0" />}
+                        <Car className={`w-3 h-3 shrink-0 ${hasWarning ? "text-destructive" : "text-muted-foreground"}`} />
+                        <span className={`text-[10px] font-medium whitespace-nowrap ${hasWarning ? "text-destructive" : "text-muted-foreground"}`}>
+                          {entry.travelMinutes! > 0 ? formatDuration(entry.travelMinutes!) : "Overlap!"}
                         </span>
                       </div>
                     </div>
