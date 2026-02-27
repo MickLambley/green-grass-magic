@@ -291,6 +291,18 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   };
 
   const openEditDialog = (job: Job) => {
+    // Check if this job belongs to a recurring series
+    const recurringId = (job as any).recurring_job_id;
+    if (recurringId) {
+      setPendingEditJob(job);
+      setRecurringEditScope(null);
+      setRecurringEditOpen(true);
+      return;
+    }
+    proceedToEditDialog(job);
+  };
+
+  const proceedToEditDialog = (job: Job) => {
     setEditingJob(job);
     const recurrence = job.recurrence_rule as unknown as RecurrenceRule | null;
     setForm({
@@ -308,6 +320,18 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       recurrence_count: recurrence?.count?.toString() || "4",
     });
     setDialogOpen(true);
+  };
+
+  const handleRecurringThisOnly = () => {
+    setRecurringEditScope("this");
+    setRecurringEditOpen(false);
+    if (pendingEditJob) proceedToEditDialog(pendingEditJob);
+  };
+
+  const handleRecurringAllFuture = () => {
+    setRecurringEditScope("future");
+    setRecurringEditOpen(false);
+    if (pendingEditJob) proceedToEditDialog(pendingEditJob);
   };
 
   // Helper: get existing job slots for a given date (for conflict detection)
