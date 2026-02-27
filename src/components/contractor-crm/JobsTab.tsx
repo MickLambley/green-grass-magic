@@ -405,19 +405,27 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   };
 
   const handleConfirmJob = async (jobId: string, source: "crm" | "platform") => {
+    // Clean up any pending alternative suggestions for this job
+    if (pendingSuggestionJobIds.has(jobId)) {
+      if (source === "platform") {
+        await supabase.from("alternative_suggestions").update({ status: "dismissed" }).eq("booking_id", jobId).eq("status", "pending");
+      } else {
+        await supabase.from("alternative_suggestions").update({ status: "dismissed" }).eq("job_id", jobId).eq("status", "pending");
+      }
+    }
+
     if (source === "platform") {
-      // Accept a platform booking - set contractor_id and confirm
       const { error } = await supabase.from("bookings").update({ 
         contractor_id: contractorId, 
         status: "confirmed" as any,
         contractor_accepted_at: new Date().toISOString(),
       }).eq("id", jobId);
       if (error) toast.error("Failed to accept booking");
-      else { toast.success("Booking accepted"); fetchData(); }
+      else { toast.success("Booking accepted"); fetchData(); fetchPendingSuggestions(); }
     } else {
       const { error } = await supabase.from("jobs").update({ status: "scheduled" }).eq("id", jobId);
       if (error) toast.error("Failed to confirm job");
-      else { toast.success("Job confirmed"); fetchData(); }
+      else { toast.success("Job confirmed"); fetchData(); fetchPendingSuggestions(); }
     }
   };
 
