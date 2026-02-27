@@ -324,7 +324,8 @@ const ContractorDashboard = () => {
 
         <main className="flex-1 px-4 sm:px-6 py-5 space-y-4">
           <StripeConnectBanner stripeAccountId={contractor.stripe_account_id} stripeOnboardingComplete={contractor.stripe_onboarding_complete} />
-            {activeTab === "overview" && (
+          {activeTab === "overview" && (
+            <div className="space-y-6">
               <RouteOptimizationBanner
                 contractorId={contractor.id}
                 subscriptionTier={contractor.subscription_tier}
