@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, DollarSign, MapPin, ChevronRight, Image, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Calendar, Clock, DollarSign, MapPin, ChevronRight, Image, Loader2, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
 import PortalAlternativeTimesCard from "./PortalAlternativeTimesCard";
 import PortalJobDetail from "./PortalJobDetail";
+import CancelBookingFlow from "./CancelBookingFlow";
 import type { ContractorBrand } from "./PortalLayout";
 
 interface PortalJob {
