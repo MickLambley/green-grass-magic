@@ -136,7 +136,7 @@ const getEmailContent = (
             <p>Hi ${customerName},</p>
             <p>Here's an update on your lawn mowing booking:</p>
             ${baseInfo}
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawn Care Team</p>
+            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
           </div>
         `,
       };
