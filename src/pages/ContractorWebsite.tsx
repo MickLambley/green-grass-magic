@@ -48,6 +48,7 @@ const ContractorWebsite = () => {
   const [contractor, setContractor] = useState<ContractorSite | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [serviceSuburbs, setServiceSuburbs] = useState<{ suburb: string; postcode: string }[]>([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
