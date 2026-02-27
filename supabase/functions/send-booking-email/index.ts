@@ -253,7 +253,7 @@ serve(async (req) => {
     console.log(`Sending ${emailType} email to ${userEmail}`);
 
     const emailResponse = await resend.emails.send({
-      from: "Lawn Care <onboarding@resend.dev>",
+      from: "Yardly <onboarding@resend.dev>",
       to: [userEmail],
       subject: emailContent.subject,
       html: emailContent.html,
