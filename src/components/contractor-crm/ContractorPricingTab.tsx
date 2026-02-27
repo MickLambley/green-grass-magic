@@ -45,7 +45,13 @@ const ContractorPricingTab = ({ contractor, onUpdate }: ContractorPricingTabProp
     // Load existing pricing from contractor's questionnaire_responses or a dedicated field
     const stored = (contractor.questionnaire_responses as any)?.pricing as PricingConfig | undefined;
     if (stored) {
-      setPricing({ ...DEFAULT_PRICING, ...stored });
+      // Migrate old single weekend_surcharge_pct to split fields
+      const migrated = { ...DEFAULT_PRICING, ...stored };
+      if ((stored as any).weekend_surcharge_pct !== undefined && stored.saturday_surcharge_pct === undefined) {
+        migrated.saturday_surcharge_pct = (stored as any).weekend_surcharge_pct;
+        migrated.sunday_surcharge_pct = (stored as any).weekend_surcharge_pct;
+      }
+      setPricing(migrated);
     }
   }, [contractor]);
 
