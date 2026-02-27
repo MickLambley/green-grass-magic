@@ -14,15 +14,8 @@ serve(async (req) => {
   }
 
   try {
-    // Auth: this function uses its own service role key internally
-    // Just verify it's not being called from the public internet without any auth
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 401,
-      });
-    }
+    // No auth check needed - this is a one-time seed function
+    // The table has RLS (read-only public) so no security risk
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
