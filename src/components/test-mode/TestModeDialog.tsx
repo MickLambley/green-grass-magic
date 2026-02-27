@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { isTestModeAllowed } from "@/lib/testMode";
+import { isTestModeAllowed, getTestKey } from "@/lib/testMode";
 import { User, Briefcase, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -39,7 +39,8 @@ const TestModeDialog = ({ open, onOpenChange }: TestModeDialogProps) => {
       // Sign out any existing session first
       await supabase.auth.signOut();
 
-      const testKey = import.meta.env.VITE_TEST_MODE_SECRET_KEY;
+      const testKey = getTestKey();
+      if (!testKey) throw new Error("Test key not found. Please reload with ?test_key= parameter.");
       const { data, error } = await supabase.functions.invoke("test-mode-login", {
         body: { persona: persona.key, test_key: testKey },
       });

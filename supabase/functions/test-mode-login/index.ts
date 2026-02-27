@@ -5,8 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const TEST_SECRET_KEY = Deno.env.get("VITE_TEST_MODE_SECRET_KEY") || "";
-const TEST_MODE_ENABLED = Deno.env.get("VITE_ENABLE_TEST_MODE") === "true";
+const TEST_SECRET_KEY = Deno.env.get("VITE_TEST_MODE_SECRET_KEY") || Deno.env.get("TEST_MODE_SECRET_KEY") || "";
+const TEST_MODE_ENABLED = Deno.env.get("VITE_ENABLE_TEST_MODE") === "true" || Deno.env.get("ENABLE_TEST_MODE") === "true";
 
 interface TestPersonaConfig {
   email: string;

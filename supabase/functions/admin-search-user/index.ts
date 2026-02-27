@@ -87,13 +87,23 @@ serve(async (req) => {
       );
     }
 
-    console.log("Searching for users matching:", sanitizedQuery);
+    if (sanitizedQuery.length > 100) {
+      return new Response(
+        JSON.stringify({ error: "Search query is too long" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Escape SQL LIKE wildcards to prevent unintended matching
+    const escapedQuery = sanitizedQuery.replace(/[%_\\]/g, '\\$&');
+
+    console.log("Searching for users matching:", escapedQuery);
 
     // Search profiles by name using server-side filtering
     const { data: profiles, error: profilesError } = await adminClient
       .from("profiles")
       .select("user_id, full_name")
-      .ilike("full_name", `%${sanitizedQuery}%`)
+      .ilike("full_name", `%${escapedQuery}%`)
       .limit(10);
 
     if (profilesError) {

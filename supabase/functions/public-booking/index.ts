@@ -103,11 +103,22 @@ serve(async (req) => {
       });
     }
 
-    // Validate customer_user_id if provided — must be a valid UUID format
-    if (customer_user_id && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(customer_user_id)) {
-      return new Response(JSON.stringify({ error: "Invalid user ID format" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // Validate customer_user_id if provided — must be a valid UUID and belong to an actual auth user
+    let validatedCustomerUserId: string | null = null;
+    if (customer_user_id) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(customer_user_id)) {
+        return new Response(JSON.stringify({ error: "Invalid user ID format" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      // Verify this user actually exists in auth
+      const { data: authUser, error: authErr } = await supabase.auth.admin.getUserById(customer_user_id);
+      if (authErr || !authUser?.user) {
+        console.warn("customer_user_id does not match a real user, ignoring:", customer_user_id);
+        // Silently ignore invalid user_id rather than linking to a non-existent user
+      } else {
+        validatedCustomerUserId = customer_user_id;
+      }
     }
 
     // Find contractor by subdomain
@@ -140,10 +151,10 @@ serve(async (req) => {
 
     if (existingClient) {
       clientId = existingClient.id;
-      if (customer_user_id) {
+      if (validatedCustomerUserId) {
         await supabase
           .from("clients")
-          .update({ user_id: customer_user_id })
+          .update({ user_id: validatedCustomerUserId })
           .eq("id", existingClient.id)
           .is("user_id", null);
       }
@@ -156,7 +167,7 @@ serve(async (req) => {
           email: cleanEmail,
           phone: customer_phone ? String(customer_phone).replace(/[\s\-()]/g, "").slice(0, 15) : null,
           address: cleanAddress ? { street: cleanAddress } : null,
-          user_id: customer_user_id || null,
+          user_id: validatedCustomerUserId || null,
         })
         .select("id")
         .single();

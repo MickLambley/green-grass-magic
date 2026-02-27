@@ -111,7 +111,7 @@ serve(async (req) => {
       await supabase.from("notifications").insert({
         user_id: booking.user_id,
         title: "⚠️ Payout Failed",
-        message: `Stripe payout failed for booking #${bookingId.slice(0, 8)}. Error: ${errorMessage}.`,
+        message: `Payout failed for booking #${bookingId.slice(0, 8)}. Our team has been notified and will resolve this shortly.`,
         type: "error",
         booking_id: bookingId,
       });
@@ -183,7 +183,7 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: "Unable to process payout" }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
     );
   }
