@@ -625,7 +625,16 @@ serve(async (req) => {
       });
     }
 
-    // ── Cron/batch run: DRY RUN only — calculate potential savings and notify ──
+    // ── Cron/batch run: require CRON_SECRET ──
+    const cronAuthHeader = req.headers.get("Authorization");
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    if (!cronSecret || cronAuthHeader !== `Bearer ${cronSecret}`) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // DRY RUN only — calculate potential savings and notify
     const { data: contractors } = await supabase
       .from("contractors")
       .select("id, subscription_tier, user_id")
