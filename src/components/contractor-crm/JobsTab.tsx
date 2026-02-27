@@ -564,6 +564,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     return matchesSearch && matchesStatus;
   });
 
+  // Paginated slice for list view
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginatedJobs = filtered.slice(listPage * PAGE_SIZE, (listPage + 1) * PAGE_SIZE);
+
+  // Reset page when filters change
+  useEffect(() => { setListPage(0); }, [searchQuery, statusFilter]);
+
   // Pending confirmation jobs for the hero section
   const pendingJobs = jobs.filter(j => j.status === "pending_confirmation" || j.status === "pending");
 
