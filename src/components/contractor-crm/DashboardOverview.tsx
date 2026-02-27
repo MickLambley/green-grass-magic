@@ -39,6 +39,22 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
   const [upcomingJobs, setUpcomingJobs] = useState<(Job & { client_name?: string; client_address?: ClientAddress | null })[]>([]);
   const [websiteBookings, setWebsiteBookings] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
+  const [completionJob, setCompletionJob] = useState<{
+    id: string; title: string; source: string; total_price: number | null; client_name: string; payment_status: string;
+  } | null>(null);
+
+  const handleQuickComplete = (job: Job & { client_name?: string }) => {
+    setCompletionJob({
+      id: job.id,
+      title: job.title,
+      source: job.source === "website_booking" ? "website_booking" : "manual",
+      total_price: job.total_price,
+      client_name: job.client_name || "Unknown",
+      payment_status: job.payment_status,
+    });
+    setCompletionDialogOpen(true);
+  };
 
   useEffect(() => {
     fetchAll();
