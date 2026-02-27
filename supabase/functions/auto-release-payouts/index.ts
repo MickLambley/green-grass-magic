@@ -139,7 +139,7 @@ serve(async (req) => {
                   Authorization: `Bearer ${resendApiKey}`,
                 },
                 body: JSON.stringify({
-                  from: "Lawn Care <onboarding@resend.dev>",
+                  from: "Yardly <onboarding@resend.dev>",
                   to: [customerEmail],
                   subject: "Payment Automatically Released",
                   html: `
