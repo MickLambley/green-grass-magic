@@ -14,8 +14,17 @@ serve(async (req) => {
   }
 
   try {
-    // No auth check needed - this is a one-time seed function
-    // The table has RLS (read-only public) so no security risk
+    // Auth: require service role key or CRON_SECRET
+    const authHeader = req.headers.get("Authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!token || (token !== cronSecret && token !== serviceRoleKey)) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
+    }
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
