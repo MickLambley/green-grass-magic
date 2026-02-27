@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Calendar, Clock, DollarSign, CheckCircle2, Image, FileText } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, DollarSign, CheckCircle2, Image, FileText, XCircle } from "lucide-react";
 import PortalDisputeSection from "./PortalDisputeSection";
+import CancelBookingFlow from "./CancelBookingFlow";
 import type { ContractorBrand } from "./PortalLayout";
 
 interface PortalJob {
