@@ -148,8 +148,8 @@ serve(async (req) => {
               Authorization: `Bearer ${resendApiKey}`,
             },
             body: JSON.stringify({
-              from: "Lawn Care <onboarding@resend.dev>",
-              to: ["admin@lawnly.com.au"],
+              from: "Yardly <onboarding@resend.dev>",
+              to: ["admin@yardly.com.au"],
               subject: `${isPostPayment ? "⚠️ Post-Payment " : ""}Dispute Raised - Job #${bookingId.slice(0, 8)}`,
               html: `
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -178,7 +178,7 @@ serve(async (req) => {
                 Authorization: `Bearer ${resendApiKey}`,
               },
               body: JSON.stringify({
-                from: "Lawn Care <onboarding@resend.dev>",
+                from: "Yardly <onboarding@resend.dev>",
                 to: [contractorEmail],
                 subject: `Issue Reported - Job #${bookingId.slice(0, 8)}`,
                 html: `
@@ -189,7 +189,7 @@ serve(async (req) => {
                     <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
                       <p style="margin: 5px 0;"><strong>Issue:</strong> ${description}</p>
                     </div>
-                    <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawnly Team</p>
+                    <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
                   </div>
                 `,
               }),

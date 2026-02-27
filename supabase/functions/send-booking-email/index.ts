@@ -76,7 +76,7 @@ const getEmailContent = (
             <p><strong>Your card has been saved but you will not be charged until a contractor accepts your job.</strong></p>
             <p>You will be charged <strong>$${booking.total_price?.toFixed(2) || "0.00"}</strong> when a contractor accepts.</p>
             <p>You'll receive another email once a contractor is assigned.</p>
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawnly Team</p>
+            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
           </div>
         `,
       };
@@ -91,7 +91,7 @@ const getEmailContent = (
             <p>Great news! Your payment has been received and your lawn mowing booking is now confirmed.</p>
             ${baseInfo}
             <p>A contractor will arrive during your selected time slot. Please ensure access to your lawn on the scheduled date.</p>
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawn Care Team</p>
+            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
           </div>
         `,
       };
@@ -107,7 +107,7 @@ const getEmailContent = (
             ${baseInfo}
             <p><strong>Status:</strong> ${booking.status}</p>
             <p>If you have any questions, please don't hesitate to contact us.</p>
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawn Care Team</p>
+            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
           </div>
         `,
       };
@@ -122,7 +122,7 @@ const getEmailContent = (
             <p>Your lawn mowing booking has been cancelled.</p>
             ${baseInfo}
             <p>If this was a mistake or you'd like to rebook, please visit our website.</p>
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawn Care Team</p>
+            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
           </div>
         `,
       };
@@ -136,7 +136,7 @@ const getEmailContent = (
             <p>Hi ${customerName},</p>
             <p>Here's an update on your lawn mowing booking:</p>
             ${baseInfo}
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawn Care Team</p>
+            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
           </div>
         `,
       };
@@ -253,7 +253,7 @@ serve(async (req) => {
     console.log(`Sending ${emailType} email to ${userEmail}`);
 
     const emailResponse = await resend.emails.send({
-      from: "Lawn Care <onboarding@resend.dev>",
+      from: "Yardly <onboarding@resend.dev>",
       to: [userEmail],
       subject: emailContent.subject,
       html: emailContent.html,
@@ -268,7 +268,7 @@ serve(async (req) => {
   } catch (error: any) {
     console.error("Error in send-booking-email function:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "An internal error occurred" }),
       {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },

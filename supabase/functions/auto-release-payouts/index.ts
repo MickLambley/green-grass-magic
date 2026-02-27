@@ -139,7 +139,7 @@ serve(async (req) => {
                   Authorization: `Bearer ${resendApiKey}`,
                 },
                 body: JSON.stringify({
-                  from: "Lawn Care <onboarding@resend.dev>",
+                  from: "Yardly <onboarding@resend.dev>",
                   to: [customerEmail],
                   subject: "Payment Automatically Released",
                   html: `
@@ -152,7 +152,7 @@ serve(async (req) => {
                         <p style="margin: 5px 0;">The 48-hour review period has elapsed and payment was released automatically.</p>
                       </div>
                       <p>You can still report an issue within 7 days if needed by visiting your dashboard.</p>
-                      <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawnly Team</p>
+                      <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
                     </div>
                   `,
                 }),
@@ -173,7 +173,7 @@ serve(async (req) => {
                   Authorization: `Bearer ${resendApiKey}`,
                 },
                 body: JSON.stringify({
-                  from: "Lawn Care <onboarding@resend.dev>",
+                  from: "Yardly <onboarding@resend.dev>",
                   to: [contractorEmail],
                   subject: "Payment Released! 💰",
                   html: `
@@ -184,7 +184,7 @@ serve(async (req) => {
                       <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
                         <p style="margin: 5px 0;"><strong>Your Earnings:</strong> $${(Number(booking.total_price) * 0.85).toFixed(2)} AUD</p>
                       </div>
-                      <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawnly Team</p>
+                      <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
                     </div>
                   `,
                 }),

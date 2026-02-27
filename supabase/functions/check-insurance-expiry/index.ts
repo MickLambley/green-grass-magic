@@ -92,9 +92,9 @@ Deno.serve(async (req) => {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
             body: JSON.stringify({
-              from: "Lawnly <notifications@updates.lovable.app>",
+              from: "Yardly <notifications@updates.lovable.app>",
               to: [emailMap[contractor.user_id]],
-              subject: "⛔ Your Lawnly Account Has Been Suspended - Insurance Expired",
+              subject: "⛔ Your Yardly Account Has Been Suspended - Insurance Expired",
               html: `<p>Hi ${contractorName},</p><p>Your public liability insurance has expired as of ${expiryDate.toLocaleDateString()}. Your account has been suspended and you cannot accept new jobs until you upload a renewed certificate.</p><p>Please log in to your contractor dashboard and upload your renewed insurance certificate.</p>`,
             }),
           });
@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
             body: JSON.stringify({
-              from: "Lawnly <notifications@updates.lovable.app>",
+              from: "Yardly <notifications@updates.lovable.app>",
               to: [emailMap[contractor.user_id]],
               subject: `⚠️ Insurance Expiring in ${daysUntilExpiry} Days - Action Required`,
               html: `<p>Hi ${contractorName},</p><p>Your public liability insurance expires on ${expiryDate.toLocaleDateString()} (${daysUntilExpiry} days). You've been suspended from accepting new jobs. Please renew and upload your new certificate.</p>`,
@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
             body: JSON.stringify({
-              from: "Lawnly <notifications@updates.lovable.app>",
+              from: "Yardly <notifications@updates.lovable.app>",
               to: [emailMap[contractor.user_id]],
               subject: "📋 Insurance Renewal Reminder",
               html: `<p>Hi ${contractorName},</p><p>This is a friendly reminder that your public liability insurance expires on ${expiryDate.toLocaleDateString()} (${daysUntilExpiry} days away). Please renew it before expiry to avoid any disruption to your account.</p>`,

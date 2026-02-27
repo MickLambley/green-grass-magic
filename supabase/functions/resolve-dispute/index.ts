@@ -102,7 +102,7 @@ serve(async (req) => {
         await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
-          body: JSON.stringify({ from: "Lawn Care <onboarding@resend.dev>", to: [to], subject, html }),
+          body: JSON.stringify({ from: "Yardly <onboarding@resend.dev>", to: [to], subject, html }),
         });
       } catch (e) {
         logStep("Email failed (non-blocking)", { error: String(e) });
@@ -112,7 +112,7 @@ serve(async (req) => {
     const wrapEmail = (content: string) => `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
         ${content}
-        <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawnly Team</p>
+        <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
       </div>
     `;
 
@@ -289,7 +289,7 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: "An internal error occurred" }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
     );
   }
