@@ -303,8 +303,15 @@ serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
+    // Only expose safe validation messages, not internal details
+    const safeMessages = [
+      "No authorization header provided", "User not authenticated", "Contractor profile not found",
+      "Missing bookingId", "Booking not found", "You are not assigned to this booking",
+      "Booking must be in confirmed status to complete",
+    ];
+    const isSafe = safeMessages.some(m => errorMessage === m) || errorMessage.startsWith("Minimum 4 before");
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: isSafe ? errorMessage : "Unable to complete job" }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
     );
   }

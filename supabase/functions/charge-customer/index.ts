@@ -289,8 +289,10 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
     const isCardError = error instanceof Error && ('type' in error && (error as any).type === 'StripeCardError');
+    // Return generic message to client; log details server-side only
+    const clientMessage = isCardError ? "Your card was declined. Please try a different payment method." : "Unable to process payment";
     return new Response(
-      JSON.stringify({ error: errorMessage, isCardError, code: isCardError ? (error as any).code : undefined }),
+      JSON.stringify({ error: clientMessage, isCardError }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
     );
   }

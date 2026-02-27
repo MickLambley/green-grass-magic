@@ -167,7 +167,7 @@ serve(async (req) => {
           email: cleanEmail,
           phone: customer_phone ? String(customer_phone).replace(/[\s\-()]/g, "").slice(0, 15) : null,
           address: cleanAddress ? { street: cleanAddress } : null,
-          user_id: customer_user_id || null,
+          user_id: validatedCustomerUserId || null,
         })
         .select("id")
         .single();

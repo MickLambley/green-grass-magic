@@ -211,8 +211,16 @@ serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
+    const safeMessages = [
+      "No authorization header provided", "User not authenticated", "Missing bookingId",
+      "Description must be at least 20 characters", "Missing dispute reason",
+      "Booking not found", "Not your booking", "Booking is not eligible for dispute",
+      "The 7-day dispute window has expired", "Suggested refund amount is invalid",
+      "Booking has no completion date",
+    ];
+    const isSafe = safeMessages.includes(errorMessage);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: isSafe ? errorMessage : "Unable to process dispute" }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
     );
   }
