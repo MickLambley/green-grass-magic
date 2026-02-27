@@ -24,6 +24,7 @@ import AlternativeTimeTab from "@/components/contractor-crm/AlternativeTimeTab";
 import RouteOptimizationBanner from "@/components/contractor-crm/RouteOptimizationBanner";
 import RouteOptimizationModal from "@/components/contractor-crm/RouteOptimizationModal";
 import OptimizationPreviewDialog from "@/components/contractor-crm/OptimizationPreviewDialog";
+import StripeConnectBanner from "@/components/contractor-crm/StripeConnectBanner";
 type Contractor = Tables<"contractors">;
 
 const NAV_ITEMS = [
@@ -133,7 +134,7 @@ const ContractorDashboard = () => {
       .eq("user_id", user.id).single();
     if (!contractorData) { toast.error("Profile not found"); navigate("/contractor-auth"); return; }
 
-    if (!contractorData.business_name && !contractorData.abn) {
+    if (!contractorData.onboarding_completed) {
       navigate("/contractor-onboarding");
       return;
     }
@@ -322,7 +323,8 @@ const ContractorDashboard = () => {
           </div>
         </header>
 
-        <main className="flex-1 px-4 sm:px-6 py-5">
+        <main className="flex-1 px-4 sm:px-6 py-5 space-y-4">
+          <StripeConnectBanner stripeAccountId={contractor.stripe_account_id} stripeOnboardingComplete={contractor.stripe_onboarding_complete} />
           {activeTab === "overview" && (
             <div className="space-y-6">
               <RouteOptimizationBanner
