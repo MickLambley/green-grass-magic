@@ -249,7 +249,7 @@ serve(async (req) => {
                         <p style="margin: 5px 0;"><strong>Amount:</strong> $${Number(booking.total_price).toFixed(2)}</p>
                       </div>
                       <p>Please review the photos and approve the payment. If you don't respond, payment will be automatically released in 48 hours.</p>
-                      <p style="color: #666; margin-top: 30px;">Best regards,<br>The Lawnly Team</p>
+                      <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
                     </div>
                   `,
                 }),
