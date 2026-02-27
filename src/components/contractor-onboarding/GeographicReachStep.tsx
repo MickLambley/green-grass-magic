@@ -13,7 +13,6 @@ import type { GeographicData, IdentityBusinessData } from "./types";
 interface GeographicReachStepProps {
   data: GeographicData;
   onChange: (data: GeographicData) => void;
-  identityData?: IdentityBusinessData;
   onNext: () => void;
   onBack: () => void;
 }
