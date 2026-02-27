@@ -408,9 +408,9 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           notes: payload.notes,
           original_scheduled_time: payload.original_scheduled_time,
         };
-        const { error: futureError } = await (supabase
+        const { error: futureError } = await supabase
           .from("jobs")
-          .update(futurePayload) as any)
+          .update(futurePayload)
           .eq("recurring_job_id", recurringId)
           .neq("id", editingJob.id)
           .gte("scheduled_date", today);
