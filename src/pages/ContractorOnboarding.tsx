@@ -142,17 +142,14 @@ const ContractorOnboarding = () => {
           }
         }
       }
-      // Pre-fill service area from business address
-      if (contractorData.business_address) {
-        setServiceAreaAddress(contractorData.business_address);
-      }
-      if (contractorData.service_center_lat && contractorData.service_center_lng) {
-        setServiceAreaLat(contractorData.service_center_lat);
-        setServiceAreaLng(contractorData.service_center_lng);
-      }
-      if (contractorData.service_radius_km) {
-        setServiceRadiusKm(contractorData.service_radius_km);
-      }
+      // Pre-fill geographic data from contractor record
+      setGeoData(prev => ({
+        ...prev,
+        baseAddress: contractorData.business_address || "",
+        baseAddressLat: contractorData.service_center_lat || null,
+        baseAddressLng: contractorData.service_center_lng || null,
+        maxTravelDistanceKm: contractorData.service_radius_km || 15,
+      }));
     }
 
     setIsLoading(false);
