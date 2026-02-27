@@ -396,7 +396,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       if (error) { toast.error("Failed to update job"); setIsSaving(false); return; }
 
       // If "all future" scope, also update all future jobs in the series
-      const recurringId = (editingJob as any).recurring_job_id;
+      const recurringId = editingJob.recurring_job_id;
       if (recurringEditScope === "future" && recurringId) {
         const today = new Date().toISOString().split("T")[0];
         const futurePayload = {
