@@ -160,8 +160,110 @@ const WebsiteBuilderTab = ({ contractor, onUpdate }: WebsiteBuilderTabProps) => 
     toast.success("URL copied!");
   };
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Logo must be under 2MB");
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please upload an image file");
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    const ext = file.name.split(".").pop();
+    const path = `${contractor.id}/logo.${ext}`;
+
+    const { error: uploadErr } = await supabase.storage
+      .from("contractor-documents")
+      .upload(path, file, { upsert: true });
+
+    if (uploadErr) {
+      toast.error("Failed to upload logo");
+      setIsUploadingLogo(false);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from("contractor-documents")
+      .getPublicUrl(path);
+
+    const publicUrl = urlData.publicUrl;
+
+    const { data, error } = await supabase
+      .from("contractors")
+      .update({ business_logo_url: publicUrl })
+      .eq("id", contractor.id)
+      .select()
+      .single();
+
+    if (!error && data) {
+      setLogoUrl(publicUrl);
+      toast.success("Logo uploaded!");
+      onUpdate(data);
+    } else {
+      toast.error("Failed to save logo");
+    }
+    setIsUploadingLogo(false);
+  };
+
+  const handleRemoveLogo = async () => {
+    const { data, error } = await supabase
+      .from("contractors")
+      .update({ business_logo_url: null })
+      .eq("id", contractor.id)
+      .select()
+      .single();
+
+    if (!error && data) {
+      setLogoUrl("");
+      toast.success("Logo removed");
+      onUpdate(data);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-2xl">
+      {/* Logo Upload */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-display text-lg flex items-center gap-2">
+            <Upload className="w-5 h-5" /> Business Logo
+          </CardTitle>
+          <CardDescription>Upload your logo to use on your website, emails, and invoices</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Business logo" className="w-16 h-16 rounded-xl object-cover border border-border" />
+            ) : (
+              <div className="w-16 h-16 rounded-xl bg-muted flex items-center justify-center border border-dashed border-border">
+                <Globe className="w-6 h-6 text-muted-foreground" />
+              </div>
+            )}
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" asChild disabled={isUploadingLogo}>
+                  <label className="cursor-pointer">
+                    {isUploadingLogo ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Upload className="w-4 h-4 mr-1.5" />}
+                    {logoUrl ? "Replace" : "Upload"}
+                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                  </label>
+                </Button>
+                {logoUrl && (
+                  <Button variant="ghost" size="sm" onClick={handleRemoveLogo}>
+                    <Trash2 className="w-4 h-4 mr-1.5" /> Remove
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">PNG, JPG or SVG. Max 2MB.</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Status */}
       <Card>
         <CardHeader>

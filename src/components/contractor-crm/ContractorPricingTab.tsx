@@ -168,18 +168,33 @@ const ContractorPricingTab = ({ contractor, onUpdate }: ContractorPricingTabProp
               <Label htmlFor="weekend-surcharge" className="cursor-pointer">Enable weekend surcharge</Label>
             </div>
             {pricing.enable_weekend_surcharge && (
-              <div className="space-y-2">
-                <Label>Weekend Surcharge (%)</Label>
-                <Input
-                  type="number"
-                  step="1"
-                  min="0"
-                  max="100"
-                  value={pricing.weekend_surcharge_pct}
-                  onChange={(e) => handleChange("weekend_surcharge_pct", e.target.value)}
-                  className="font-mono max-w-[200px]"
-                />
-                <p className="text-xs text-muted-foreground">Percentage added for Saturday/Sunday jobs</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Saturday Surcharge (%)</Label>
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="100"
+                    value={pricing.saturday_surcharge_pct}
+                    onChange={(e) => handleChange("saturday_surcharge_pct", e.target.value)}
+                    className="font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">Percentage added for Saturday jobs</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Sunday Surcharge (%)</Label>
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="100"
+                    value={pricing.sunday_surcharge_pct}
+                    onChange={(e) => handleChange("sunday_surcharge_pct", e.target.value)}
+                    className="font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">Percentage added for Sunday jobs</p>
+                </div>
               </div>
             )}
           </div>
