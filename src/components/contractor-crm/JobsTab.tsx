@@ -429,7 +429,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       const createPayload = { ...payload, ...(seriesId ? { recurring_job_id: seriesId } : {}) };
 
       // Create the initial job
-      const { error } = await supabase.from("jobs").insert(createPayload as any);
+      const { error } = await supabase.from("jobs").insert(createPayload);
       if (error) { toast.error("Failed to create job"); setIsSaving(false); return; }
 
       // If recurring, create additional jobs
