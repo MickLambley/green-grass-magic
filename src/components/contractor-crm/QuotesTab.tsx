@@ -8,14 +8,14 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Pencil, Loader2, FileText, Trash2, ArrowRight } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, FileText, Trash2, ArrowRight, UserPlus, Send, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import type { Tables, Json } from "@/integrations/supabase/types";
@@ -47,7 +47,13 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [isConverting, setIsConverting] = useState<string | null>(null);
+
+  // Inline new client form
+  const [showNewClient, setShowNewClient] = useState(false);
+  const [newClientForm, setNewClientForm] = useState({ name: "", email: "", phone: "" });
+  const [isCreatingClient, setIsCreatingClient] = useState(false);
 
   const [form, setForm] = useState({
     client_id: "",
@@ -82,6 +88,8 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
     setEditingQuote(null);
     setForm({ client_id: clients[0]?.id || "", notes: "", valid_until: "", status: "draft" });
     setLineItems([{ description: "Lawn Mowing", quantity: 1, unit_price: 0 }]);
+    setShowNewClient(false);
+    setNewClientForm({ name: "", email: "", phone: "" });
     setDialogOpen(true);
   };
 
@@ -95,14 +103,41 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
     });
     const items = Array.isArray(quote.line_items) ? (quote.line_items as unknown as LineItem[]) : [];
     setLineItems(items.length > 0 ? items : [{ description: "", quantity: 1, unit_price: 0 }]);
+    setShowNewClient(false);
     setDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!form.client_id) { toast.error("Select a client"); return; }
-    if (lineItems.every((li) => !li.description.trim())) { toast.error("Add at least one line item"); return; }
+  const handleCreateInlineClient = async () => {
+    if (!newClientForm.name.trim()) { toast.error("Client name is required"); return; }
+    setIsCreatingClient(true);
 
-    setIsSaving(true);
+    const { data, error } = await supabase
+      .from("clients")
+      .insert({
+        contractor_id: contractorId,
+        name: newClientForm.name.trim(),
+        email: newClientForm.email.trim() || null,
+        phone: newClientForm.phone.trim() || null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      toast.error("Failed to create client");
+    } else if (data) {
+      setClients((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+      setForm((prev) => ({ ...prev, client_id: data.id }));
+      setShowNewClient(false);
+      setNewClientForm({ name: "", email: "", phone: "" });
+      toast.success(`Client "${data.name}" created`);
+    }
+    setIsCreatingClient(false);
+  };
+
+  const saveQuote = async (status: string): Promise<string | null> => {
+    if (!form.client_id) { toast.error("Select a client"); return null; }
+    if (lineItems.every((li) => !li.description.trim())) { toast.error("Add at least one line item"); return null; }
+
     const validItems = lineItems.filter((li) => li.description.trim());
     const total = validItems.reduce((sum, li) => sum + li.quantity * li.unit_price, 0);
 
@@ -113,19 +148,55 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
       total,
       notes: form.notes.trim() || null,
       valid_until: form.valid_until || null,
-      status: form.status,
+      status,
     };
 
     if (editingQuote) {
       const { error } = await supabase.from("quotes").update(payload).eq("id", editingQuote.id);
-      if (error) toast.error("Failed to update quote");
-      else { toast.success("Quote updated"); setDialogOpen(false); fetchData(); }
+      if (error) { toast.error("Failed to update quote"); return null; }
+      return editingQuote.id;
     } else {
-      const { error } = await supabase.from("quotes").insert(payload);
-      if (error) toast.error("Failed to create quote");
-      else { toast.success("Quote created"); setDialogOpen(false); fetchData(); }
+      const { data, error } = await supabase.from("quotes").insert(payload).select("id").single();
+      if (error || !data) { toast.error("Failed to create quote"); return null; }
+      return data.id;
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    setIsSaving(true);
+    const id = await saveQuote("draft");
+    if (id) {
+      toast.success(editingQuote ? "Quote updated" : "Quote saved as draft");
+      setDialogOpen(false);
+      fetchData();
     }
     setIsSaving(false);
+  };
+
+  const handleSaveAndSend = async () => {
+    // Check client has email
+    const selectedClient = clients.find((c) => c.id === form.client_id);
+    if (!selectedClient?.email) {
+      toast.error("This client has no email address. Add an email to their profile first.");
+      return;
+    }
+
+    setIsSending(true);
+    const quoteId = await saveQuote("sent");
+    if (quoteId) {
+      // Trigger send-quote edge function
+      const { error } = await supabase.functions.invoke("send-quote", {
+        body: { quoteId },
+      });
+      if (error) {
+        toast.error("Quote saved but email failed to send");
+      } else {
+        toast.success("Quote sent to " + selectedClient.email);
+      }
+      setDialogOpen(false);
+      fetchData();
+    }
+    setIsSending(false);
   };
 
   /** Convert an accepted quote into a new job */
@@ -170,7 +241,7 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
         <h3 className="font-display font-semibold text-lg text-foreground">Quotes</h3>
-        <Button onClick={openCreateDialog} disabled={clients.length === 0}>
+        <Button onClick={openCreateDialog}>
           <Plus className="w-4 h-4 mr-2" /> New Quote
         </Button>
       </div>
@@ -181,7 +252,7 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
             <FileText className="w-12 h-12 text-muted-foreground/50 mb-4" />
             <h3 className="font-display font-semibold text-lg text-foreground mb-1">No quotes yet</h3>
             <p className="text-muted-foreground text-sm mb-4">Create your first quote for a client.</p>
-            {clients.length > 0 && <Button onClick={openCreateDialog} size="sm"><Plus className="w-4 h-4 mr-1" /> New Quote</Button>}
+            <Button onClick={openCreateDialog} size="sm"><Plus className="w-4 h-4 mr-1" /> New Quote</Button>
           </CardContent>
         </Card>
       ) : (
@@ -238,18 +309,77 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingQuote ? "Edit Quote" : "New Quote"}</DialogTitle>
+            <DialogTitle className="font-display">{editingQuote ? "Edit Quote" : "New Quote"}</DialogTitle>
+            <DialogDescription>
+              {editingQuote ? "Update the quote details below." : "Create a quote for your client."}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Client Selection */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Client *</Label>
-                <Select value={form.client_id} onValueChange={(v) => setForm({ ...form, client_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
-                  <SelectContent>
-                    {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                {!showNewClient ? (
+                  <div className="space-y-2">
+                    <Select value={form.client_id} onValueChange={(v) => setForm({ ...form, client_id: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
+                      <SelectContent>
+                        {clients.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                            {c.email ? ` (${c.email})` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-primary h-7 px-2 text-xs"
+                      onClick={() => setShowNewClient(true)}
+                    >
+                      <UserPlus className="w-3 h-3 mr-1" /> New Client
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2 p-3 rounded-lg border border-primary/20 bg-primary/5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-primary">New Client</span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowNewClient(false)}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                    <Input
+                      placeholder="Client name *"
+                      value={newClientForm.name}
+                      onChange={(e) => setNewClientForm({ ...newClientForm, name: e.target.value })}
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      placeholder="Email (for sending quotes)"
+                      type="email"
+                      value={newClientForm.email}
+                      onChange={(e) => setNewClientForm({ ...newClientForm, email: e.target.value })}
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      placeholder="Phone"
+                      value={newClientForm.phone}
+                      onChange={(e) => setNewClientForm({ ...newClientForm, phone: e.target.value })}
+                      className="h-8 text-sm"
+                    />
+                    <Button
+                      size="sm"
+                      className="w-full h-8 text-xs"
+                      onClick={handleCreateInlineClient}
+                      disabled={isCreatingClient || !newClientForm.name.trim()}
+                    >
+                      {isCreatingClient ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Plus className="w-3 h-3 mr-1" />}
+                      Add Client
+                    </Button>
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Valid Until</Label>
@@ -272,26 +402,58 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
               </div>
             )}
 
+            {/* Line Items with Column Headers */}
             <div className="space-y-2">
               <Label>Line Items</Label>
               <div className="space-y-2">
+                {/* Column headers */}
+                <div className="flex items-center gap-2 px-1">
+                  <span className="flex-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Description</span>
+                  <span className="w-16 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide text-center">Qty</span>
+                  <span className="w-24 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Rate</span>
+                  <span className="w-20 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Total</span>
+                  {lineItems.length > 1 && <span className="w-9" />}
+                </div>
                 {lineItems.map((li, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <Input value={li.description} onChange={(e) => updateLineItem(i, "description", e.target.value)} placeholder="Description" className="flex-1" />
-                    <Input type="number" value={li.quantity} onChange={(e) => updateLineItem(i, "quantity", parseInt(e.target.value) || 0)} className="w-16" min={1} />
-                    <Input type="number" step="0.01" value={li.unit_price} onChange={(e) => updateLineItem(i, "unit_price", parseFloat(e.target.value) || 0)} className="w-24" placeholder="$0.00" />
+                    <Input
+                      value={li.description}
+                      onChange={(e) => updateLineItem(i, "description", e.target.value)}
+                      placeholder="Description"
+                      className="flex-1"
+                    />
+                    <Input
+                      type="number"
+                      value={li.quantity}
+                      onChange={(e) => updateLineItem(i, "quantity", parseInt(e.target.value) || 0)}
+                      className="w-16 text-center"
+                      min={1}
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={li.unit_price}
+                      onChange={(e) => updateLineItem(i, "unit_price", parseFloat(e.target.value) || 0)}
+                      className="w-24"
+                      placeholder="$0.00"
+                    />
+                    <span className="w-20 text-right text-sm font-medium text-foreground tabular-nums">
+                      ${(li.quantity * li.unit_price).toFixed(2)}
+                    </span>
                     {lineItems.length > 1 && (
-                      <Button variant="ghost" size="icon" onClick={() => setLineItems(lineItems.filter((_, idx) => idx !== i))}>
+                      <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setLineItems(lineItems.filter((_, idx) => idx !== i))}>
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
                     )}
                   </div>
                 ))}
               </div>
-              <Button variant="outline" size="sm" onClick={() => setLineItems([...lineItems, { description: "", quantity: 1, unit_price: 0 }])}>
-                <Plus className="w-3 h-3 mr-1" /> Add Line
-              </Button>
-              <p className="text-right font-semibold text-foreground">Total: ${calcTotal().toFixed(2)}</p>
+              <div className="flex items-center justify-between">
+                <Button variant="outline" size="sm" onClick={() => setLineItems([...lineItems, { description: "", quantity: 1, unit_price: 0 }])}>
+                  <Plus className="w-3 h-3 mr-1" /> Add Line
+                </Button>
+                <p className="font-semibold text-foreground">Total: ${calcTotal().toFixed(2)}</p>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -299,10 +461,26 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Additional notes..." rows={2} />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingQuote ? "Save" : "Create Quote"}
+
+          {/* Split Save Actions */}
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setDialogOpen(false)} className="sm:mr-auto">
+              Cancel
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleSaveDraft}
+              disabled={isSaving || isSending}
+            >
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Save className="w-4 h-4 mr-1.5" />}
+              Save as Draft
+            </Button>
+            <Button
+              onClick={handleSaveAndSend}
+              disabled={isSaving || isSending}
+            >
+              {isSending ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Send className="w-4 h-4 mr-1.5" />}
+              Save & Send
             </Button>
           </DialogFooter>
         </DialogContent>
