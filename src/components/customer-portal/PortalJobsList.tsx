@@ -249,7 +249,21 @@ export const PortalJobsList = ({ userId, contractor }: PortalJobsListProps) => {
               );
             })}
           </div>
-        </div>
+    </div>
+      )}
+
+      {/* Cancel Booking Flow */}
+      {cancellingJob && (
+        <CancelBookingFlow
+          open={!!cancellingJob}
+          onOpenChange={(o) => { if (!o) setCancellingJob(null); }}
+          jobId={cancellingJob.id}
+          jobTitle={cancellingJob.title}
+          contractorId={cancellingJob.contractor_id}
+          source="job"
+          onCancelled={loadJobs}
+          onRescheduled={loadJobs}
+        />
       )}
     </div>
   );
