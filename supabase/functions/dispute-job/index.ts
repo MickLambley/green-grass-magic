@@ -148,7 +148,7 @@ serve(async (req) => {
               Authorization: `Bearer ${resendApiKey}`,
             },
             body: JSON.stringify({
-              from: "Lawn Care <onboarding@resend.dev>",
+              from: "Yardly <onboarding@resend.dev>",
               to: ["admin@lawnly.com.au"],
               subject: `${isPostPayment ? "⚠️ Post-Payment " : ""}Dispute Raised - Job #${bookingId.slice(0, 8)}`,
               html: `
