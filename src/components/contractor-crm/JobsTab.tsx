@@ -424,12 +424,16 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       setDialogOpen(false);
       fetchData();
     } else {
+      // Generate a recurring_job_id for the series
+      const seriesId = form.is_recurring ? crypto.randomUUID() : null;
+      const createPayload = { ...payload, ...(seriesId ? { recurring_job_id: seriesId } : {}) };
+
       // Create the initial job
-      const { error } = await supabase.from("jobs").insert(payload);
+      const { error } = await supabase.from("jobs").insert(createPayload as any);
       if (error) { toast.error("Failed to create job"); setIsSaving(false); return; }
 
       // If recurring, create additional jobs
-      if (form.is_recurring) {
+      if (form.is_recurring && seriesId) {
         const count = parseInt(form.recurrence_count) || 4;
         const baseDate = new Date(form.scheduled_date);
         const additionalJobs = [];
@@ -444,13 +448,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             nextDate.setMonth(baseDate.getMonth() + i);
           }
           additionalJobs.push({
-            ...payload,
+            ...createPayload,
             scheduled_date: nextDate.toISOString().split("T")[0],
           });
         }
 
         if (additionalJobs.length > 0) {
-          const { error: batchError } = await supabase.from("jobs").insert(additionalJobs);
+          const { error: batchError } = await supabase.from("jobs").insert(additionalJobs as any);
           if (batchError) toast.error("Some recurring jobs failed to create");
         }
         toast.success(`Created ${count} recurring jobs`);
