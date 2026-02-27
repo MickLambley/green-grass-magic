@@ -1205,6 +1205,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      seed_postcodes_from_csv: { Args: { csv_text: string }; Returns: number }
     }
     Enums: {
       address_status: "pending" | "verified" | "rejected"
