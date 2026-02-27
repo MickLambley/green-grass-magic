@@ -213,6 +213,23 @@ const ContractorWebsite = () => {
         </div>
       </section>
 
+      {/* Service Areas */}
+      {serviceSuburbs.length > 0 && (
+        <section className="py-16 sm:py-20">
+          <div className="max-w-5xl mx-auto px-4">
+            <h2 className="font-display text-3xl font-bold text-foreground text-center mb-6">Service Areas</h2>
+            <p className="text-muted-foreground text-center mb-8">We proudly serve the following suburbs:</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {serviceSuburbs.map((s, i) => (
+                <Badge key={i} variant="outline" className="text-sm px-3 py-1.5">
+                  {s.suburb} ({s.postcode})
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* CTA */}
       <section className="py-16 sm:py-20">
         <div className="max-w-5xl mx-auto px-4 text-center">
