@@ -122,10 +122,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [markPaidJob, setMarkPaidJob] = useState<{
     id: string; title: string; client_name: string; total_price: number | null;
   } | null>(null);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [pendingSuggestionJobIds, setPendingSuggestionJobIds] = useState<Set<string>>(new Set());
+  const [recurringEditOpen, setRecurringEditOpen] = useState(false);
+  const [recurringEditScope, setRecurringEditScope] = useState<"this" | "future" | null>(null);
+  const [pendingEditJob, setPendingEditJob] = useState<Job | null>(null);
 
   const handleRunOptimization = async () => {
     setIsOptimizing(true);
