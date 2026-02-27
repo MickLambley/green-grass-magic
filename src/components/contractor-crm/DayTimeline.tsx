@@ -484,6 +484,12 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                 <Clock className="w-3 h-3" />
                 {formatDuration(entries.filter(e => e.type === "job").reduce((sum, e) => sum + e.durationMinutes, 0))} work
               </span>
+              {travelWarningJobIds.size > 0 && (
+                <span className="text-xs text-destructive flex items-center gap-1 font-medium">
+                  <AlertTriangle className="w-3 h-3" />
+                  {travelWarningJobIds.size / 2 >= 1 ? Math.ceil(travelWarningJobIds.size / 2) : 1} tight gap{travelWarningJobIds.size > 2 ? "s" : ""}
+                </span>
+              )}
             </div>
 
             {isDraggable && (
