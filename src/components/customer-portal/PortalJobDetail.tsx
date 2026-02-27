@@ -51,7 +51,7 @@ export const PortalJobDetail = ({ job, contractor, userId, onBack }: PortalJobDe
 
   useEffect(() => {
     loadPhotos();
-  }, [job.id]);
+  }, [currentJob.id]);
 
   const loadPhotos = async () => {
     const { data } = await supabase
