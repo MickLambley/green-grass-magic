@@ -447,6 +447,23 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     setCompletionDialogOpen(true);
   };
 
+  const handleDeleteJob = async () => {
+    if (!deletingJobId) return;
+    setIsDeleting(true);
+    const { error } = await supabase.from("jobs").delete().eq("id", deletingJobId);
+    if (error) {
+      toast.error("Failed to delete job");
+    } else {
+      toast.success("Job deleted");
+      setDialogOpen(false);
+      fetchData();
+    }
+    setIsDeleting(false);
+    setDeleteConfirmOpen(false);
+    setDeletingJobId(null);
+  };
+  };
+
   const filtered = jobs.filter((j) => {
     const matchesSearch =
       j.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
