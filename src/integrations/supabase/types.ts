@@ -683,6 +683,7 @@ export type Database = {
           payment_status: string
           quote_breakdown: Json | null
           recurrence_rule: Json | null
+          recurring_job_id: string | null
           route_optimization_locked: boolean
           scheduled_date: string
           scheduled_time: string | null
@@ -718,6 +719,7 @@ export type Database = {
           payment_status?: string
           quote_breakdown?: Json | null
           recurrence_rule?: Json | null
+          recurring_job_id?: string | null
           route_optimization_locked?: boolean
           scheduled_date: string
           scheduled_time?: string | null
@@ -753,6 +755,7 @@ export type Database = {
           payment_status?: string
           quote_breakdown?: Json | null
           recurrence_rule?: Json | null
+          recurring_job_id?: string | null
           route_optimization_locked?: boolean
           scheduled_date?: string
           scheduled_time?: string | null

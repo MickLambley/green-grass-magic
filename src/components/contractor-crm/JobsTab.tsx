@@ -28,6 +28,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock, Trash2, MessageSquare } from "lucide-react";
 import DayTimeline from "./DayTimeline";
+import RecurringEditDialog from "./RecurringEditDialog";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, endOfWeek, isToday } from "date-fns";
 import type { Tables, Json } from "@/integrations/supabase/types";
@@ -82,6 +83,7 @@ interface UnifiedJob {
   description: string | null;
   notes: string | null;
   recurrence_rule: Json | null;
+  recurring_job_id: string | null;
   source: "crm" | "platform";
   // CRM-only fields
   client_id?: string;
@@ -120,10 +122,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [markPaidJob, setMarkPaidJob] = useState<{
     id: string; title: string; client_name: string; total_price: number | null;
   } | null>(null);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [pendingSuggestionJobIds, setPendingSuggestionJobIds] = useState<Set<string>>(new Set());
+  const [recurringEditOpen, setRecurringEditOpen] = useState(false);
+  const [recurringEditScope, setRecurringEditScope] = useState<"this" | "future" | null>(null);
+  const [pendingEditJob, setPendingEditJob] = useState<Job | null>(null);
 
   const handleRunOptimization = async () => {
     setIsOptimizing(true);
@@ -220,6 +225,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           description: j.description,
           notes: j.notes,
           recurrence_rule: j.recurrence_rule,
+          recurring_job_id: (j as any).recurring_job_id || null,
           source: "crm",
           client_id: j.client_id,
           duration_minutes: j.duration_minutes,
@@ -250,6 +256,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           description: null,
           notes: b.notes,
           recurrence_rule: null,
+          recurring_job_id: null,
           source: "platform",
           address_street: addr?.street_address,
           address_city: addr?.city,
@@ -284,6 +291,18 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   };
 
   const openEditDialog = (job: Job) => {
+    // Check if this job belongs to a recurring series
+    const recurringId = (job as any).recurring_job_id;
+    if (recurringId) {
+      setPendingEditJob(job);
+      setRecurringEditScope(null);
+      setRecurringEditOpen(true);
+      return;
+    }
+    proceedToEditDialog(job);
+  };
+
+  const proceedToEditDialog = (job: Job) => {
     setEditingJob(job);
     const recurrence = job.recurrence_rule as unknown as RecurrenceRule | null;
     setForm({
@@ -301,6 +320,18 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       recurrence_count: recurrence?.count?.toString() || "4",
     });
     setDialogOpen(true);
+  };
+
+  const handleRecurringThisOnly = () => {
+    setRecurringEditScope("this");
+    setRecurringEditOpen(false);
+    if (pendingEditJob) proceedToEditDialog(pendingEditJob);
+  };
+
+  const handleRecurringAllFuture = () => {
+    setRecurringEditScope("future");
+    setRecurringEditOpen(false);
+    if (pendingEditJob) proceedToEditDialog(pendingEditJob);
   };
 
   // Helper: get existing job slots for a given date (for conflict detection)
@@ -360,16 +391,49 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     };
 
     if (editingJob) {
+      // Update this job
       const { error } = await supabase.from("jobs").update(payload).eq("id", editingJob.id);
-      if (error) toast.error("Failed to update job");
-      else { toast.success("Job updated"); setDialogOpen(false); fetchData(); }
+      if (error) { toast.error("Failed to update job"); setIsSaving(false); return; }
+
+      // If "all future" scope, also update all future jobs in the series
+      const recurringId = (editingJob as any).recurring_job_id;
+      if (recurringEditScope === "future" && recurringId) {
+        const today = new Date().toISOString().split("T")[0];
+        const futurePayload = {
+          title: payload.title,
+          description: payload.description,
+          scheduled_time: payload.scheduled_time,
+          duration_minutes: payload.duration_minutes,
+          total_price: payload.total_price,
+          notes: payload.notes,
+          original_scheduled_time: payload.original_scheduled_time,
+        };
+        const { error: futureError } = await (supabase
+          .from("jobs")
+          .update(futurePayload) as any)
+          .eq("recurring_job_id", recurringId)
+          .neq("id", editingJob.id)
+          .gte("scheduled_date", today);
+        if (futureError) toast.error("Some future jobs failed to update");
+        else toast.success("Updated this job and all future jobs in the series");
+      } else {
+        toast.success("Job updated");
+      }
+      setRecurringEditScope(null);
+      setPendingEditJob(null);
+      setDialogOpen(false);
+      fetchData();
     } else {
+      // Generate a recurring_job_id for the series
+      const seriesId = form.is_recurring ? crypto.randomUUID() : null;
+      const createPayload = { ...payload, ...(seriesId ? { recurring_job_id: seriesId } : {}) };
+
       // Create the initial job
-      const { error } = await supabase.from("jobs").insert(payload);
+      const { error } = await supabase.from("jobs").insert(createPayload as any);
       if (error) { toast.error("Failed to create job"); setIsSaving(false); return; }
 
       // If recurring, create additional jobs
-      if (form.is_recurring) {
+      if (form.is_recurring && seriesId) {
         const count = parseInt(form.recurrence_count) || 4;
         const baseDate = new Date(form.scheduled_date);
         const additionalJobs = [];
@@ -384,13 +448,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             nextDate.setMonth(baseDate.getMonth() + i);
           }
           additionalJobs.push({
-            ...payload,
+            ...createPayload,
             scheduled_date: nextDate.toISOString().split("T")[0],
           });
         }
 
         if (additionalJobs.length > 0) {
-          const { error: batchError } = await supabase.from("jobs").insert(additionalJobs);
+          const { error: batchError } = await supabase.from("jobs").insert(additionalJobs as any);
           if (batchError) toast.error("Some recurring jobs failed to create");
         }
         toast.success(`Created ${count} recurring jobs`);
@@ -1014,6 +1078,14 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Recurring Edit Dialog */}
+      <RecurringEditDialog
+        open={recurringEditOpen}
+        onOpenChange={setRecurringEditOpen}
+        onThisOnly={handleRecurringThisOnly}
+        onAllFuture={handleRecurringAllFuture}
+      />
     </div>
   );
 };
