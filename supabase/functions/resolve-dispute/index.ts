@@ -102,7 +102,7 @@ serve(async (req) => {
         await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
-          body: JSON.stringify({ from: "Lawn Care <onboarding@resend.dev>", to: [to], subject, html }),
+          body: JSON.stringify({ from: "Yardly <onboarding@resend.dev>", to: [to], subject, html }),
         });
       } catch (e) {
         logStep("Email failed (non-blocking)", { error: String(e) });
