@@ -889,6 +889,7 @@ export type Database = {
           line_items: Json
           notes: string | null
           status: string
+          token: string
           total: number
           updated_at: string
           valid_until: string | null
@@ -901,6 +902,7 @@ export type Database = {
           line_items?: Json
           notes?: string | null
           status?: string
+          token?: string
           total?: number
           updated_at?: string
           valid_until?: string | null
@@ -913,6 +915,7 @@ export type Database = {
           line_items?: Json
           notes?: string | null
           status?: string
+          token?: string
           total?: number
           updated_at?: string
           valid_until?: string | null
