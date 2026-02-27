@@ -62,9 +62,9 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
 
     const revenue = (paidRes.data || []).reduce((sum, inv) => sum + Number(inv.total), 0);
 
-    // Fetch client names for today's and upcoming jobs
-    const { data: clients } = await supabase.from("clients").select("id, name").eq("contractor_id", contractorId);
-    const clientMap = new Map((clients || []).map((c) => [c.id, c.name]));
+    // Fetch client names and addresses for today's and upcoming jobs
+    const { data: clients } = await supabase.from("clients").select("id, name, address").eq("contractor_id", contractorId);
+    const clientMap = new Map((clients || []).map((c) => [c.id, c]));
 
     setStats({
       clientCount: clientsRes.count || 0,
@@ -72,8 +72,14 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
       unpaidInvoices: unpaidRes.count || 0,
       revenue,
     });
-    setTodaysJobs((todayRes.data || []).map((j) => ({ ...j, client_name: clientMap.get(j.client_id) || "Unknown" })));
-    setUpcomingJobs((upcomingRes.data || []).map((j) => ({ ...j, client_name: clientMap.get(j.client_id) || "Unknown" })));
+    setTodaysJobs((todayRes.data || []).map((j) => {
+      const client = clientMap.get(j.client_id);
+      return { ...j, client_name: client?.name || "Unknown", client_address: client?.address as ClientAddress | null };
+    }));
+    setUpcomingJobs((upcomingRes.data || []).map((j) => {
+      const client = clientMap.get(j.client_id);
+      return { ...j, client_name: client?.name || "Unknown", client_address: client?.address as ClientAddress | null };
+    }));
     setWebsiteBookings(websiteRes.count || 0);
     setIsLoading(false);
   };
