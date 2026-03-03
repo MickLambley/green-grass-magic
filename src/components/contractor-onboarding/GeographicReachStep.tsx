@@ -71,6 +71,11 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   const [isLoadingBoundaries, setIsLoadingBoundaries] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [allDiscoveredSuburbs, setAllDiscoveredSuburbs] = useState<SuburbWithCoords[]>([]);
+  const [manualSuburbSearch, setManualSuburbSearch] = useState("");
+  const [manualSuburbResults, setManualSuburbResults] = useState<{ suburb: string; lat: number; lng: number }[]>([]);
+  const [isSearchingSuburbs, setIsSearchingSuburbs] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const isInitialLoadRef = useRef(true);
 
   const isValid = data.maxTravelDistanceKm >= 5 && data.baseAddress && data.baseAddressLat !== null;
 
