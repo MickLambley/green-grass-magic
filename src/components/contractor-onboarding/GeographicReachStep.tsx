@@ -545,6 +545,16 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
               )}
             </div>
 
+            {/* Progress bar */}
+            {loadingProgress > 0 && (
+              <div className="space-y-1">
+                <Progress value={loadingProgress} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  {loadingProgress < 50 ? "Discovering suburbs..." : loadingProgress < 85 ? "Fetching coordinates..." : "Loading boundaries..."}
+                </p>
+              </div>
+            )}
+
             {allDiscoveredSuburbs.length > 0 ? (
               <>
                 <div className="flex items-center gap-2">
@@ -603,6 +613,48 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
                 </p>
               </div>
             )}
+
+            {/* Manual suburb entry */}
+            <div className="space-y-2">
+              <Label className="text-sm">Add a suburb outside your radius</Label>
+              <div className="relative">
+                <Plus className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Type suburb name..."
+                  value={manualSuburbSearch}
+                  onChange={(e) => setManualSuburbSearch(e.target.value)}
+                  className="pl-10"
+                />
+                {isSearchingSuburbs && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
+              {manualSuburbResults.length > 0 && (
+                <div className="rounded-lg border border-border bg-background shadow-md max-h-48 overflow-y-auto">
+                  {manualSuburbResults.map((r) => {
+                    const alreadySelected = data.servicedSuburbs.includes(r.suburb);
+                    return (
+                      <button
+                        key={r.suburb}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center justify-between"
+                        onClick={() => addManualSuburb(r)}
+                        disabled={alreadySelected}
+                      >
+                        <span className={alreadySelected ? "text-muted-foreground" : "text-foreground"}>
+                          {r.suburb}
+                        </span>
+                        {alreadySelected ? (
+                          <span className="text-xs text-muted-foreground">Already added</span>
+                        ) : (
+                          <Plus className="w-3 h-3 text-primary" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <p className="text-xs text-muted-foreground">
               Click to deselect any suburbs you don't want to service. Customers will only be able to complete online
