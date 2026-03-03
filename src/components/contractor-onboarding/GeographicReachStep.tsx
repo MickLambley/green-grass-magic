@@ -297,70 +297,63 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
     });
   }, [mapLoaded]);
 
-  // Suburb discovery via reverse geocoding
+  // Suburb discovery via australian_postcodes database table
   const fetchSuburbsInRadius = useCallback(
     async (lat: number, lng: number, radiusKm: number) => {
-      if (!mapLoaded) return;
       setIsLoadingSuburbs(true);
 
       try {
-        const suburbMap = new Map<string, SuburbWithCoords>();
-        const center = new google.maps.LatLng(lat, lng);
-        const distances = [0, 0.25, 0.5, 0.75, 1];
-        const angles = [0, 45, 90, 135, 180, 225, 270, 315];
-        const geocoder = new google.maps.Geocoder();
+        const { data: result, error } = await supabase.functions.invoke("get-suburbs-in-radius", {
+          body: { lat, lng, radius_km: radiusKm },
+        });
 
-        const geocodePoint = (
-          latP: number,
-          lngP: number
-        ): Promise<SuburbWithCoords | null> => {
-          return new Promise((resolve) => {
-            geocoder.geocode(
-              { location: { lat: latP, lng: lngP } },
-              (results, status) => {
-                if (status === "OK" && results?.[0]) {
-                  const comp = results[0].address_components.find(
-                    (c) =>
-                      c.types.includes("locality") ||
-                      c.types.includes("sublocality")
-                  );
-                  if (comp) {
-                    resolve({ name: comp.long_name, lat: latP, lng: lngP });
-                  } else {
-                    resolve(null);
-                  }
-                } else {
-                  resolve(null);
-                }
-              }
-            );
-          });
-        };
+        if (error) {
+          console.error("Error fetching suburbs:", error);
+          return;
+        }
 
-        const centerResult = await geocodePoint(lat, lng);
-        if (centerResult) suburbMap.set(centerResult.name, centerResult);
+        const suburbsArray: SuburbWithCoords[] = [];
+        const seen = new Set<string>();
+        
+        // Deduplicate by suburb name (different postcodes can share a name)
+        for (const s of (result?.suburbs || [])) {
+          if (!seen.has(s.suburb)) {
+            seen.add(s.suburb);
+            // Look up centroid from australian_postcodes data
+            suburbsArray.push({
+              name: s.suburb,
+              lat: 0, // Will be filled by boundary fetch or centroid
+              lng: 0,
+            });
+          }
+        }
 
-        for (const distFrac of distances) {
-          for (const angle of angles) {
-            if (distFrac === 0) continue;
-            const point = google.maps.geometry.spherical.computeOffset(
-              center,
-              radiusKm * 1000 * distFrac,
-              angle
-            );
-            await new Promise((r) => setTimeout(r, 50));
-            const result = await geocodePoint(point.lat(), point.lng());
-            if (result && !suburbMap.has(result.name)) {
-              suburbMap.set(result.name, result);
+        // We need lat/lng for boundary fetching - query the postcodes table directly
+        const suburbNames = suburbsArray.map(s => s.name);
+        const { data: postcodeData } = await supabase
+          .from("australian_postcodes")
+          .select("suburb, lat, lng")
+          .in("suburb", suburbNames);
+
+        if (postcodeData) {
+          const coordMap = new Map<string, { lat: number; lng: number }>();
+          for (const p of postcodeData) {
+            if (!coordMap.has(p.suburb)) {
+              coordMap.set(p.suburb, { lat: Number(p.lat), lng: Number(p.lng) });
+            }
+          }
+          for (const s of suburbsArray) {
+            const coords = coordMap.get(s.name);
+            if (coords) {
+              s.lat = coords.lat;
+              s.lng = coords.lng;
             }
           }
         }
 
-        const suburbsArray = Array.from(suburbMap.values()).sort((a, b) =>
-          a.name.localeCompare(b.name)
-        );
+        suburbsArray.sort((a, b) => a.name.localeCompare(b.name));
 
-        // Now fetch real boundaries from Nominatim
+        // Fetch real boundaries
         const suburbsWithBoundaries = await fetchBoundaries(suburbsArray);
         setAllDiscoveredSuburbs(suburbsWithBoundaries);
         onChangeRef.current({
@@ -373,7 +366,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
         setIsLoadingSuburbs(false);
       }
     },
-    [mapLoaded, fetchBoundaries]
+    [fetchBoundaries]
   );
 
   // Debounced suburb fetch
