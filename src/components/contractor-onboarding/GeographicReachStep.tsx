@@ -380,13 +380,13 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
         // Fit bounds on initial load / radius change
         isInitialLoadRef.current = true;
         setTimeout(() => {
-          drawSuburbPolygons(suburbsWithBoundaries, suburbsWithBoundaries.map((s) => s.name), true);
+          drawSuburbPolygons(suburbsWithBoundaries, suburbsWithBoundaries.map((s) => `${s.name}|${s.postcode}`), true);
           isInitialLoadRef.current = false;
         }, 50);
 
         onChangeRef.current({
           ...dataRef.current,
-          servicedSuburbs: suburbsWithBoundaries.map((s) => s.name),
+          servicedSuburbs: suburbsWithBoundaries.map((s) => `${s.name}|${s.postcode}`),
         });
       } catch (error) {
         console.error("Error fetching suburbs:", error);
