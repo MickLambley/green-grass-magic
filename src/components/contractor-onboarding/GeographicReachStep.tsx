@@ -465,10 +465,10 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
     return () => clearTimeout(timer);
   }, [manualSuburbSearch]);
 
-  const addManualSuburb = async (suburb: { suburb: string; state: string; lat: number; lng: number }) => {
-    const alreadyExists = allDiscoveredSuburbs.some((s) => s.name === suburb.suburb && s.state === suburb.state);
+  const addManualSuburb = async (suburb: { suburb: string; state: string; postcode: string; lat: number; lng: number }) => {
+    const alreadyExists = allDiscoveredSuburbs.some((s) => s.name === suburb.suburb && s.postcode === suburb.postcode);
     if (!alreadyExists) {
-      const newSuburb: SuburbWithCoords = { name: suburb.suburb, state: suburb.state, lat: suburb.lat, lng: suburb.lng };
+      const newSuburb: SuburbWithCoords = { name: suburb.suburb, state: suburb.state, postcode: suburb.postcode, lat: suburb.lat, lng: suburb.lng };
       const withBoundaries = await fetchBoundaries([newSuburb]);
       const updated = [...allDiscoveredSuburbs, ...withBoundaries].sort((a, b) => a.name.localeCompare(b.name));
       setAllDiscoveredSuburbs(updated);
