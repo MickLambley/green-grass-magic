@@ -174,30 +174,37 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
     if (bounds) googleMapRef.current.fitBounds(bounds);
   };
 
-  // Fetch boundaries from Nominatim for all suburbs
+  // Fetch boundaries via server-side cache (single batch request)
   const fetchBoundaries = useCallback(
     async (suburbs: SuburbWithCoords[]): Promise<SuburbWithCoords[]> => {
       setIsLoadingBoundaries(true);
-      const updated: SuburbWithCoords[] = [];
-      const baseLat = dataRef.current.baseAddressLat || -33.87;
-      const baseLng = dataRef.current.baseAddressLng || 151.21;
+
+      // Check local cache first, identify uncached
+      const uncached: { name: string; lat: number; lng: number }[] = [];
+      const results: SuburbWithCoords[] = [];
 
       for (const suburb of suburbs) {
-        // Check cache first
         if (boundaryCache.current.has(suburb.name)) {
-          updated.push({ ...suburb, boundary: boundaryCache.current.get(suburb.name) });
-          continue;
+          results.push({ ...suburb, boundary: boundaryCache.current.get(suburb.name) });
+        } else {
+          uncached.push({ name: suburb.name, lat: suburb.lat, lng: suburb.lng });
+          results.push(suburb); // placeholder, will update below
         }
+      }
 
-        // Rate limit: 1 req/sec for Nominatim
-        await new Promise((r) => setTimeout(r, 1100));
-        const boundary = await fetchSuburbBoundary(suburb.name, baseLat, baseLng);
-        boundaryCache.current.set(suburb.name, boundary);
-        updated.push({ ...suburb, boundary });
+      if (uncached.length > 0) {
+        const boundaryMap = await fetchBoundariesBatch(uncached);
+        for (let i = 0; i < results.length; i++) {
+          if (boundaryMap.has(results[i].name)) {
+            const boundary = boundaryMap.get(results[i].name)!;
+            boundaryCache.current.set(results[i].name, boundary);
+            results[i] = { ...results[i], boundary };
+          }
+        }
       }
 
       setIsLoadingBoundaries(false);
-      return updated;
+      return results;
     },
     []
   );
