@@ -409,6 +409,57 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
     });
   const deselectAllSuburbs = () => onChange({ ...data, servicedSuburbs: [] });
 
+  // Manual suburb search with autocomplete
+  useEffect(() => {
+    if (manualSuburbSearch.length < 2) {
+      setManualSuburbResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearchingSuburbs(true);
+      try {
+        const { data: results } = await supabase
+          .from("australian_postcodes")
+          .select("suburb, lat, lng")
+          .ilike("suburb", `${manualSuburbSearch}%`)
+          .limit(20);
+        
+        if (results) {
+          // Deduplicate and exclude already-discovered suburbs
+          const seen = new Set<string>();
+          const filtered: { suburb: string; lat: number; lng: number }[] = [];
+          for (const r of results) {
+            if (!seen.has(r.suburb)) {
+              seen.add(r.suburb);
+              filtered.push({ suburb: r.suburb, lat: Number(r.lat), lng: Number(r.lng) });
+            }
+          }
+          setManualSuburbResults(filtered);
+        }
+      } catch (err) {
+        console.error("Suburb search error:", err);
+      } finally {
+        setIsSearchingSuburbs(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [manualSuburbSearch]);
+
+  const addManualSuburb = async (suburb: { suburb: string; lat: number; lng: number }) => {
+    const alreadyExists = allDiscoveredSuburbs.some((s) => s.name === suburb.suburb);
+    if (!alreadyExists) {
+      const newSuburb: SuburbWithCoords = { name: suburb.suburb, lat: suburb.lat, lng: suburb.lng };
+      const withBoundaries = await fetchBoundaries([newSuburb]);
+      const updated = [...allDiscoveredSuburbs, ...withBoundaries].sort((a, b) => a.name.localeCompare(b.name));
+      setAllDiscoveredSuburbs(updated);
+    }
+    if (!data.servicedSuburbs.includes(suburb.suburb)) {
+      onChange({ ...data, servicedSuburbs: [...data.servicedSuburbs, suburb.suburb].sort() });
+    }
+    setManualSuburbSearch("");
+    setManualSuburbResults([]);
+  };
+
   return (
     <Card>
       <CardHeader>
