@@ -8,12 +8,14 @@ const corsHeaders = {
 
 interface SuburbRequest {
   name: string;
+  state?: string;
   lat: number;
   lng: number;
 }
 
 interface BoundaryResult {
   name: string;
+  state?: string;
   boundary: { lat: number; lng: number }[][] | null;
 }
 
@@ -126,18 +128,23 @@ Deno.serve(async (req) => {
     // 1. Check cache for all suburbs at once
     const { data: cached } = await supabase
       .from("suburb_boundaries")
-      .select("suburb_name, boundary")
+      .select("suburb_name, state, boundary")
       .in("suburb_name", suburbNames);
 
+    // Use name|state as cache key to avoid cross-state collisions
     const cachedMap = new Map<string, { lat: number; lng: number }[][] | null>();
     if (cached) {
       for (const row of cached) {
-        cachedMap.set(row.suburb_name, row.boundary as any);
+        const key = `${row.suburb_name}|${row.state || ""}`;
+        cachedMap.set(key, row.boundary as any);
       }
     }
 
-    // 2. Identify uncached suburbs
-    const uncached = suburbs.filter((s) => !cachedMap.has(s.name));
+    // 2. Identify uncached suburbs (match by name AND state)
+    const uncached = suburbs.filter((s) => {
+      const key = `${s.name}|${s.state || ""}`;
+      return !cachedMap.has(key);
+    });
 
     // 3. Fetch uncached from Nominatim in parallel (3 concurrent workers)
     if (uncached.length > 0) {
@@ -146,6 +153,7 @@ Deno.serve(async (req) => {
 
       const newEntries: {
         suburb_name: string;
+        state: string;
         boundary: any;
         centroid_lat: number;
         centroid_lng: number;
@@ -155,10 +163,12 @@ Deno.serve(async (req) => {
       for (let i = 0; i < uncached.length; i++) {
         const s = uncached[i];
         const boundary = boundaries[i];
-        cachedMap.set(s.name, boundary);
+        const key = `${s.name}|${s.state || ""}`;
+        cachedMap.set(key, boundary);
 
         newEntries.push({
           suburb_name: s.name,
+          state: s.state || "",
           boundary: boundary || [],
           centroid_lat: s.lat,
           centroid_lng: s.lng,
@@ -176,10 +186,14 @@ Deno.serve(async (req) => {
     }
 
     // 5. Build response
-    const results: BoundaryResult[] = suburbs.map((s) => ({
-      name: s.name,
-      boundary: cachedMap.get(s.name) || null,
-    }));
+    const results: BoundaryResult[] = suburbs.map((s) => {
+      const key = `${s.name}|${s.state || ""}`;
+      return {
+        name: s.name,
+        state: s.state,
+        boundary: cachedMap.get(key) || null,
+      };
+    });
 
     return new Response(JSON.stringify({ results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
