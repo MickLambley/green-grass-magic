@@ -4,9 +4,10 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, ArrowLeft, MapPin, Loader2, Navigation } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, Loader2, Navigation, Plus, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import type { GeographicData } from "./types";
 
