@@ -15,6 +15,7 @@ interface SuburbRequest {
 
 interface BoundaryResult {
   name: string;
+  state?: string;
   boundary: { lat: number; lng: number }[][] | null;
 }
 
