@@ -26,7 +26,7 @@ interface GeographicReachStepProps {
 
 // Fetch boundaries via edge function (server-side cache + Nominatim fallback)
 async function fetchBoundariesBatch(
-  suburbs: { name: string; lat: number; lng: number }[]
+  suburbs: { name: string; lat: number; lng: number }[],
 ): Promise<Map<string, google.maps.LatLngLiteral[][] | null>> {
   const result = new Map<string, google.maps.LatLngLiteral[][] | null>();
   if (suburbs.length === 0) return result;
@@ -74,14 +74,24 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   const isValid = data.maxTravelDistanceKm >= 5 && data.baseAddress && data.baseAddressLat !== null;
 
   // Keep refs in sync
-  useEffect(() => { dataRef.current = data; }, [data]);
-  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   // Load Google Maps script
   useEffect(() => {
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) { console.error("Google Maps API key not found"); return; }
-    if (window.google?.maps) { setMapLoaded(true); return; }
+    if (!apiKey) {
+      console.error("Google Maps API key not found");
+      return;
+    }
+    if (window.google?.maps) {
+      setMapLoaded(true);
+      return;
+    }
 
     const script = document.createElement("script");
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry`;
@@ -96,9 +106,10 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
     if (!mapLoaded || !mapRef.current || googleMapRef.current) return;
 
     const defaultCenter = { lat: -33.8688, lng: 151.2093 };
-    const center = data.baseAddressLat && data.baseAddressLng
-      ? { lat: data.baseAddressLat, lng: data.baseAddressLng }
-      : defaultCenter;
+    const center =
+      data.baseAddressLat && data.baseAddressLng
+        ? { lat: data.baseAddressLat, lng: data.baseAddressLng }
+        : defaultCenter;
 
     googleMapRef.current = new google.maps.Map(mapRef.current, {
       center,
@@ -126,23 +137,20 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
 
     hasAutoGeocodedRef.current = true;
     const geocoder = new google.maps.Geocoder();
-    geocoder.geocode(
-      { address: data.baseAddress, componentRestrictions: { country: "au" } },
-      (results, status) => {
-        if (status === "OK" && results?.[0]?.geometry?.location) {
-          const lat = results[0].geometry.location.lat();
-          const lng = results[0].geometry.location.lng();
-          const address = results[0].formatted_address || data.baseAddress;
-          onChangeRef.current({
-            ...dataRef.current,
-            baseAddress: address,
-            baseAddressLat: lat,
-            baseAddressLng: lng,
-          });
-          updateMapCenter({ lat, lng });
-        }
+    geocoder.geocode({ address: data.baseAddress, componentRestrictions: { country: "au" } }, (results, status) => {
+      if (status === "OK" && results?.[0]?.geometry?.location) {
+        const lat = results[0].geometry.location.lat();
+        const lng = results[0].geometry.location.lng();
+        const address = results[0].formatted_address || data.baseAddress;
+        onChangeRef.current({
+          ...dataRef.current,
+          baseAddress: address,
+          baseAddressLat: lat,
+          baseAddressLng: lng,
+        });
+        updateMapCenter({ lat, lng });
       }
-    );
+    });
   }, [mapLoaded, data.baseAddress]);
 
   const createMarker = (position: google.maps.LatLngLiteral) => {
@@ -175,94 +183,88 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   };
 
   // Fetch boundaries via server-side cache (single batch request)
-  const fetchBoundaries = useCallback(
-    async (suburbs: SuburbWithCoords[]): Promise<SuburbWithCoords[]> => {
-      setIsLoadingBoundaries(true);
+  const fetchBoundaries = useCallback(async (suburbs: SuburbWithCoords[]): Promise<SuburbWithCoords[]> => {
+    setIsLoadingBoundaries(true);
 
-      // Check local cache first, identify uncached
-      const uncached: { name: string; lat: number; lng: number }[] = [];
-      const results: SuburbWithCoords[] = [];
+    // Check local cache first, identify uncached
+    const uncached: { name: string; lat: number; lng: number }[] = [];
+    const results: SuburbWithCoords[] = [];
 
-      for (const suburb of suburbs) {
-        if (boundaryCache.current.has(suburb.name)) {
-          results.push({ ...suburb, boundary: boundaryCache.current.get(suburb.name) });
-        } else {
-          uncached.push({ name: suburb.name, lat: suburb.lat, lng: suburb.lng });
-          results.push(suburb); // placeholder, will update below
+    for (const suburb of suburbs) {
+      if (boundaryCache.current.has(suburb.name)) {
+        results.push({ ...suburb, boundary: boundaryCache.current.get(suburb.name) });
+      } else {
+        uncached.push({ name: suburb.name, lat: suburb.lat, lng: suburb.lng });
+        results.push(suburb); // placeholder, will update below
+      }
+    }
+
+    if (uncached.length > 0) {
+      const boundaryMap = await fetchBoundariesBatch(uncached);
+      for (let i = 0; i < results.length; i++) {
+        if (boundaryMap.has(results[i].name)) {
+          const boundary = boundaryMap.get(results[i].name)!;
+          boundaryCache.current.set(results[i].name, boundary);
+          results[i] = { ...results[i], boundary };
         }
       }
+    }
 
-      if (uncached.length > 0) {
-        const boundaryMap = await fetchBoundariesBatch(uncached);
-        for (let i = 0; i < results.length; i++) {
-          if (boundaryMap.has(results[i].name)) {
-            const boundary = boundaryMap.get(results[i].name)!;
-            boundaryCache.current.set(results[i].name, boundary);
-            results[i] = { ...results[i], boundary };
-          }
-        }
-      }
-
-      setIsLoadingBoundaries(false);
-      return results;
-    },
-    []
-  );
+    setIsLoadingBoundaries(false);
+    return results;
+  }, []);
 
   // Draw suburb polygons on map
-  const drawSuburbPolygons = useCallback(
-    (suburbs: SuburbWithCoords[], selectedNames: string[]) => {
-      polygonsRef.current.forEach((p) => p.setMap(null));
-      polygonsRef.current = [];
-      if (!googleMapRef.current || suburbs.length === 0) return;
+  const drawSuburbPolygons = useCallback((suburbs: SuburbWithCoords[], selectedNames: string[]) => {
+    polygonsRef.current.forEach((p) => p.setMap(null));
+    polygonsRef.current = [];
+    if (!googleMapRef.current || suburbs.length === 0) return;
 
-      const bounds = new google.maps.LatLngBounds();
-      if (dataRef.current.baseAddressLat && dataRef.current.baseAddressLng) {
-        bounds.extend({
-          lat: dataRef.current.baseAddressLat,
-          lng: dataRef.current.baseAddressLng,
-        });
-      }
+    const bounds = new google.maps.LatLngBounds();
+    if (dataRef.current.baseAddressLat && dataRef.current.baseAddressLng) {
+      bounds.extend({
+        lat: dataRef.current.baseAddressLat,
+        lng: dataRef.current.baseAddressLng,
+      });
+    }
 
-      for (const suburb of suburbs) {
-        const isSelected = selectedNames.includes(suburb.name);
+    for (const suburb of suburbs) {
+      const isSelected = selectedNames.includes(suburb.name);
 
-        if (suburb.boundary && suburb.boundary.length > 0) {
-          // Draw real boundary polygon
-          for (const ring of suburb.boundary) {
-            const polygon = new google.maps.Polygon({
-              paths: ring,
-              map: googleMapRef.current,
-              fillColor: isSelected ? "#22c55e" : "#94a3b8",
-              fillOpacity: isSelected ? 0.25 : 0.06,
-              strokeColor: isSelected ? "#16a34a" : "#94a3b8",
-              strokeWeight: isSelected ? 2 : 0.5,
-              strokeOpacity: isSelected ? 0.9 : 0.3,
-            });
-            polygonsRef.current.push(polygon);
-            ring.forEach((p) => bounds.extend(p));
-          }
-        } else {
-          // Fallback: draw a small circle marker for suburbs with no boundary data
-          const fallbackCircle = new google.maps.Circle({
-            center: { lat: suburb.lat, lng: suburb.lng },
-            radius: 800,
+      if (suburb.boundary && suburb.boundary.length > 0) {
+        // Draw real boundary polygon
+        for (const ring of suburb.boundary) {
+          const polygon = new google.maps.Polygon({
+            paths: ring,
             map: googleMapRef.current,
             fillColor: isSelected ? "#22c55e" : "#94a3b8",
-            fillOpacity: isSelected ? 0.3 : 0.1,
+            fillOpacity: isSelected ? 0.25 : 0.06,
             strokeColor: isSelected ? "#16a34a" : "#94a3b8",
-            strokeWeight: isSelected ? 1.5 : 0.5,
+            strokeWeight: isSelected ? 2 : 0.5,
+            strokeOpacity: isSelected ? 0.9 : 0.3,
           });
-          // Store as polygon-like for cleanup (Circle has setMap too)
-          polygonsRef.current.push(fallbackCircle as any);
-          bounds.extend({ lat: suburb.lat, lng: suburb.lng });
+          polygonsRef.current.push(polygon);
+          ring.forEach((p) => bounds.extend(p));
         }
+      } else {
+        // Fallback: draw a small circle marker for suburbs with no boundary data
+        const fallbackCircle = new google.maps.Circle({
+          center: { lat: suburb.lat, lng: suburb.lng },
+          radius: 800,
+          map: googleMapRef.current,
+          fillColor: isSelected ? "#22c55e" : "#94a3b8",
+          fillOpacity: isSelected ? 0.3 : 0.1,
+          strokeColor: isSelected ? "#16a34a" : "#94a3b8",
+          strokeWeight: isSelected ? 1.5 : 0.5,
+        });
+        // Store as polygon-like for cleanup (Circle has setMap too)
+        polygonsRef.current.push(fallbackCircle as any);
+        bounds.extend({ lat: suburb.lat, lng: suburb.lng });
       }
+    }
 
-      googleMapRef.current.fitBounds(bounds, 40);
-    },
-    []
-  );
+    googleMapRef.current.fitBounds(bounds, 40);
+  }, []);
 
   // Redraw when selection changes
   useEffect(() => {
@@ -314,9 +316,9 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
 
         const suburbsArray: SuburbWithCoords[] = [];
         const seen = new Set<string>();
-        
+
         // Deduplicate by suburb name (different postcodes can share a name)
-        for (const s of (result?.suburbs || [])) {
+        for (const s of result?.suburbs || []) {
           if (!seen.has(s.suburb)) {
             seen.add(s.suburb);
             // Look up centroid from australian_postcodes data
@@ -329,7 +331,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
         }
 
         // We need lat/lng for boundary fetching - query the postcodes table directly
-        const suburbNames = suburbsArray.map(s => s.name);
+        const suburbNames = suburbsArray.map((s) => s.name);
         const { data: postcodeData } = await supabase
           .from("australian_postcodes")
           .select("suburb, lat, lng")
@@ -366,26 +368,17 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
         setIsLoadingSuburbs(false);
       }
     },
-    [fetchBoundaries]
+    [fetchBoundaries],
   );
 
   // Debounced suburb fetch
   useEffect(() => {
     if (!data.baseAddressLat || !data.baseAddressLng) return;
     const timer = setTimeout(() => {
-      fetchSuburbsInRadius(
-        data.baseAddressLat!,
-        data.baseAddressLng!,
-        data.maxTravelDistanceKm
-      );
+      fetchSuburbsInRadius(data.baseAddressLat!, data.baseAddressLng!, data.maxTravelDistanceKm);
     }, 500);
     return () => clearTimeout(timer);
-  }, [
-    data.baseAddressLat,
-    data.baseAddressLng,
-    data.maxTravelDistanceKm,
-    fetchSuburbsInRadius,
-  ]);
+  }, [data.baseAddressLat, data.baseAddressLng, data.maxTravelDistanceKm, fetchSuburbsInRadius]);
 
   const toggleSuburb = (suburb: string) => {
     const isSelected = data.servicedSuburbs.includes(suburb);
@@ -407,8 +400,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
       ...data,
       servicedSuburbs: allDiscoveredSuburbs.map((s) => s.name),
     });
-  const deselectAllSuburbs = () =>
-    onChange({ ...data, servicedSuburbs: [] });
+  const deselectAllSuburbs = () => onChange({ ...data, servicedSuburbs: [] });
 
   return (
     <Card>
@@ -419,9 +411,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
           </div>
           <div>
             <CardTitle>Geographic Reach</CardTitle>
-            <CardDescription>
-              Set your maximum travel distance for jobs
-            </CardDescription>
+            <CardDescription>Set your maximum travel distance for jobs</CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -429,12 +419,9 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
         {/* Base Address */}
         <div className="space-y-3">
           <Label htmlFor="base-address">
-            Base address for service area{" "}
-            <span className="text-destructive">*</span>
+            Base address for service area <span className="text-destructive">*</span>
           </Label>
-          <p className="text-sm text-muted-foreground">
-            This is where you'll travel from to reach jobs.
-          </p>
+          <p className="text-sm text-muted-foreground">This is where you'll travel from to reach jobs.</p>
           <div className="relative">
             <Navigation className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -474,16 +461,12 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
           <Label>Maximum travel distance from your base</Label>
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">5 km</span>
-            <span className="text-2xl font-bold text-primary">
-              {data.maxTravelDistanceKm} km
-            </span>
+            <span className="text-2xl font-bold text-primary">{data.maxTravelDistanceKm} km</span>
             <span className="text-sm text-muted-foreground">50 km</span>
           </div>
           <Slider
             value={[data.maxTravelDistanceKm]}
-            onValueChange={([value]) =>
-              onChange({ ...data, maxTravelDistanceKm: value })
-            }
+            onValueChange={([value]) => onChange({ ...data, maxTravelDistanceKm: value })}
             min={5}
             max={50}
             step={5}
@@ -499,9 +482,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
               {(isLoadingSuburbs || isLoadingBoundaries) && (
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  {isLoadingSuburbs
-                    ? "Finding suburbs..."
-                    : "Loading boundaries..."}
+                  {isLoadingSuburbs ? "Finding suburbs..." : "Loading boundaries..."}
                 </span>
               )}
             </div>
@@ -513,10 +494,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
                     variant="outline"
                     size="sm"
                     onClick={selectAllSuburbs}
-                    disabled={
-                      data.servicedSuburbs.length ===
-                      allDiscoveredSuburbs.length
-                    }
+                    disabled={data.servicedSuburbs.length === allDiscoveredSuburbs.length}
                   >
                     Select All
                   </Button>
@@ -529,16 +507,13 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
                     Deselect All
                   </Button>
                   <span className="text-xs text-muted-foreground ml-auto">
-                    {data.servicedSuburbs.length} of{" "}
-                    {allDiscoveredSuburbs.length} selected
+                    {data.servicedSuburbs.length} of {allDiscoveredSuburbs.length} selected
                   </span>
                 </div>
                 <ScrollArea className="h-48 md:h-56 rounded-lg border border-border p-3">
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-1">
                     {allDiscoveredSuburbs.map((suburb) => {
-                      const isSelected = data.servicedSuburbs.includes(
-                        suburb.name
-                      );
+                      const isSelected = data.servicedSuburbs.includes(suburb.name);
                       return (
                         <div
                           key={suburb.name}
@@ -552,9 +527,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
                           />
                           <span
                             className={`text-sm truncate ${
-                              isSelected
-                                ? "text-foreground font-medium"
-                                : "text-muted-foreground"
+                              isSelected ? "text-foreground font-medium" : "text-muted-foreground"
                             }`}
                           >
                             {suburb.name}
@@ -574,8 +547,8 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
             )}
 
             <p className="text-xs text-muted-foreground">
-              Click to deselect any suburbs you don't want to service. You'll
-              only receive job notifications for selected suburbs.
+              Click to deselect any suburbs you don't want to service. Customers will only be able to complete online
+              bookings for selected suburbs.
             </p>
           </div>
         )}
@@ -583,9 +556,8 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
         {/* Tip */}
         <div className="p-4 bg-muted/50 rounded-lg">
           <p className="text-sm text-muted-foreground">
-            <strong>Tip:</strong> A larger radius means more job opportunities,
-            but consider fuel costs and travel time when setting your maximum
-            distance.
+            <strong>Tip:</strong> A larger radius means more job opportunities, but consider fuel costs and travel time
+            when setting your maximum distance.
           </p>
         </div>
 
