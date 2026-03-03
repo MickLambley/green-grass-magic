@@ -131,20 +131,22 @@ Deno.serve(async (req) => {
     let fetched = 0;
     let failed = 0;
 
-    for (const name of toProcess) {
-      const coords = uniqueMap.get(name)!;
-      const boundary = await fetchFromNominatim(name, coords.lat, coords.lng);
+    for (const key of toProcess) {
+      const entry = uniqueMap.get(key)!;
+      const name = key.split("|")[0];
+      const boundary = await fetchFromNominatim(name, entry.lat, entry.lng);
 
       const { error: insertErr } = await supabase
         .from("suburb_boundaries")
         .upsert({
           suburb_name: name,
+          postcode: entry.postcode,
           boundary: boundary || [],
-          centroid_lat: coords.lat,
-          centroid_lng: coords.lng,
+          centroid_lat: entry.lat,
+          centroid_lng: entry.lng,
           source: "nominatim",
           state: "NSW",
-        }, { onConflict: "suburb_name,state" });
+        }, { onConflict: "suburb_name,state,postcode" });
 
       if (insertErr) {
         console.warn(`[PRELOAD] Insert failed for ${name}:`, insertErr.message);
