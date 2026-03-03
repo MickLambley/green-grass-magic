@@ -29,14 +29,14 @@ interface GeographicReachStepProps {
 
 // Fetch boundaries via edge function (server-side cache + Nominatim fallback)
 async function fetchBoundariesBatch(
-  suburbs: { name: string; state: string; lat: number; lng: number }[],
+  suburbs: { name: string; state: string; postcode: string; lat: number; lng: number }[],
 ): Promise<Map<string, google.maps.LatLngLiteral[][] | null>> {
   const result = new Map<string, google.maps.LatLngLiteral[][] | null>();
   if (suburbs.length === 0) return result;
 
   try {
     const { data, error } = await supabase.functions.invoke("get-suburb-boundaries", {
-      body: { suburbs: suburbs.map((s) => ({ name: s.name, state: s.state, lat: s.lat, lng: s.lng })) },
+      body: { suburbs: suburbs.map((s) => ({ name: s.name, state: s.state, postcode: s.postcode, lat: s.lat, lng: s.lng })) },
     });
 
     if (error) {
@@ -47,7 +47,7 @@ async function fetchBoundariesBatch(
     if (data?.results) {
       for (const r of data.results) {
         const boundary = r.boundary && Array.isArray(r.boundary) && r.boundary.length > 0 ? r.boundary : null;
-        const key = `${r.name}|${r.state || ""}`;
+        const key = `${r.name}|${r.postcode || ""}`;
         result.set(key, boundary);
       }
     }
