@@ -4,10 +4,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, ArrowLeft, MapPin, Loader2, Navigation, Plus, X } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, Loader2, Navigation, Plus } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import type { GeographicData } from "./types";
 
@@ -17,7 +16,6 @@ interface SuburbWithCoords {
   postcode: string;
   lat: number;
   lng: number;
-  boundary?: google.maps.LatLngLiteral[][] | null;
 }
 
 interface GeographicReachStepProps {
@@ -27,82 +25,35 @@ interface GeographicReachStepProps {
   onBack: () => void;
 }
 
-// Fetch boundaries via edge function (server-side cache + Nominatim fallback)
-async function fetchBoundariesBatch(
-  suburbs: { name: string; state: string; postcode: string; lat: number; lng: number }[],
-): Promise<Map<string, google.maps.LatLngLiteral[][] | null>> {
-  const result = new Map<string, google.maps.LatLngLiteral[][] | null>();
-  if (suburbs.length === 0) return result;
-
-  try {
-    const { data, error } = await supabase.functions.invoke("get-suburb-boundaries", {
-      body: { suburbs: suburbs.map((s) => ({ name: s.name, state: s.state, postcode: s.postcode, lat: s.lat, lng: s.lng })) },
-    });
-
-    if (error) {
-      console.error("Edge function error:", error);
-      return result;
-    }
-
-    if (data?.results) {
-      for (const r of data.results) {
-        const boundary = r.boundary && Array.isArray(r.boundary) && r.boundary.length > 0 ? r.boundary : null;
-        const key = `${r.name}|${r.postcode || ""}`;
-        result.set(key, boundary);
-      }
-    }
-  } catch (err) {
-    console.error("Failed to fetch boundaries:", err);
-  }
-
-  return result;
-}
-
 export const GeographicReachStep = ({ data, onChange, onNext, onBack }: GeographicReachStepProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
+  const radiusCircleRef = useRef<google.maps.Circle | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dataRef = useRef(data);
   const onChangeRef = useRef(onChange);
-  const polygonsRef = useRef<(google.maps.Polygon | google.maps.Circle)[]>([]);
   const hasAutoGeocodedRef = useRef(false);
-  const boundaryCache = useRef<Map<string, google.maps.LatLngLiteral[][] | null>>(new Map());
-  const toggleSuburbRef = useRef<(id: string) => void>(() => {});
 
   const [isLoadingSuburbs, setIsLoadingSuburbs] = useState(false);
-  const [isLoadingBoundaries, setIsLoadingBoundaries] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [allDiscoveredSuburbs, setAllDiscoveredSuburbs] = useState<SuburbWithCoords[]>([]);
   const [manualSuburbSearch, setManualSuburbSearch] = useState("");
   const [manualSuburbResults, setManualSuburbResults] = useState<{ suburb: string; state: string; postcode: string; lat: number; lng: number }[]>([]);
   const [isSearchingSuburbs, setIsSearchingSuburbs] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const isInitialLoadRef = useRef(true);
 
   const isValid = data.maxTravelDistanceKm >= 5 && data.baseAddress && data.baseAddressLat !== null;
 
   // Keep refs in sync
-  useEffect(() => {
-    dataRef.current = data;
-  }, [data]);
-  useEffect(() => {
-    onChangeRef.current = onChange;
-  }, [onChange]);
+  useEffect(() => { dataRef.current = data; }, [data]);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
   // Load Google Maps script
   useEffect(() => {
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) {
-      console.error("Google Maps API key not found");
-      return;
-    }
-    if (window.google?.maps) {
-      setMapLoaded(true);
-      return;
-    }
-
+    if (!apiKey) { console.error("Google Maps API key not found"); return; }
+    if (window.google?.maps) { setMapLoaded(true); return; }
     const script = document.createElement("script");
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry`;
     script.async = true;
@@ -114,24 +65,19 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   // Initialize map
   useEffect(() => {
     if (!mapLoaded || !mapRef.current || googleMapRef.current) return;
-
     const defaultCenter = { lat: -33.8688, lng: 151.2093 };
-    const center =
-      data.baseAddressLat && data.baseAddressLng
-        ? { lat: data.baseAddressLat, lng: data.baseAddressLng }
-        : defaultCenter;
+    const center = data.baseAddressLat && data.baseAddressLng
+      ? { lat: data.baseAddressLat, lng: data.baseAddressLng }
+      : defaultCenter;
 
     googleMapRef.current = new google.maps.Map(mapRef.current, {
-      center,
-      zoom: 10,
-      mapTypeId: "roadmap",
-      disableDefaultUI: true,
-      zoomControl: true,
+      center, zoom: 10, mapTypeId: "roadmap",
+      disableDefaultUI: true, zoomControl: true,
       styles: [{ featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }],
     });
 
     if (data.baseAddressLat && data.baseAddressLng) {
-      createMarker({ lat: data.baseAddressLat, lng: data.baseAddressLng });
+      updateMapView({ lat: data.baseAddressLat, lng: data.baseAddressLng }, data.maxTravelDistanceKm);
     }
   }, [mapLoaded]);
 
@@ -139,11 +85,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   useEffect(() => {
     if (!mapLoaded || hasAutoGeocodedRef.current) return;
     if (!data.baseAddress) return;
-
-    if (data.baseAddressLat && data.baseAddressLng) {
-      hasAutoGeocodedRef.current = true;
-      return;
-    }
+    if (data.baseAddressLat && data.baseAddressLng) { hasAutoGeocodedRef.current = true; return; }
 
     hasAutoGeocodedRef.current = true;
     const geocoder = new google.maps.Geocoder();
@@ -152,268 +94,108 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
         const lat = results[0].geometry.location.lat();
         const lng = results[0].geometry.location.lng();
         const address = results[0].formatted_address || data.baseAddress;
-        onChangeRef.current({
-          ...dataRef.current,
-          baseAddress: address,
-          baseAddressLat: lat,
-          baseAddressLng: lng,
-        });
-        updateMapCenter({ lat, lng });
+        onChangeRef.current({ ...dataRef.current, baseAddress: address, baseAddressLat: lat, baseAddressLng: lng });
+        updateMapView({ lat, lng }, dataRef.current.maxTravelDistanceKm);
       }
     });
   }, [mapLoaded, data.baseAddress]);
 
-  const createMarker = (position: google.maps.LatLngLiteral) => {
-    if (markerRef.current) markerRef.current.setMap(null);
+  const updateMapView = (center: google.maps.LatLngLiteral, radiusKm: number) => {
     if (!googleMapRef.current) return;
-    markerRef.current = new google.maps.Marker({
-      map: googleMapRef.current,
-      position,
-      icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 10,
-        fillColor: "#16a34a",
-        fillOpacity: 1,
-        strokeColor: "#ffffff",
-        strokeWeight: 3,
-      },
-    });
-  };
 
-  const updateMapCenter = (center: google.maps.LatLngLiteral) => {
-    if (!googleMapRef.current) return;
-    googleMapRef.current.setCenter(center);
-    createMarker(center);
-    const circle = new google.maps.Circle({
-      center,
-      radius: dataRef.current.maxTravelDistanceKm * 1000,
+    // Marker
+    if (markerRef.current) markerRef.current.setMap(null);
+    markerRef.current = new google.maps.Marker({
+      map: googleMapRef.current, position: center,
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: "#16a34a", fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 3 },
     });
-    const bounds = circle.getBounds();
+
+    // Radius circle
+    if (radiusCircleRef.current) radiusCircleRef.current.setMap(null);
+    radiusCircleRef.current = new google.maps.Circle({
+      map: googleMapRef.current, center, radius: radiusKm * 1000,
+      fillColor: "#22c55e", fillOpacity: 0.1,
+      strokeColor: "#16a34a", strokeWeight: 2, strokeOpacity: 0.6,
+    });
+
+    const bounds = radiusCircleRef.current.getBounds();
     if (bounds) googleMapRef.current.fitBounds(bounds);
   };
 
-// Fetch boundaries via server-side cache (batched for speed)
-  const fetchBoundaries = useCallback(async (suburbs: SuburbWithCoords[]): Promise<SuburbWithCoords[]> => {
-    setIsLoadingBoundaries(true);
-
-    // Check local cache first, identify uncached
-    const uncached: { name: string; state: string; postcode: string; lat: number; lng: number }[] = [];
-    const results: SuburbWithCoords[] = suburbs.map((suburb) => {
-      const cacheKey = `${suburb.name}|${suburb.postcode}`;
-      if (boundaryCache.current.has(cacheKey)) {
-        return { ...suburb, boundary: boundaryCache.current.get(cacheKey) };
-      }
-      uncached.push({ name: suburb.name, state: suburb.state, postcode: suburb.postcode, lat: suburb.lat, lng: suburb.lng });
-      return suburb;
-    });
-
-    if (uncached.length > 0) {
-      // Split into batches of 15 for parallel processing
-      const BATCH_SIZE = 15;
-      const batches: typeof uncached[] = [];
-      for (let i = 0; i < uncached.length; i += BATCH_SIZE) {
-        batches.push(uncached.slice(i, i + BATCH_SIZE));
-      }
-
-      // Fire all batches in parallel
-      const batchResults = await Promise.all(batches.map((batch) => fetchBoundariesBatch(batch)));
-      
-      // Merge all results
-      const mergedMap = new Map<string, google.maps.LatLngLiteral[][] | null>();
-      for (const batchMap of batchResults) {
-        batchMap.forEach((v, k) => mergedMap.set(k, v));
-      }
-
-      for (let i = 0; i < results.length; i++) {
-        const key = `${results[i].name}|${results[i].postcode}`;
-        if (mergedMap.has(key)) {
-          const boundary = mergedMap.get(key)!;
-          boundaryCache.current.set(key, boundary);
-          results[i] = { ...results[i], boundary };
-        }
-      }
-    }
-
-    setIsLoadingBoundaries(false);
-    return results;
-  }, []);
-
-  // Draw suburb polygons on map
-  const drawSuburbPolygons = useCallback((suburbs: SuburbWithCoords[], selectedIds: string[], fitBounds = false) => {
-    polygonsRef.current.forEach((p) => p.setMap(null));
-    polygonsRef.current = [];
-    if (!googleMapRef.current || suburbs.length === 0) return;
-
-    const bounds = fitBounds ? new google.maps.LatLngBounds() : null;
-    if (bounds && dataRef.current.baseAddressLat && dataRef.current.baseAddressLng) {
-      bounds.extend({
-        lat: dataRef.current.baseAddressLat,
-        lng: dataRef.current.baseAddressLng,
-      });
-    }
-
-    for (const suburb of suburbs) {
-      const suburbId = `${suburb.name}|${suburb.postcode}`;
-      const isSelected = selectedIds.includes(suburbId);
-
-      if (suburb.boundary && suburb.boundary.length > 0) {
-        for (const ring of suburb.boundary) {
-          const polygon = new google.maps.Polygon({
-            paths: ring,
-            map: googleMapRef.current,
-            fillColor: isSelected ? "#22c55e" : "#94a3b8",
-            fillOpacity: isSelected ? 0.25 : 0.06,
-            strokeColor: isSelected ? "#16a34a" : "#94a3b8",
-            strokeWeight: isSelected ? 2 : 0.5,
-            strokeOpacity: isSelected ? 0.9 : 0.3,
-            clickable: true,
-          });
-          polygon.addListener("click", () => toggleSuburbRef.current(suburbId));
-          polygon.addListener("mouseover", () => {
-            polygon.setOptions({ fillOpacity: isSelected ? 0.4 : 0.15 });
-          });
-          polygon.addListener("mouseout", () => {
-            polygon.setOptions({ fillOpacity: isSelected ? 0.25 : 0.06 });
-          });
-          polygonsRef.current.push(polygon);
-          if (bounds) ring.forEach((p) => bounds.extend(p));
-        }
-      } else {
-        const fallbackCircle = new google.maps.Circle({
-          center: { lat: suburb.lat, lng: suburb.lng },
-          radius: 800,
-          map: googleMapRef.current,
-          fillColor: isSelected ? "#22c55e" : "#94a3b8",
-          fillOpacity: isSelected ? 0.3 : 0.1,
-          strokeColor: isSelected ? "#16a34a" : "#94a3b8",
-          strokeWeight: isSelected ? 1.5 : 0.5,
-          clickable: true,
-        });
-        fallbackCircle.addListener("click", () => toggleSuburbRef.current(suburbId));
-        fallbackCircle.addListener("mouseover", () => {
-          fallbackCircle.setOptions({ fillOpacity: isSelected ? 0.45 : 0.2 });
-        });
-        fallbackCircle.addListener("mouseout", () => {
-          fallbackCircle.setOptions({ fillOpacity: isSelected ? 0.3 : 0.1 });
-        });
-        polygonsRef.current.push(fallbackCircle as any);
-        if (bounds) bounds.extend({ lat: suburb.lat, lng: suburb.lng });
-      }
-    }
-
-    if (bounds) googleMapRef.current.fitBounds(bounds, 40);
-  }, []);
-
-  // Redraw when selection changes (no zoom reset)
+  // Update radius circle when slider changes
   useEffect(() => {
-    if (allDiscoveredSuburbs.length > 0) {
-      drawSuburbPolygons(allDiscoveredSuburbs, data.servicedSuburbs, false);
-    }
-  }, [data.servicedSuburbs, allDiscoveredSuburbs, drawSuburbPolygons]);
+    if (!data.baseAddressLat || !data.baseAddressLng) return;
+    updateMapView({ lat: data.baseAddressLat, lng: data.baseAddressLng }, data.maxTravelDistanceKm);
+  }, [data.maxTravelDistanceKm, data.baseAddressLat, data.baseAddressLng]);
 
   // Initialize autocomplete
   useEffect(() => {
     if (!mapLoaded || !inputRef.current || autocompleteRef.current) return;
-
     autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
-      componentRestrictions: { country: "au" },
-      types: ["address"],
+      componentRestrictions: { country: "au" }, types: ["address"],
     });
-
     autocompleteRef.current.addListener("place_changed", () => {
       const place = autocompleteRef.current?.getPlace();
       if (place?.geometry?.location) {
         const lat = place.geometry.location.lat();
         const lng = place.geometry.location.lng();
         const address = place.formatted_address || "";
-        onChangeRef.current({
-          ...dataRef.current,
-          baseAddress: address,
-          baseAddressLat: lat,
-          baseAddressLng: lng,
-        });
-        updateMapCenter({ lat, lng });
+        onChangeRef.current({ ...dataRef.current, baseAddress: address, baseAddressLat: lat, baseAddressLng: lng });
+        updateMapView({ lat, lng }, dataRef.current.maxTravelDistanceKm);
       }
     });
   }, [mapLoaded]);
 
   // Suburb discovery via australian_postcodes database table
-  const fetchSuburbsInRadius = useCallback(
-    async (lat: number, lng: number, radiusKm: number) => {
-      setIsLoadingSuburbs(true);
-      setLoadingProgress(10);
+  const fetchSuburbsInRadius = useCallback(async (lat: number, lng: number, radiusKm: number) => {
+    setIsLoadingSuburbs(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke("get-suburbs-in-radius", {
+        body: { lat, lng, radius_km: radiusKm },
+      });
+      if (error) { console.error("Error fetching suburbs:", error); return; }
 
-      try {
-        setLoadingProgress(30);
-        const { data: result, error } = await supabase.functions.invoke("get-suburbs-in-radius", {
-          body: { lat, lng, radius_km: radiusKm },
-        });
-
-        if (error) {
-          console.error("Error fetching suburbs:", error);
-          return;
+      const suburbsArray: SuburbWithCoords[] = [];
+      const seen = new Set<string>();
+      for (const s of result?.suburbs || []) {
+        const key = `${s.suburb}|${s.postcode}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          suburbsArray.push({ name: s.suburb, state: s.state || "NSW", postcode: s.postcode || "", lat: 0, lng: 0 });
         }
-
-        setLoadingProgress(50);
-        const suburbsArray: SuburbWithCoords[] = [];
-        const seen = new Set<string>();
-
-        for (const s of result?.suburbs || []) {
-          const key = `${s.suburb}|${s.postcode}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            suburbsArray.push({ name: s.suburb, state: s.state || "NSW", postcode: s.postcode || "", lat: 0, lng: 0 });
-          }
-        }
-
-        const suburbNames = suburbsArray.map((s) => s.name);
-        const { data: postcodeData } = await supabase
-          .from("australian_postcodes")
-          .select("suburb, state, postcode, lat, lng")
-          .in("suburb", suburbNames);
-
-        setLoadingProgress(70);
-        if (postcodeData) {
-          const coordMap = new Map<string, { lat: number; lng: number }>();
-          for (const p of postcodeData) {
-            const key = `${p.suburb}|${p.postcode}`;
-            if (!coordMap.has(key)) {
-              coordMap.set(key, { lat: Number(p.lat), lng: Number(p.lng) });
-            }
-          }
-          for (const s of suburbsArray) {
-            const coords = coordMap.get(`${s.name}|${s.postcode}`);
-            if (coords) { s.lat = coords.lat; s.lng = coords.lng; }
-          }
-        }
-
-        suburbsArray.sort((a, b) => a.name.localeCompare(b.name));
-        setLoadingProgress(85);
-
-        const suburbsWithBoundaries = await fetchBoundaries(suburbsArray);
-        setLoadingProgress(100);
-        setAllDiscoveredSuburbs(suburbsWithBoundaries);
-        
-        // Fit bounds on initial load / radius change
-        isInitialLoadRef.current = true;
-        setTimeout(() => {
-          drawSuburbPolygons(suburbsWithBoundaries, suburbsWithBoundaries.map((s) => `${s.name}|${s.postcode}`), true);
-          isInitialLoadRef.current = false;
-        }, 50);
-
-        onChangeRef.current({
-          ...dataRef.current,
-          servicedSuburbs: suburbsWithBoundaries.map((s) => `${s.name}|${s.postcode}`),
-        });
-      } catch (error) {
-        console.error("Error fetching suburbs:", error);
-      } finally {
-        setIsLoadingSuburbs(false);
-        setTimeout(() => setLoadingProgress(0), 500);
       }
-    },
-    [fetchBoundaries, drawSuburbPolygons],
-  );
+
+      const suburbNames = suburbsArray.map((s) => s.name);
+      const { data: postcodeData } = await supabase
+        .from("australian_postcodes")
+        .select("suburb, state, postcode, lat, lng")
+        .in("suburb", suburbNames);
+
+      if (postcodeData) {
+        const coordMap = new Map<string, { lat: number; lng: number }>();
+        for (const p of postcodeData) {
+          const key = `${p.suburb}|${p.postcode}`;
+          if (!coordMap.has(key)) coordMap.set(key, { lat: Number(p.lat), lng: Number(p.lng) });
+        }
+        for (const s of suburbsArray) {
+          const coords = coordMap.get(`${s.name}|${s.postcode}`);
+          if (coords) { s.lat = coords.lat; s.lng = coords.lng; }
+        }
+      }
+
+      suburbsArray.sort((a, b) => a.name.localeCompare(b.name));
+      setAllDiscoveredSuburbs(suburbsArray);
+
+      onChangeRef.current({
+        ...dataRef.current,
+        servicedSuburbs: suburbsArray.map((s) => `${s.name}|${s.postcode}`),
+      });
+    } catch (error) {
+      console.error("Error fetching suburbs:", error);
+    } finally {
+      setIsLoadingSuburbs(false);
+    }
+  }, []);
 
   // Debounced suburb fetch
   useEffect(() => {
@@ -427,35 +209,19 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   const toggleSuburb = useCallback((suburbId: string) => {
     const isSelected = dataRef.current.servicedSuburbs.includes(suburbId);
     if (isSelected) {
-      onChangeRef.current({
-        ...dataRef.current,
-        servicedSuburbs: dataRef.current.servicedSuburbs.filter((s) => s !== suburbId),
-      });
+      onChangeRef.current({ ...dataRef.current, servicedSuburbs: dataRef.current.servicedSuburbs.filter((s) => s !== suburbId) });
     } else {
-      onChangeRef.current({
-        ...dataRef.current,
-        servicedSuburbs: [...dataRef.current.servicedSuburbs, suburbId].sort(),
-      });
+      onChangeRef.current({ ...dataRef.current, servicedSuburbs: [...dataRef.current.servicedSuburbs, suburbId].sort() });
     }
   }, []);
 
-  useEffect(() => {
-    toggleSuburbRef.current = toggleSuburb;
-  }, [toggleSuburb]);
-
   const selectAllSuburbs = () =>
-    onChange({
-      ...data,
-      servicedSuburbs: allDiscoveredSuburbs.map((s) => `${s.name}|${s.postcode}`),
-    });
+    onChange({ ...data, servicedSuburbs: allDiscoveredSuburbs.map((s) => `${s.name}|${s.postcode}`) });
   const deselectAllSuburbs = () => onChange({ ...data, servicedSuburbs: [] });
 
-  // Manual suburb search with autocomplete
+  // Manual suburb search
   useEffect(() => {
-    if (manualSuburbSearch.length < 2) {
-      setManualSuburbResults([]);
-      return;
-    }
+    if (manualSuburbSearch.length < 2) { setManualSuburbResults([]); return; }
     const timer = setTimeout(async () => {
       setIsSearchingSuburbs(true);
       try {
@@ -464,9 +230,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
           .select("suburb, state, postcode, lat, lng")
           .ilike("suburb", `${manualSuburbSearch}%`)
           .limit(20);
-        
         if (results) {
-          // Deduplicate and exclude already-discovered suburbs
           const seen = new Set<string>();
           const filtered: { suburb: string; state: string; postcode: string; lat: number; lng: number }[] = [];
           for (const r of results) {
@@ -478,21 +242,17 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
           }
           setManualSuburbResults(filtered);
         }
-      } catch (err) {
-        console.error("Suburb search error:", err);
-      } finally {
-        setIsSearchingSuburbs(false);
-      }
+      } catch (err) { console.error("Suburb search error:", err); }
+      finally { setIsSearchingSuburbs(false); }
     }, 300);
     return () => clearTimeout(timer);
   }, [manualSuburbSearch]);
 
-  const addManualSuburb = async (suburb: { suburb: string; state: string; postcode: string; lat: number; lng: number }) => {
+  const addManualSuburb = (suburb: { suburb: string; state: string; postcode: string; lat: number; lng: number }) => {
     const alreadyExists = allDiscoveredSuburbs.some((s) => s.name === suburb.suburb && s.postcode === suburb.postcode);
     if (!alreadyExists) {
       const newSuburb: SuburbWithCoords = { name: suburb.suburb, state: suburb.state, postcode: suburb.postcode, lat: suburb.lat, lng: suburb.lng };
-      const withBoundaries = await fetchBoundaries([newSuburb]);
-      const updated = [...allDiscoveredSuburbs, ...withBoundaries].sort((a, b) => a.name.localeCompare(b.name));
+      const updated = [...allDiscoveredSuburbs, newSuburb].sort((a, b) => a.name.localeCompare(b.name));
       setAllDiscoveredSuburbs(updated);
     }
     const suburbId = `${suburb.suburb}|${suburb.postcode}`;
@@ -525,18 +285,11 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
           <p className="text-sm text-muted-foreground">This is where you'll travel from to reach jobs.</p>
           <div className="relative">
             <Navigation className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              ref={inputRef}
-              id="base-address"
-              placeholder="Start typing your address..."
-              defaultValue={data.baseAddress}
-              className="pl-10"
-            />
+            <Input ref={inputRef} id="base-address" placeholder="Start typing your address..." defaultValue={data.baseAddress} className="pl-10" />
           </div>
           {data.baseAddress && data.baseAddressLat && (
             <p className="text-sm text-primary flex items-center gap-1">
-              <MapPin className="w-3 h-3" />
-              {data.baseAddress}
+              <MapPin className="w-3 h-3" /> {data.baseAddress}
             </p>
           )}
         </div>
@@ -544,11 +297,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
         {/* Map */}
         <div className="space-y-3">
           <Label>Service Area Preview</Label>
-          <div
-            ref={mapRef}
-            className="w-full h-64 md:h-80 rounded-lg border border-border bg-muted"
-            style={{ minHeight: "256px" }}
-          >
+          <div ref={mapRef} className="w-full h-64 md:h-80 rounded-lg border border-border bg-muted" style={{ minHeight: "256px" }}>
             {!mapLoaded && (
               <div className="w-full h-full flex items-center justify-center">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -568,10 +317,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
           <Slider
             value={[data.maxTravelDistanceKm]}
             onValueChange={([value]) => onChange({ ...data, maxTravelDistanceKm: value })}
-            min={5}
-            max={50}
-            step={5}
-            className="w-full"
+            min={5} max={50} step={5} className="w-full"
           />
         </div>
 
@@ -580,43 +326,18 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label>Select suburbs to service</Label>
-              {(isLoadingSuburbs || isLoadingBoundaries) && (
+              {isLoadingSuburbs && (
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  {isLoadingSuburbs ? "Finding suburbs..." : "Loading boundaries..."}
+                  <Loader2 className="w-3 h-3 animate-spin" /> Finding suburbs...
                 </span>
               )}
             </div>
 
-            {/* Progress bar */}
-            {loadingProgress > 0 && (
-              <div className="space-y-1">
-                <Progress value={loadingProgress} className="h-2" />
-                <p className="text-xs text-muted-foreground">
-                  {loadingProgress < 50 ? "Discovering suburbs..." : loadingProgress < 85 ? "Fetching coordinates..." : "Loading boundaries..."}
-                </p>
-              </div>
-            )}
-
             {allDiscoveredSuburbs.length > 0 ? (
               <>
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={selectAllSuburbs}
-                    disabled={data.servicedSuburbs.length === allDiscoveredSuburbs.length}
-                  >
-                    Select All
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={deselectAllSuburbs}
-                    disabled={data.servicedSuburbs.length === 0}
-                  >
-                    Deselect All
-                  </Button>
+                  <Button variant="outline" size="sm" onClick={selectAllSuburbs} disabled={data.servicedSuburbs.length === allDiscoveredSuburbs.length}>Select All</Button>
+                  <Button variant="outline" size="sm" onClick={deselectAllSuburbs} disabled={data.servicedSuburbs.length === 0}>Deselect All</Button>
                   <span className="text-xs text-muted-foreground ml-auto">
                     {data.servicedSuburbs.length} of {allDiscoveredSuburbs.length} selected
                   </span>
@@ -626,7 +347,6 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
                     {allDiscoveredSuburbs.map((suburb) => {
                       const suburbId = `${suburb.name}|${suburb.postcode}`;
                       const isSelected = data.servicedSuburbs.includes(suburbId);
-                      // Check if there are duplicate names to show postcode
                       const hasDuplicateName = allDiscoveredSuburbs.filter((s) => s.name === suburb.name).length > 1;
                       return (
                         <div
@@ -639,11 +359,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
                             onCheckedChange={() => toggleSuburb(suburbId)}
                             onClick={(e) => e.stopPropagation()}
                           />
-                          <span
-                            className={`text-sm truncate ${
-                              isSelected ? "text-foreground font-medium" : "text-muted-foreground"
-                            }`}
-                          >
+                          <span className={`text-sm truncate ${isSelected ? "text-foreground font-medium" : "text-muted-foreground"}`}>
                             {suburb.name}
                             {hasDuplicateName && <span className="text-xs text-muted-foreground ml-1">({suburb.postcode})</span>}
                           </span>
@@ -655,9 +371,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
               </>
             ) : (
               <div className="h-20 rounded-lg border border-dashed border-border flex items-center justify-center">
-                <p className="text-sm text-muted-foreground">
-                  {isLoadingSuburbs ? "Loading..." : "No suburbs found yet"}
-                </p>
+                <p className="text-sm text-muted-foreground">{isLoadingSuburbs ? "Loading..." : "No suburbs found yet"}</p>
               </div>
             )}
 
@@ -666,15 +380,8 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
               <Label className="text-sm">Add a suburb outside your radius</Label>
               <div className="relative">
                 <Plus className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Type suburb name..."
-                  value={manualSuburbSearch}
-                  onChange={(e) => setManualSuburbSearch(e.target.value)}
-                  className="pl-10"
-                />
-                {isSearchingSuburbs && (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
-                )}
+                <Input placeholder="Type suburb name..." value={manualSuburbSearch} onChange={(e) => setManualSuburbSearch(e.target.value)} className="pl-10" />
+                {isSearchingSuburbs && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />}
               </div>
               {manualSuburbResults.length > 0 && (
                 <div className="rounded-lg border border-border bg-background shadow-md max-h-48 overflow-y-auto">
@@ -689,7 +396,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
                         disabled={alreadySelected}
                       >
                         <span className={alreadySelected ? "text-muted-foreground" : "text-foreground"}>
-                          {r.suburb} <span className="text-xs text-muted-foreground">({r.state})</span>
+                          {r.suburb} <span className="text-xs text-muted-foreground">({r.state} {r.postcode})</span>
                         </span>
                         {alreadySelected ? (
                           <span className="text-xs text-muted-foreground">Already added</span>
