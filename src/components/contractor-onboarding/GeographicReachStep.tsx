@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input";
 import { ArrowRight, ArrowLeft, MapPin, Loader2, Navigation } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
+import { supabase } from "@/integrations/supabase/client";
 import type { GeographicData } from "./types";
 
 interface SuburbWithCoords {
   name: string;
   lat: number;
   lng: number;
-  boundary?: google.maps.LatLngLiteral[][] | null; // polygon rings
+  boundary?: google.maps.LatLngLiteral[][] | null;
 }
 
 interface GeographicReachStepProps {
@@ -23,65 +24,34 @@ interface GeographicReachStepProps {
   onBack: () => void;
 }
 
-// Fetch suburb boundary from Nominatim (OpenStreetMap)
-async function fetchSuburbBoundary(
-  suburbName: string,
-  nearLat: number,
-  nearLng: number
-): Promise<google.maps.LatLngLiteral[][] | null> {
+// Fetch boundaries via edge function (server-side cache + Nominatim fallback)
+async function fetchBoundariesBatch(
+  suburbs: { name: string; lat: number; lng: number }[]
+): Promise<Map<string, google.maps.LatLngLiteral[][] | null>> {
+  const result = new Map<string, google.maps.LatLngLiteral[][] | null>();
+  if (suburbs.length === 0) return result;
+
   try {
-    const query = encodeURIComponent(`${suburbName}, Australia`);
-    const url = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&polygon_geojson=1&limit=3&countrycodes=au&viewbox=${nearLng - 0.5},${nearLat + 0.5},${nearLng + 0.5},${nearLat - 0.5}&bounded=0`;
-
-    const res = await fetch(url, {
-      headers: { "User-Agent": "YardlyApp/1.0" },
+    const { data, error } = await supabase.functions.invoke("get-suburb-boundaries", {
+      body: { suburbs: suburbs.map((s) => ({ name: s.name, lat: s.lat, lng: s.lng })) },
     });
-    if (!res.ok) return null;
 
-    const results = await res.json();
-    if (!results || results.length === 0) return null;
-
-    // Find the best match - prefer results that are suburbs/towns/villages
-    const match =
-      results.find(
-        (r: any) =>
-          r.geojson &&
-          (r.type === "suburb" || r.type === "town" || r.type === "village" || r.type === "city" || r.type === "hamlet") &&
-          (r.geojson.type === "Polygon" || r.geojson.type === "MultiPolygon")
-      ) ||
-      results.find(
-        (r: any) =>
-          r.geojson &&
-          (r.geojson.type === "Polygon" || r.geojson.type === "MultiPolygon")
-      );
-
-    if (!match?.geojson) return null;
-
-    const geojson = match.geojson;
-
-    if (geojson.type === "Polygon") {
-      // Polygon: array of rings, each ring is array of [lng, lat]
-      return geojson.coordinates.map((ring: number[][]) =>
-        ring.map((coord: number[]) => ({ lat: coord[1], lng: coord[0] }))
-      );
-    } else if (geojson.type === "MultiPolygon") {
-      // MultiPolygon: flatten all polygons into rings
-      const rings: google.maps.LatLngLiteral[][] = [];
-      for (const polygon of geojson.coordinates) {
-        for (const ring of polygon) {
-          rings.push(
-            ring.map((coord: number[]) => ({ lat: coord[1], lng: coord[0] }))
-          );
-        }
-      }
-      return rings;
+    if (error) {
+      console.error("Edge function error:", error);
+      return result;
     }
 
-    return null;
+    if (data?.results) {
+      for (const r of data.results) {
+        const boundary = r.boundary && Array.isArray(r.boundary) && r.boundary.length > 0 ? r.boundary : null;
+        result.set(r.name, boundary);
+      }
+    }
   } catch (err) {
-    console.warn(`Failed to fetch boundary for ${suburbName}:`, err);
-    return null;
+    console.error("Failed to fetch boundaries:", err);
   }
+
+  return result;
 }
 
 export const GeographicReachStep = ({ data, onChange, onNext, onBack }: GeographicReachStepProps) => {
@@ -204,30 +174,37 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
     if (bounds) googleMapRef.current.fitBounds(bounds);
   };
 
-  // Fetch boundaries from Nominatim for all suburbs
+  // Fetch boundaries via server-side cache (single batch request)
   const fetchBoundaries = useCallback(
     async (suburbs: SuburbWithCoords[]): Promise<SuburbWithCoords[]> => {
       setIsLoadingBoundaries(true);
-      const updated: SuburbWithCoords[] = [];
-      const baseLat = dataRef.current.baseAddressLat || -33.87;
-      const baseLng = dataRef.current.baseAddressLng || 151.21;
+
+      // Check local cache first, identify uncached
+      const uncached: { name: string; lat: number; lng: number }[] = [];
+      const results: SuburbWithCoords[] = [];
 
       for (const suburb of suburbs) {
-        // Check cache first
         if (boundaryCache.current.has(suburb.name)) {
-          updated.push({ ...suburb, boundary: boundaryCache.current.get(suburb.name) });
-          continue;
+          results.push({ ...suburb, boundary: boundaryCache.current.get(suburb.name) });
+        } else {
+          uncached.push({ name: suburb.name, lat: suburb.lat, lng: suburb.lng });
+          results.push(suburb); // placeholder, will update below
         }
+      }
 
-        // Rate limit: 1 req/sec for Nominatim
-        await new Promise((r) => setTimeout(r, 1100));
-        const boundary = await fetchSuburbBoundary(suburb.name, baseLat, baseLng);
-        boundaryCache.current.set(suburb.name, boundary);
-        updated.push({ ...suburb, boundary });
+      if (uncached.length > 0) {
+        const boundaryMap = await fetchBoundariesBatch(uncached);
+        for (let i = 0; i < results.length; i++) {
+          if (boundaryMap.has(results[i].name)) {
+            const boundary = boundaryMap.get(results[i].name)!;
+            boundaryCache.current.set(results[i].name, boundary);
+            results[i] = { ...results[i], boundary };
+          }
+        }
       }
 
       setIsLoadingBoundaries(false);
-      return updated;
+      return results;
     },
     []
   );
