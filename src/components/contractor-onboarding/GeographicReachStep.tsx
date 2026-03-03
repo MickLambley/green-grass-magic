@@ -66,9 +66,10 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   const inputRef = useRef<HTMLInputElement>(null);
   const dataRef = useRef(data);
   const onChangeRef = useRef(onChange);
-  const polygonsRef = useRef<google.maps.Polygon[]>([]);
+  const polygonsRef = useRef<(google.maps.Polygon | google.maps.Circle)[]>([]);
   const hasAutoGeocodedRef = useRef(false);
   const boundaryCache = useRef<Map<string, google.maps.LatLngLiteral[][] | null>>(new Map());
+  const toggleSuburbRef = useRef<(id: string) => void>(() => {});
 
   const [isLoadingSuburbs, setIsLoadingSuburbs] = useState(false);
   const [isLoadingBoundaries, setIsLoadingBoundaries] = useState(false);
