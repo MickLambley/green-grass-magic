@@ -221,13 +221,13 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   }, []);
 
   // Draw suburb polygons on map
-  const drawSuburbPolygons = useCallback((suburbs: SuburbWithCoords[], selectedNames: string[]) => {
+  const drawSuburbPolygons = useCallback((suburbs: SuburbWithCoords[], selectedNames: string[], fitBounds = false) => {
     polygonsRef.current.forEach((p) => p.setMap(null));
     polygonsRef.current = [];
     if (!googleMapRef.current || suburbs.length === 0) return;
 
-    const bounds = new google.maps.LatLngBounds();
-    if (dataRef.current.baseAddressLat && dataRef.current.baseAddressLng) {
+    const bounds = fitBounds ? new google.maps.LatLngBounds() : null;
+    if (bounds && dataRef.current.baseAddressLat && dataRef.current.baseAddressLng) {
       bounds.extend({
         lat: dataRef.current.baseAddressLat,
         lng: dataRef.current.baseAddressLng,
@@ -238,7 +238,6 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
       const isSelected = selectedNames.includes(suburb.name);
 
       if (suburb.boundary && suburb.boundary.length > 0) {
-        // Draw real boundary polygon
         for (const ring of suburb.boundary) {
           const polygon = new google.maps.Polygon({
             paths: ring,
@@ -250,10 +249,9 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
             strokeOpacity: isSelected ? 0.9 : 0.3,
           });
           polygonsRef.current.push(polygon);
-          ring.forEach((p) => bounds.extend(p));
+          if (bounds) ring.forEach((p) => bounds.extend(p));
         }
       } else {
-        // Fallback: draw a small circle marker for suburbs with no boundary data
         const fallbackCircle = new google.maps.Circle({
           center: { lat: suburb.lat, lng: suburb.lng },
           radius: 800,
@@ -263,13 +261,12 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
           strokeColor: isSelected ? "#16a34a" : "#94a3b8",
           strokeWeight: isSelected ? 1.5 : 0.5,
         });
-        // Store as polygon-like for cleanup (Circle has setMap too)
         polygonsRef.current.push(fallbackCircle as any);
-        bounds.extend({ lat: suburb.lat, lng: suburb.lng });
+        if (bounds) bounds.extend({ lat: suburb.lat, lng: suburb.lng });
       }
     }
 
-    googleMapRef.current.fitBounds(bounds, 40);
+    if (bounds) googleMapRef.current.fitBounds(bounds, 40);
   }, []);
 
   // Redraw when selection changes
