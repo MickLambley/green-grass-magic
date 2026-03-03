@@ -9,6 +9,7 @@ const corsHeaders = {
 interface SuburbRequest {
   name: string;
   state?: string;
+  postcode?: string;
   lat: number;
   lng: number;
 }
@@ -16,6 +17,7 @@ interface SuburbRequest {
 interface BoundaryResult {
   name: string;
   state?: string;
+  postcode?: string;
   boundary: { lat: number; lng: number }[][] | null;
 }
 
