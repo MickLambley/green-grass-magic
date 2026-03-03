@@ -306,8 +306,10 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   const fetchSuburbsInRadius = useCallback(
     async (lat: number, lng: number, radiusKm: number) => {
       setIsLoadingSuburbs(true);
+      setLoadingProgress(10);
 
       try {
+        setLoadingProgress(30);
         const { data: result, error } = await supabase.functions.invoke("get-suburbs-in-radius", {
           body: { lat, lng, radius_km: radiusKm },
         });
@@ -317,29 +319,24 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
           return;
         }
 
+        setLoadingProgress(50);
         const suburbsArray: SuburbWithCoords[] = [];
         const seen = new Set<string>();
 
-        // Deduplicate by suburb name (different postcodes can share a name)
         for (const s of result?.suburbs || []) {
           if (!seen.has(s.suburb)) {
             seen.add(s.suburb);
-            // Look up centroid from australian_postcodes data
-            suburbsArray.push({
-              name: s.suburb,
-              lat: 0, // Will be filled by boundary fetch or centroid
-              lng: 0,
-            });
+            suburbsArray.push({ name: s.suburb, lat: 0, lng: 0 });
           }
         }
 
-        // We need lat/lng for boundary fetching - query the postcodes table directly
         const suburbNames = suburbsArray.map((s) => s.name);
         const { data: postcodeData } = await supabase
           .from("australian_postcodes")
           .select("suburb, lat, lng")
           .in("suburb", suburbNames);
 
+        setLoadingProgress(70);
         if (postcodeData) {
           const coordMap = new Map<string, { lat: number; lng: number }>();
           for (const p of postcodeData) {
@@ -349,18 +346,24 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
           }
           for (const s of suburbsArray) {
             const coords = coordMap.get(s.name);
-            if (coords) {
-              s.lat = coords.lat;
-              s.lng = coords.lng;
-            }
+            if (coords) { s.lat = coords.lat; s.lng = coords.lng; }
           }
         }
 
         suburbsArray.sort((a, b) => a.name.localeCompare(b.name));
+        setLoadingProgress(85);
 
-        // Fetch real boundaries
         const suburbsWithBoundaries = await fetchBoundaries(suburbsArray);
+        setLoadingProgress(100);
         setAllDiscoveredSuburbs(suburbsWithBoundaries);
+        
+        // Fit bounds on initial load / radius change
+        isInitialLoadRef.current = true;
+        setTimeout(() => {
+          drawSuburbPolygons(suburbsWithBoundaries, suburbsWithBoundaries.map((s) => s.name), true);
+          isInitialLoadRef.current = false;
+        }, 50);
+
         onChangeRef.current({
           ...dataRef.current,
           servicedSuburbs: suburbsWithBoundaries.map((s) => s.name),
@@ -369,9 +372,10 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
         console.error("Error fetching suburbs:", error);
       } finally {
         setIsLoadingSuburbs(false);
+        setTimeout(() => setLoadingProgress(0), 500);
       }
     },
-    [fetchBoundaries],
+    [fetchBoundaries, drawSuburbPolygons],
   );
 
   // Debounced suburb fetch
