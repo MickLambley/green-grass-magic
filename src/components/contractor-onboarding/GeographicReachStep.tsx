@@ -269,10 +269,10 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
     if (bounds) googleMapRef.current.fitBounds(bounds, 40);
   }, []);
 
-  // Redraw when selection changes
+  // Redraw when selection changes (no zoom reset)
   useEffect(() => {
     if (allDiscoveredSuburbs.length > 0) {
-      drawSuburbPolygons(allDiscoveredSuburbs, data.servicedSuburbs);
+      drawSuburbPolygons(allDiscoveredSuburbs, data.servicedSuburbs, false);
     }
   }, [data.servicedSuburbs, allDiscoveredSuburbs, drawSuburbPolygons]);
 
