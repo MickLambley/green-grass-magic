@@ -130,21 +130,21 @@ Deno.serve(async (req) => {
     // 1. Check cache for all suburbs at once
     const { data: cached } = await supabase
       .from("suburb_boundaries")
-      .select("suburb_name, state, boundary")
+      .select("suburb_name, state, postcode, boundary")
       .in("suburb_name", suburbNames);
 
-    // Use name|state as cache key to avoid cross-state collisions
+    // Use name|postcode as cache key to avoid same-name collisions
     const cachedMap = new Map<string, { lat: number; lng: number }[][] | null>();
     if (cached) {
       for (const row of cached) {
-        const key = `${row.suburb_name}|${row.state || ""}`;
+        const key = `${row.suburb_name}|${row.postcode || ""}`;
         cachedMap.set(key, row.boundary as any);
       }
     }
 
-    // 2. Identify uncached suburbs (match by name AND state)
+    // 2. Identify uncached suburbs (match by name AND postcode)
     const uncached = suburbs.filter((s) => {
-      const key = `${s.name}|${s.state || ""}`;
+      const key = `${s.name}|${s.postcode || ""}`;
       return !cachedMap.has(key);
     });
 
@@ -156,6 +156,7 @@ Deno.serve(async (req) => {
       const newEntries: {
         suburb_name: string;
         state: string;
+        postcode: string;
         boundary: any;
         centroid_lat: number;
         centroid_lng: number;
@@ -165,12 +166,13 @@ Deno.serve(async (req) => {
       for (let i = 0; i < uncached.length; i++) {
         const s = uncached[i];
         const boundary = boundaries[i];
-        const key = `${s.name}|${s.state || ""}`;
+        const key = `${s.name}|${s.postcode || ""}`;
         cachedMap.set(key, boundary);
 
         newEntries.push({
           suburb_name: s.name,
           state: s.state || "",
+          postcode: s.postcode || "",
           boundary: boundary || [],
           centroid_lat: s.lat,
           centroid_lng: s.lng,
@@ -182,17 +184,18 @@ Deno.serve(async (req) => {
       if (newEntries.length > 0) {
         await supabase
           .from("suburb_boundaries")
-          .upsert(newEntries, { onConflict: "suburb_name,state" })
+          .upsert(newEntries, { onConflict: "suburb_name,state,postcode" })
           .select();
       }
     }
 
     // 5. Build response
     const results: BoundaryResult[] = suburbs.map((s) => {
-      const key = `${s.name}|${s.state || ""}`;
+      const key = `${s.name}|${s.postcode || ""}`;
       return {
         name: s.name,
         state: s.state,
+        postcode: s.postcode,
         boundary: cachedMap.get(key) || null,
       };
     });
