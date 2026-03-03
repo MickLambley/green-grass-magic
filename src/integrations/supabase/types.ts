@@ -1085,6 +1085,39 @@ export type Database = {
           },
         ]
       }
+      suburb_boundaries: {
+        Row: {
+          boundary: Json
+          centroid_lat: number | null
+          centroid_lng: number | null
+          created_at: string
+          id: string
+          source: string
+          state: string | null
+          suburb_name: string
+        }
+        Insert: {
+          boundary: Json
+          centroid_lat?: number | null
+          centroid_lng?: number | null
+          created_at?: string
+          id?: string
+          source?: string
+          state?: string | null
+          suburb_name: string
+        }
+        Update: {
+          boundary?: Json
+          centroid_lat?: number | null
+          centroid_lng?: number | null
+          created_at?: string
+          id?: string
+          source?: string
+          state?: string | null
+          suburb_name?: string
+        }
+        Relationships: []
+      }
       transaction_fees: {
         Row: {
           contractor_id: string
