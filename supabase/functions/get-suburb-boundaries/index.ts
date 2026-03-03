@@ -78,6 +78,30 @@ async function fetchFromNominatim(
   }
 }
 
+// Run promises with limited concurrency
+async function parallelLimit<T>(
+  tasks: (() => Promise<T>)[],
+  concurrency: number
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let idx = 0;
+
+  async function worker() {
+    while (idx < tasks.length) {
+      const i = idx++;
+      results[i] = await tasks[i]();
+      // Small delay between requests from the same worker to be polite to Nominatim
+      if (idx < tasks.length) {
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -93,7 +117,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Use service role to read/write boundary cache
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
@@ -116,49 +139,40 @@ Deno.serve(async (req) => {
     // 2. Identify uncached suburbs
     const uncached = suburbs.filter((s) => !cachedMap.has(s.name));
 
-    // 3. Fetch uncached from Nominatim (with 1.1s delay between requests)
-    const newEntries: {
-      suburb_name: string;
-      boundary: any;
-      centroid_lat: number;
-      centroid_lng: number;
-      source: string;
-    }[] = [];
+    // 3. Fetch uncached from Nominatim in parallel (3 concurrent workers)
+    if (uncached.length > 0) {
+      const tasks = uncached.map((s) => () => fetchFromNominatim(s.name, s.lat, s.lng));
+      const boundaries = await parallelLimit(tasks, 3);
 
-    for (let i = 0; i < uncached.length; i++) {
-      if (i > 0) {
-        await new Promise((r) => setTimeout(r, 1100));
-      }
-      const s = uncached[i];
-      const boundary = await fetchFromNominatim(s.name, s.lat, s.lng);
-      cachedMap.set(s.name, boundary);
+      const newEntries: {
+        suburb_name: string;
+        boundary: any;
+        centroid_lat: number;
+        centroid_lng: number;
+        source: string;
+      }[] = [];
 
-      if (boundary) {
+      for (let i = 0; i < uncached.length; i++) {
+        const s = uncached[i];
+        const boundary = boundaries[i];
+        cachedMap.set(s.name, boundary);
+
         newEntries.push({
           suburb_name: s.name,
-          boundary,
-          centroid_lat: s.lat,
-          centroid_lng: s.lng,
-          source: "nominatim",
-        });
-      } else {
-        // Cache null result too (as empty array) to avoid re-fetching
-        newEntries.push({
-          suburb_name: s.name,
-          boundary: [],
+          boundary: boundary || [],
           centroid_lat: s.lat,
           centroid_lng: s.lng,
           source: "nominatim",
         });
       }
-    }
 
-    // 4. Bulk insert new entries (upsert to handle races)
-    if (newEntries.length > 0) {
-      await supabase
-        .from("suburb_boundaries")
-        .upsert(newEntries, { onConflict: "suburb_name,state" })
-        .select();
+      // 4. Bulk insert new entries
+      if (newEntries.length > 0) {
+        await supabase
+          .from("suburb_boundaries")
+          .upsert(newEntries, { onConflict: "suburb_name,state" })
+          .select();
+      }
     }
 
     // 5. Build response
