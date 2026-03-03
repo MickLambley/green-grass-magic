@@ -340,28 +340,30 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
         const seen = new Set<string>();
 
         for (const s of result?.suburbs || []) {
-          if (!seen.has(s.suburb)) {
-            seen.add(s.suburb);
-            suburbsArray.push({ name: s.suburb, lat: 0, lng: 0 });
+          const key = `${s.suburb}|${s.state}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            suburbsArray.push({ name: s.suburb, state: s.state || "NSW", lat: 0, lng: 0 });
           }
         }
 
         const suburbNames = suburbsArray.map((s) => s.name);
         const { data: postcodeData } = await supabase
           .from("australian_postcodes")
-          .select("suburb, lat, lng")
+          .select("suburb, state, lat, lng")
           .in("suburb", suburbNames);
 
         setLoadingProgress(70);
         if (postcodeData) {
           const coordMap = new Map<string, { lat: number; lng: number }>();
           for (const p of postcodeData) {
-            if (!coordMap.has(p.suburb)) {
-              coordMap.set(p.suburb, { lat: Number(p.lat), lng: Number(p.lng) });
+            const key = `${p.suburb}|${p.state}`;
+            if (!coordMap.has(key)) {
+              coordMap.set(key, { lat: Number(p.lat), lng: Number(p.lng) });
             }
           }
           for (const s of suburbsArray) {
-            const coords = coordMap.get(s.name);
+            const coords = coordMap.get(`${s.name}|${s.state}`);
             if (coords) { s.lat = coords.lat; s.lng = coords.lng; }
           }
         }
