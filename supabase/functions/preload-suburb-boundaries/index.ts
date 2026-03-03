@@ -98,23 +98,24 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Deduplicate by suburb name, pick first lat/lng
-    const uniqueMap = new Map<string, { lat: number; lng: number }>();
+    // Deduplicate by suburb+postcode, pick first lat/lng
+    const uniqueMap = new Map<string, { lat: number; lng: number; postcode: string }>();
     for (const row of allNSW) {
-      if (!uniqueMap.has(row.suburb)) {
-        uniqueMap.set(row.suburb, { lat: Number(row.lat), lng: Number(row.lng) });
+      const key = `${row.suburb}|${row.postcode}`;
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, { lat: Number(row.lat), lng: Number(row.lng), postcode: row.postcode });
       }
     }
 
     // Check which are already cached
-    const suburbNames = [...uniqueMap.keys()];
+    const suburbNames = [...new Set(allNSW.map((r: any) => r.suburb))];
     const { data: cached } = await supabase
       .from("suburb_boundaries")
-      .select("suburb_name")
+      .select("suburb_name, postcode")
       .in("suburb_name", suburbNames);
 
-    const cachedSet = new Set((cached || []).map((r) => r.suburb_name));
-    const uncached = suburbNames.filter((n) => !cachedSet.has(n));
+    const cachedSet = new Set((cached || []).map((r) => `${r.suburb_name}|${r.postcode || ""}`));
+    const uncached = [...uniqueMap.keys()].filter((k) => !cachedSet.has(k));
 
     console.log(`[PRELOAD] Found ${uncached.length} uncached NSW suburbs (offset=${offset})`);
 
