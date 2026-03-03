@@ -603,16 +603,19 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
                 <ScrollArea className="h-48 md:h-56 rounded-lg border border-border p-3">
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-1">
                     {allDiscoveredSuburbs.map((suburb) => {
-                      const isSelected = data.servicedSuburbs.includes(suburb.name);
+                      const suburbId = `${suburb.name}|${suburb.postcode}`;
+                      const isSelected = data.servicedSuburbs.includes(suburbId);
+                      // Check if there are duplicate names to show postcode
+                      const hasDuplicateName = allDiscoveredSuburbs.filter((s) => s.name === suburb.name).length > 1;
                       return (
                         <div
-                          key={suburb.name}
+                          key={suburbId}
                           className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1.5 rounded-md"
-                          onClick={() => toggleSuburb(suburb.name)}
+                          onClick={() => toggleSuburb(suburbId)}
                         >
                           <Checkbox
                             checked={isSelected}
-                            onCheckedChange={() => toggleSuburb(suburb.name)}
+                            onCheckedChange={() => toggleSuburb(suburbId)}
                             onClick={(e) => e.stopPropagation()}
                           />
                           <span
@@ -621,6 +624,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
                             }`}
                           >
                             {suburb.name}
+                            {hasDuplicateName && <span className="text-xs text-muted-foreground ml-1">({suburb.postcode})</span>}
                           </span>
                         </div>
                       );
