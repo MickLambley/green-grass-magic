@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input";
 import { ArrowRight, ArrowLeft, MapPin, Loader2, Navigation } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
+import { supabase } from "@/integrations/supabase/client";
 import type { GeographicData } from "./types";
 
 interface SuburbWithCoords {
   name: string;
   lat: number;
   lng: number;
-  boundary?: google.maps.LatLngLiteral[][] | null; // polygon rings
+  boundary?: google.maps.LatLngLiteral[][] | null;
 }
 
 interface GeographicReachStepProps {
@@ -23,65 +24,34 @@ interface GeographicReachStepProps {
   onBack: () => void;
 }
 
-// Fetch suburb boundary from Nominatim (OpenStreetMap)
-async function fetchSuburbBoundary(
-  suburbName: string,
-  nearLat: number,
-  nearLng: number
-): Promise<google.maps.LatLngLiteral[][] | null> {
+// Fetch boundaries via edge function (server-side cache + Nominatim fallback)
+async function fetchBoundariesBatch(
+  suburbs: { name: string; lat: number; lng: number }[]
+): Promise<Map<string, google.maps.LatLngLiteral[][] | null>> {
+  const result = new Map<string, google.maps.LatLngLiteral[][] | null>();
+  if (suburbs.length === 0) return result;
+
   try {
-    const query = encodeURIComponent(`${suburbName}, Australia`);
-    const url = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&polygon_geojson=1&limit=3&countrycodes=au&viewbox=${nearLng - 0.5},${nearLat + 0.5},${nearLng + 0.5},${nearLat - 0.5}&bounded=0`;
-
-    const res = await fetch(url, {
-      headers: { "User-Agent": "YardlyApp/1.0" },
+    const { data, error } = await supabase.functions.invoke("get-suburb-boundaries", {
+      body: { suburbs: suburbs.map((s) => ({ name: s.name, lat: s.lat, lng: s.lng })) },
     });
-    if (!res.ok) return null;
 
-    const results = await res.json();
-    if (!results || results.length === 0) return null;
-
-    // Find the best match - prefer results that are suburbs/towns/villages
-    const match =
-      results.find(
-        (r: any) =>
-          r.geojson &&
-          (r.type === "suburb" || r.type === "town" || r.type === "village" || r.type === "city" || r.type === "hamlet") &&
-          (r.geojson.type === "Polygon" || r.geojson.type === "MultiPolygon")
-      ) ||
-      results.find(
-        (r: any) =>
-          r.geojson &&
-          (r.geojson.type === "Polygon" || r.geojson.type === "MultiPolygon")
-      );
-
-    if (!match?.geojson) return null;
-
-    const geojson = match.geojson;
-
-    if (geojson.type === "Polygon") {
-      // Polygon: array of rings, each ring is array of [lng, lat]
-      return geojson.coordinates.map((ring: number[][]) =>
-        ring.map((coord: number[]) => ({ lat: coord[1], lng: coord[0] }))
-      );
-    } else if (geojson.type === "MultiPolygon") {
-      // MultiPolygon: flatten all polygons into rings
-      const rings: google.maps.LatLngLiteral[][] = [];
-      for (const polygon of geojson.coordinates) {
-        for (const ring of polygon) {
-          rings.push(
-            ring.map((coord: number[]) => ({ lat: coord[1], lng: coord[0] }))
-          );
-        }
-      }
-      return rings;
+    if (error) {
+      console.error("Edge function error:", error);
+      return result;
     }
 
-    return null;
+    if (data?.results) {
+      for (const r of data.results) {
+        const boundary = r.boundary && Array.isArray(r.boundary) && r.boundary.length > 0 ? r.boundary : null;
+        result.set(r.name, boundary);
+      }
+    }
   } catch (err) {
-    console.warn(`Failed to fetch boundary for ${suburbName}:`, err);
-    return null;
+    console.error("Failed to fetch boundaries:", err);
   }
+
+  return result;
 }
 
 export const GeographicReachStep = ({ data, onChange, onNext, onBack }: GeographicReachStepProps) => {
