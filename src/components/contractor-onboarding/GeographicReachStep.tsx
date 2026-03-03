@@ -238,7 +238,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   }, []);
 
   // Draw suburb polygons on map
-  const drawSuburbPolygons = useCallback((suburbs: SuburbWithCoords[], selectedNames: string[], fitBounds = false) => {
+  const drawSuburbPolygons = useCallback((suburbs: SuburbWithCoords[], selectedIds: string[], fitBounds = false) => {
     polygonsRef.current.forEach((p) => p.setMap(null));
     polygonsRef.current = [];
     if (!googleMapRef.current || suburbs.length === 0) return;
@@ -252,7 +252,8 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
     }
 
     for (const suburb of suburbs) {
-      const isSelected = selectedNames.includes(suburb.name);
+      const suburbId = `${suburb.name}|${suburb.postcode}`;
+      const isSelected = selectedIds.includes(suburbId);
 
       if (suburb.boundary && suburb.boundary.length > 0) {
         for (const ring of suburb.boundary) {
