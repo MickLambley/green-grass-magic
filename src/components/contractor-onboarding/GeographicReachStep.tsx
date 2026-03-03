@@ -408,20 +408,24 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
     return () => clearTimeout(timer);
   }, [data.baseAddressLat, data.baseAddressLng, data.maxTravelDistanceKm, fetchSuburbsInRadius]);
 
-  const toggleSuburb = (suburbId: string) => {
-    const isSelected = data.servicedSuburbs.includes(suburbId);
+  const toggleSuburb = useCallback((suburbId: string) => {
+    const isSelected = dataRef.current.servicedSuburbs.includes(suburbId);
     if (isSelected) {
-      onChange({
-        ...data,
-        servicedSuburbs: data.servicedSuburbs.filter((s) => s !== suburbId),
+      onChangeRef.current({
+        ...dataRef.current,
+        servicedSuburbs: dataRef.current.servicedSuburbs.filter((s) => s !== suburbId),
       });
     } else {
-      onChange({
-        ...data,
-        servicedSuburbs: [...data.servicedSuburbs, suburbId].sort(),
+      onChangeRef.current({
+        ...dataRef.current,
+        servicedSuburbs: [...dataRef.current.servicedSuburbs, suburbId].sort(),
       });
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    toggleSuburbRef.current = toggleSuburb;
+  }, [toggleSuburb]);
 
   const selectAllSuburbs = () =>
     onChange({
