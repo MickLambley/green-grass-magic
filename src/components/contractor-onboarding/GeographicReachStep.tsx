@@ -407,17 +407,17 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
     return () => clearTimeout(timer);
   }, [data.baseAddressLat, data.baseAddressLng, data.maxTravelDistanceKm, fetchSuburbsInRadius]);
 
-  const toggleSuburb = (suburb: string) => {
-    const isSelected = data.servicedSuburbs.includes(suburb);
+  const toggleSuburb = (suburbId: string) => {
+    const isSelected = data.servicedSuburbs.includes(suburbId);
     if (isSelected) {
       onChange({
         ...data,
-        servicedSuburbs: data.servicedSuburbs.filter((s) => s !== suburb),
+        servicedSuburbs: data.servicedSuburbs.filter((s) => s !== suburbId),
       });
     } else {
       onChange({
         ...data,
-        servicedSuburbs: [...data.servicedSuburbs, suburb].sort(),
+        servicedSuburbs: [...data.servicedSuburbs, suburbId].sort(),
       });
     }
   };
@@ -425,7 +425,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   const selectAllSuburbs = () =>
     onChange({
       ...data,
-      servicedSuburbs: allDiscoveredSuburbs.map((s) => s.name),
+      servicedSuburbs: allDiscoveredSuburbs.map((s) => `${s.name}|${s.postcode}`),
     });
   const deselectAllSuburbs = () => onChange({ ...data, servicedSuburbs: [] });
 
