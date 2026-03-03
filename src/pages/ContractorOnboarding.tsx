@@ -241,8 +241,11 @@ const ContractorOnboarding = () => {
     if (!geoData.baseAddressLat || !geoData.baseAddressLng) return;
 
     try {
-      // Save suburbs via edge function
-      const suburbPayload = geoData.servicedSuburbs.map(s => ({ suburb: s, postcode: "" }));
+      // Save suburbs via edge function - parse "name|postcode" format
+      const suburbPayload = geoData.servicedSuburbs.map(s => {
+        const [suburb, postcode] = s.split("|");
+        return { suburb, postcode: postcode || "" };
+      });
       if (suburbPayload.length > 0) {
         await supabase.functions.invoke("update-service-areas", {
           body: { suburbs: suburbPayload },

@@ -1092,6 +1092,7 @@ export type Database = {
           centroid_lng: number | null
           created_at: string
           id: string
+          postcode: string
           source: string
           state: string | null
           suburb_name: string
@@ -1102,6 +1103,7 @@ export type Database = {
           centroid_lng?: number | null
           created_at?: string
           id?: string
+          postcode?: string
           source?: string
           state?: string | null
           suburb_name: string
@@ -1112,6 +1114,7 @@ export type Database = {
           centroid_lng?: number | null
           created_at?: string
           id?: string
+          postcode?: string
           source?: string
           state?: string | null
           suburb_name?: string

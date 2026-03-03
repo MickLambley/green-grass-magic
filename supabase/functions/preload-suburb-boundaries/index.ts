@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
     // Get distinct NSW suburbs not yet cached
     const { data: allNSW, error: fetchErr } = await supabase
       .from("australian_postcodes")
-      .select("suburb, lat, lng")
+      .select("suburb, postcode, lat, lng")
       .eq("state", "NSW")
       .order("suburb")
       .range(offset, offset + 5000 - 1);
@@ -98,23 +98,24 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Deduplicate by suburb name, pick first lat/lng
-    const uniqueMap = new Map<string, { lat: number; lng: number }>();
+    // Deduplicate by suburb+postcode, pick first lat/lng
+    const uniqueMap = new Map<string, { lat: number; lng: number; postcode: string }>();
     for (const row of allNSW) {
-      if (!uniqueMap.has(row.suburb)) {
-        uniqueMap.set(row.suburb, { lat: Number(row.lat), lng: Number(row.lng) });
+      const key = `${row.suburb}|${row.postcode}`;
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, { lat: Number(row.lat), lng: Number(row.lng), postcode: row.postcode });
       }
     }
 
     // Check which are already cached
-    const suburbNames = [...uniqueMap.keys()];
+    const suburbNames = [...new Set(allNSW.map((r: any) => r.suburb))];
     const { data: cached } = await supabase
       .from("suburb_boundaries")
-      .select("suburb_name")
+      .select("suburb_name, postcode")
       .in("suburb_name", suburbNames);
 
-    const cachedSet = new Set((cached || []).map((r) => r.suburb_name));
-    const uncached = suburbNames.filter((n) => !cachedSet.has(n));
+    const cachedSet = new Set((cached || []).map((r) => `${r.suburb_name}|${r.postcode || ""}`));
+    const uncached = [...uniqueMap.keys()].filter((k) => !cachedSet.has(k));
 
     console.log(`[PRELOAD] Found ${uncached.length} uncached NSW suburbs (offset=${offset})`);
 
@@ -130,20 +131,22 @@ Deno.serve(async (req) => {
     let fetched = 0;
     let failed = 0;
 
-    for (const name of toProcess) {
-      const coords = uniqueMap.get(name)!;
-      const boundary = await fetchFromNominatim(name, coords.lat, coords.lng);
+    for (const key of toProcess) {
+      const entry = uniqueMap.get(key)!;
+      const name = key.split("|")[0];
+      const boundary = await fetchFromNominatim(name, entry.lat, entry.lng);
 
       const { error: insertErr } = await supabase
         .from("suburb_boundaries")
         .upsert({
           suburb_name: name,
+          postcode: entry.postcode,
           boundary: boundary || [],
-          centroid_lat: coords.lat,
-          centroid_lng: coords.lng,
+          centroid_lat: entry.lat,
+          centroid_lng: entry.lng,
           source: "nominatim",
           state: "NSW",
-        }, { onConflict: "suburb_name,state" });
+        }, { onConflict: "suburb_name,state,postcode" });
 
       if (insertErr) {
         console.warn(`[PRELOAD] Insert failed for ${name}:`, insertErr.message);
