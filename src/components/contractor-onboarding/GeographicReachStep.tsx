@@ -14,6 +14,7 @@ import type { GeographicData } from "./types";
 interface SuburbWithCoords {
   name: string;
   state: string;
+  postcode: string;
   lat: number;
   lng: number;
   boundary?: google.maps.LatLngLiteral[][] | null;
