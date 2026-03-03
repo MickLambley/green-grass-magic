@@ -8,6 +8,7 @@ const corsHeaders = {
 
 interface SuburbRequest {
   name: string;
+  state?: string;
   lat: number;
   lng: number;
 }
