@@ -196,13 +196,13 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
     setIsLoadingBoundaries(true);
 
     // Check local cache first, identify uncached
-    const uncached: { name: string; state: string; lat: number; lng: number }[] = [];
+    const uncached: { name: string; state: string; postcode: string; lat: number; lng: number }[] = [];
     const results: SuburbWithCoords[] = suburbs.map((suburb) => {
-      const cacheKey = `${suburb.name}|${suburb.state}`;
+      const cacheKey = `${suburb.name}|${suburb.postcode}`;
       if (boundaryCache.current.has(cacheKey)) {
         return { ...suburb, boundary: boundaryCache.current.get(cacheKey) };
       }
-      uncached.push({ name: suburb.name, state: suburb.state, lat: suburb.lat, lng: suburb.lng });
+      uncached.push({ name: suburb.name, state: suburb.state, postcode: suburb.postcode, lat: suburb.lat, lng: suburb.lng });
       return suburb;
     });
 
@@ -224,7 +224,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
       }
 
       for (let i = 0; i < results.length; i++) {
-        const key = `${results[i].name}|${results[i].state}`;
+        const key = `${results[i].name}|${results[i].postcode}`;
         if (mergedMap.has(key)) {
           const boundary = mergedMap.get(key)!;
           boundaryCache.current.set(key, boundary);
