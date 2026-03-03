@@ -266,6 +266,14 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
             strokeColor: isSelected ? "#16a34a" : "#94a3b8",
             strokeWeight: isSelected ? 2 : 0.5,
             strokeOpacity: isSelected ? 0.9 : 0.3,
+            clickable: true,
+          });
+          polygon.addListener("click", () => toggleSuburbRef.current(suburbId));
+          polygon.addListener("mouseover", () => {
+            polygon.setOptions({ fillOpacity: isSelected ? 0.4 : 0.15 });
+          });
+          polygon.addListener("mouseout", () => {
+            polygon.setOptions({ fillOpacity: isSelected ? 0.25 : 0.06 });
           });
           polygonsRef.current.push(polygon);
           if (bounds) ring.forEach((p) => bounds.extend(p));
