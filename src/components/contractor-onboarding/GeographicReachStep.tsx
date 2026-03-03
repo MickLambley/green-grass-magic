@@ -654,14 +654,14 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
                     const alreadySelected = data.servicedSuburbs.includes(r.suburb);
                     return (
                       <button
-                        key={r.suburb}
+                        key={`${r.suburb}|${r.state}`}
                         type="button"
                         className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center justify-between"
                         onClick={() => addManualSuburb(r)}
                         disabled={alreadySelected}
                       >
                         <span className={alreadySelected ? "text-muted-foreground" : "text-foreground"}>
-                          {r.suburb}
+                          {r.suburb} <span className="text-xs text-muted-foreground">({r.state})</span>
                         </span>
                         {alreadySelected ? (
                           <span className="text-xs text-muted-foreground">Already added</span>
