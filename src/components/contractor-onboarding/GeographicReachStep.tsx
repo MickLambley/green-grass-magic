@@ -658,10 +658,10 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
               {manualSuburbResults.length > 0 && (
                 <div className="rounded-lg border border-border bg-background shadow-md max-h-48 overflow-y-auto">
                   {manualSuburbResults.map((r) => {
-                    const alreadySelected = data.servicedSuburbs.includes(r.suburb);
+                    const alreadySelected = data.servicedSuburbs.includes(`${r.suburb}|${r.postcode}`);
                     return (
                       <button
-                        key={`${r.suburb}|${r.state}`}
+                        key={`${r.suburb}|${r.postcode}`}
                         type="button"
                         className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center justify-between"
                         onClick={() => addManualSuburb(r)}
