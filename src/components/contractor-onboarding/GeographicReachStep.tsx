@@ -195,12 +195,13 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
     setIsLoadingBoundaries(true);
 
     // Check local cache first, identify uncached
-    const uncached: { name: string; lat: number; lng: number }[] = [];
+    const uncached: { name: string; state: string; lat: number; lng: number }[] = [];
     const results: SuburbWithCoords[] = suburbs.map((suburb) => {
-      if (boundaryCache.current.has(suburb.name)) {
-        return { ...suburb, boundary: boundaryCache.current.get(suburb.name) };
+      const cacheKey = `${suburb.name}|${suburb.state}`;
+      if (boundaryCache.current.has(cacheKey)) {
+        return { ...suburb, boundary: boundaryCache.current.get(cacheKey) };
       }
-      uncached.push({ name: suburb.name, lat: suburb.lat, lng: suburb.lng });
+      uncached.push({ name: suburb.name, state: suburb.state, lat: suburb.lat, lng: suburb.lng });
       return suburb;
     });
 
@@ -222,9 +223,10 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
       }
 
       for (let i = 0; i < results.length; i++) {
-        if (mergedMap.has(results[i].name)) {
-          const boundary = mergedMap.get(results[i].name)!;
-          boundaryCache.current.set(results[i].name, boundary);
+        const key = `${results[i].name}|${results[i].state}`;
+        if (mergedMap.has(key)) {
+          const boundary = mergedMap.get(key)!;
+          boundaryCache.current.set(key, boundary);
           results[i] = { ...results[i], boundary };
         }
       }
