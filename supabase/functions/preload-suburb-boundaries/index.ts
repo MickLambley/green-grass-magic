@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
     // Get distinct NSW suburbs not yet cached
     const { data: allNSW, error: fetchErr } = await supabase
       .from("australian_postcodes")
-      .select("suburb, lat, lng")
+      .select("suburb, postcode, lat, lng")
       .eq("state", "NSW")
       .order("suburb")
       .range(offset, offset + 5000 - 1);
