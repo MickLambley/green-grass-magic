@@ -66,9 +66,10 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   const inputRef = useRef<HTMLInputElement>(null);
   const dataRef = useRef(data);
   const onChangeRef = useRef(onChange);
-  const polygonsRef = useRef<google.maps.Polygon[]>([]);
+  const polygonsRef = useRef<(google.maps.Polygon | google.maps.Circle)[]>([]);
   const hasAutoGeocodedRef = useRef(false);
   const boundaryCache = useRef<Map<string, google.maps.LatLngLiteral[][] | null>>(new Map());
+  const toggleSuburbRef = useRef<(id: string) => void>(() => {});
 
   const [isLoadingSuburbs, setIsLoadingSuburbs] = useState(false);
   const [isLoadingBoundaries, setIsLoadingBoundaries] = useState(false);
@@ -265,6 +266,14 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
             strokeColor: isSelected ? "#16a34a" : "#94a3b8",
             strokeWeight: isSelected ? 2 : 0.5,
             strokeOpacity: isSelected ? 0.9 : 0.3,
+            clickable: true,
+          });
+          polygon.addListener("click", () => toggleSuburbRef.current(suburbId));
+          polygon.addListener("mouseover", () => {
+            polygon.setOptions({ fillOpacity: isSelected ? 0.4 : 0.15 });
+          });
+          polygon.addListener("mouseout", () => {
+            polygon.setOptions({ fillOpacity: isSelected ? 0.25 : 0.06 });
           });
           polygonsRef.current.push(polygon);
           if (bounds) ring.forEach((p) => bounds.extend(p));
@@ -278,6 +287,14 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
           fillOpacity: isSelected ? 0.3 : 0.1,
           strokeColor: isSelected ? "#16a34a" : "#94a3b8",
           strokeWeight: isSelected ? 1.5 : 0.5,
+          clickable: true,
+        });
+        fallbackCircle.addListener("click", () => toggleSuburbRef.current(suburbId));
+        fallbackCircle.addListener("mouseover", () => {
+          fallbackCircle.setOptions({ fillOpacity: isSelected ? 0.45 : 0.2 });
+        });
+        fallbackCircle.addListener("mouseout", () => {
+          fallbackCircle.setOptions({ fillOpacity: isSelected ? 0.3 : 0.1 });
         });
         polygonsRef.current.push(fallbackCircle as any);
         if (bounds) bounds.extend({ lat: suburb.lat, lng: suburb.lng });
@@ -407,20 +424,24 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
     return () => clearTimeout(timer);
   }, [data.baseAddressLat, data.baseAddressLng, data.maxTravelDistanceKm, fetchSuburbsInRadius]);
 
-  const toggleSuburb = (suburbId: string) => {
-    const isSelected = data.servicedSuburbs.includes(suburbId);
+  const toggleSuburb = useCallback((suburbId: string) => {
+    const isSelected = dataRef.current.servicedSuburbs.includes(suburbId);
     if (isSelected) {
-      onChange({
-        ...data,
-        servicedSuburbs: data.servicedSuburbs.filter((s) => s !== suburbId),
+      onChangeRef.current({
+        ...dataRef.current,
+        servicedSuburbs: dataRef.current.servicedSuburbs.filter((s) => s !== suburbId),
       });
     } else {
-      onChange({
-        ...data,
-        servicedSuburbs: [...data.servicedSuburbs, suburbId].sort(),
+      onChangeRef.current({
+        ...dataRef.current,
+        servicedSuburbs: [...dataRef.current.servicedSuburbs, suburbId].sort(),
       });
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    toggleSuburbRef.current = toggleSuburb;
+  }, [toggleSuburb]);
 
   const selectAllSuburbs = () =>
     onChange({
