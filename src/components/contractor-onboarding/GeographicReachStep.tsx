@@ -4,9 +4,10 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, ArrowLeft, MapPin, Loader2, Navigation } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, Loader2, Navigation, Plus, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import type { GeographicData } from "./types";
 
@@ -70,6 +71,11 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   const [isLoadingBoundaries, setIsLoadingBoundaries] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [allDiscoveredSuburbs, setAllDiscoveredSuburbs] = useState<SuburbWithCoords[]>([]);
+  const [manualSuburbSearch, setManualSuburbSearch] = useState("");
+  const [manualSuburbResults, setManualSuburbResults] = useState<{ suburb: string; lat: number; lng: number }[]>([]);
+  const [isSearchingSuburbs, setIsSearchingSuburbs] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const isInitialLoadRef = useRef(true);
 
   const isValid = data.maxTravelDistanceKm >= 5 && data.baseAddress && data.baseAddressLat !== null;
 
@@ -215,13 +221,13 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   }, []);
 
   // Draw suburb polygons on map
-  const drawSuburbPolygons = useCallback((suburbs: SuburbWithCoords[], selectedNames: string[]) => {
+  const drawSuburbPolygons = useCallback((suburbs: SuburbWithCoords[], selectedNames: string[], fitBounds = false) => {
     polygonsRef.current.forEach((p) => p.setMap(null));
     polygonsRef.current = [];
     if (!googleMapRef.current || suburbs.length === 0) return;
 
-    const bounds = new google.maps.LatLngBounds();
-    if (dataRef.current.baseAddressLat && dataRef.current.baseAddressLng) {
+    const bounds = fitBounds ? new google.maps.LatLngBounds() : null;
+    if (bounds && dataRef.current.baseAddressLat && dataRef.current.baseAddressLng) {
       bounds.extend({
         lat: dataRef.current.baseAddressLat,
         lng: dataRef.current.baseAddressLng,
@@ -232,7 +238,6 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
       const isSelected = selectedNames.includes(suburb.name);
 
       if (suburb.boundary && suburb.boundary.length > 0) {
-        // Draw real boundary polygon
         for (const ring of suburb.boundary) {
           const polygon = new google.maps.Polygon({
             paths: ring,
@@ -244,10 +249,9 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
             strokeOpacity: isSelected ? 0.9 : 0.3,
           });
           polygonsRef.current.push(polygon);
-          ring.forEach((p) => bounds.extend(p));
+          if (bounds) ring.forEach((p) => bounds.extend(p));
         }
       } else {
-        // Fallback: draw a small circle marker for suburbs with no boundary data
         const fallbackCircle = new google.maps.Circle({
           center: { lat: suburb.lat, lng: suburb.lng },
           radius: 800,
@@ -257,19 +261,18 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
           strokeColor: isSelected ? "#16a34a" : "#94a3b8",
           strokeWeight: isSelected ? 1.5 : 0.5,
         });
-        // Store as polygon-like for cleanup (Circle has setMap too)
         polygonsRef.current.push(fallbackCircle as any);
-        bounds.extend({ lat: suburb.lat, lng: suburb.lng });
+        if (bounds) bounds.extend({ lat: suburb.lat, lng: suburb.lng });
       }
     }
 
-    googleMapRef.current.fitBounds(bounds, 40);
+    if (bounds) googleMapRef.current.fitBounds(bounds, 40);
   }, []);
 
-  // Redraw when selection changes
+  // Redraw when selection changes (no zoom reset)
   useEffect(() => {
     if (allDiscoveredSuburbs.length > 0) {
-      drawSuburbPolygons(allDiscoveredSuburbs, data.servicedSuburbs);
+      drawSuburbPolygons(allDiscoveredSuburbs, data.servicedSuburbs, false);
     }
   }, [data.servicedSuburbs, allDiscoveredSuburbs, drawSuburbPolygons]);
 
@@ -303,8 +306,10 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
   const fetchSuburbsInRadius = useCallback(
     async (lat: number, lng: number, radiusKm: number) => {
       setIsLoadingSuburbs(true);
+      setLoadingProgress(10);
 
       try {
+        setLoadingProgress(30);
         const { data: result, error } = await supabase.functions.invoke("get-suburbs-in-radius", {
           body: { lat, lng, radius_km: radiusKm },
         });
@@ -314,29 +319,24 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
           return;
         }
 
+        setLoadingProgress(50);
         const suburbsArray: SuburbWithCoords[] = [];
         const seen = new Set<string>();
 
-        // Deduplicate by suburb name (different postcodes can share a name)
         for (const s of result?.suburbs || []) {
           if (!seen.has(s.suburb)) {
             seen.add(s.suburb);
-            // Look up centroid from australian_postcodes data
-            suburbsArray.push({
-              name: s.suburb,
-              lat: 0, // Will be filled by boundary fetch or centroid
-              lng: 0,
-            });
+            suburbsArray.push({ name: s.suburb, lat: 0, lng: 0 });
           }
         }
 
-        // We need lat/lng for boundary fetching - query the postcodes table directly
         const suburbNames = suburbsArray.map((s) => s.name);
         const { data: postcodeData } = await supabase
           .from("australian_postcodes")
           .select("suburb, lat, lng")
           .in("suburb", suburbNames);
 
+        setLoadingProgress(70);
         if (postcodeData) {
           const coordMap = new Map<string, { lat: number; lng: number }>();
           for (const p of postcodeData) {
@@ -346,18 +346,24 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
           }
           for (const s of suburbsArray) {
             const coords = coordMap.get(s.name);
-            if (coords) {
-              s.lat = coords.lat;
-              s.lng = coords.lng;
-            }
+            if (coords) { s.lat = coords.lat; s.lng = coords.lng; }
           }
         }
 
         suburbsArray.sort((a, b) => a.name.localeCompare(b.name));
+        setLoadingProgress(85);
 
-        // Fetch real boundaries
         const suburbsWithBoundaries = await fetchBoundaries(suburbsArray);
+        setLoadingProgress(100);
         setAllDiscoveredSuburbs(suburbsWithBoundaries);
+        
+        // Fit bounds on initial load / radius change
+        isInitialLoadRef.current = true;
+        setTimeout(() => {
+          drawSuburbPolygons(suburbsWithBoundaries, suburbsWithBoundaries.map((s) => s.name), true);
+          isInitialLoadRef.current = false;
+        }, 50);
+
         onChangeRef.current({
           ...dataRef.current,
           servicedSuburbs: suburbsWithBoundaries.map((s) => s.name),
@@ -366,9 +372,10 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
         console.error("Error fetching suburbs:", error);
       } finally {
         setIsLoadingSuburbs(false);
+        setTimeout(() => setLoadingProgress(0), 500);
       }
     },
-    [fetchBoundaries],
+    [fetchBoundaries, drawSuburbPolygons],
   );
 
   // Debounced suburb fetch
@@ -401,6 +408,57 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
       servicedSuburbs: allDiscoveredSuburbs.map((s) => s.name),
     });
   const deselectAllSuburbs = () => onChange({ ...data, servicedSuburbs: [] });
+
+  // Manual suburb search with autocomplete
+  useEffect(() => {
+    if (manualSuburbSearch.length < 2) {
+      setManualSuburbResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearchingSuburbs(true);
+      try {
+        const { data: results } = await supabase
+          .from("australian_postcodes")
+          .select("suburb, lat, lng")
+          .ilike("suburb", `${manualSuburbSearch}%`)
+          .limit(20);
+        
+        if (results) {
+          // Deduplicate and exclude already-discovered suburbs
+          const seen = new Set<string>();
+          const filtered: { suburb: string; lat: number; lng: number }[] = [];
+          for (const r of results) {
+            if (!seen.has(r.suburb)) {
+              seen.add(r.suburb);
+              filtered.push({ suburb: r.suburb, lat: Number(r.lat), lng: Number(r.lng) });
+            }
+          }
+          setManualSuburbResults(filtered);
+        }
+      } catch (err) {
+        console.error("Suburb search error:", err);
+      } finally {
+        setIsSearchingSuburbs(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [manualSuburbSearch]);
+
+  const addManualSuburb = async (suburb: { suburb: string; lat: number; lng: number }) => {
+    const alreadyExists = allDiscoveredSuburbs.some((s) => s.name === suburb.suburb);
+    if (!alreadyExists) {
+      const newSuburb: SuburbWithCoords = { name: suburb.suburb, lat: suburb.lat, lng: suburb.lng };
+      const withBoundaries = await fetchBoundaries([newSuburb]);
+      const updated = [...allDiscoveredSuburbs, ...withBoundaries].sort((a, b) => a.name.localeCompare(b.name));
+      setAllDiscoveredSuburbs(updated);
+    }
+    if (!data.servicedSuburbs.includes(suburb.suburb)) {
+      onChange({ ...data, servicedSuburbs: [...data.servicedSuburbs, suburb.suburb].sort() });
+    }
+    setManualSuburbSearch("");
+    setManualSuburbResults([]);
+  };
 
   return (
     <Card>
@@ -487,6 +545,16 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
               )}
             </div>
 
+            {/* Progress bar */}
+            {loadingProgress > 0 && (
+              <div className="space-y-1">
+                <Progress value={loadingProgress} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  {loadingProgress < 50 ? "Discovering suburbs..." : loadingProgress < 85 ? "Fetching coordinates..." : "Loading boundaries..."}
+                </p>
+              </div>
+            )}
+
             {allDiscoveredSuburbs.length > 0 ? (
               <>
                 <div className="flex items-center gap-2">
@@ -545,6 +613,48 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
                 </p>
               </div>
             )}
+
+            {/* Manual suburb entry */}
+            <div className="space-y-2">
+              <Label className="text-sm">Add a suburb outside your radius</Label>
+              <div className="relative">
+                <Plus className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Type suburb name..."
+                  value={manualSuburbSearch}
+                  onChange={(e) => setManualSuburbSearch(e.target.value)}
+                  className="pl-10"
+                />
+                {isSearchingSuburbs && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
+              {manualSuburbResults.length > 0 && (
+                <div className="rounded-lg border border-border bg-background shadow-md max-h-48 overflow-y-auto">
+                  {manualSuburbResults.map((r) => {
+                    const alreadySelected = data.servicedSuburbs.includes(r.suburb);
+                    return (
+                      <button
+                        key={r.suburb}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center justify-between"
+                        onClick={() => addManualSuburb(r)}
+                        disabled={alreadySelected}
+                      >
+                        <span className={alreadySelected ? "text-muted-foreground" : "text-foreground"}>
+                          {r.suburb}
+                        </span>
+                        {alreadySelected ? (
+                          <span className="text-xs text-muted-foreground">Already added</span>
+                        ) : (
+                          <Plus className="w-3 h-3 text-primary" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <p className="text-xs text-muted-foreground">
               Click to deselect any suburbs you don't want to service. Customers will only be able to complete online
