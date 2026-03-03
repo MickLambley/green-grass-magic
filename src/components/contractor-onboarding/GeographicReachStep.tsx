@@ -439,19 +439,19 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
       try {
         const { data: results } = await supabase
           .from("australian_postcodes")
-          .select("suburb, state, lat, lng")
+          .select("suburb, state, postcode, lat, lng")
           .ilike("suburb", `${manualSuburbSearch}%`)
           .limit(20);
         
         if (results) {
           // Deduplicate and exclude already-discovered suburbs
           const seen = new Set<string>();
-          const filtered: { suburb: string; state: string; lat: number; lng: number }[] = [];
+          const filtered: { suburb: string; state: string; postcode: string; lat: number; lng: number }[] = [];
           for (const r of results) {
-            const key = `${r.suburb}|${r.state}`;
+            const key = `${r.suburb}|${r.postcode}`;
             if (!seen.has(key)) {
               seen.add(key);
-              filtered.push({ suburb: r.suburb, state: r.state, lat: Number(r.lat), lng: Number(r.lng) });
+              filtered.push({ suburb: r.suburb, state: r.state, postcode: r.postcode, lat: Number(r.lat), lng: Number(r.lng) });
             }
           }
           setManualSuburbResults(filtered);
