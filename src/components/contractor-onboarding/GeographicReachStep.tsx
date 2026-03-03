@@ -474,8 +474,9 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
       const updated = [...allDiscoveredSuburbs, ...withBoundaries].sort((a, b) => a.name.localeCompare(b.name));
       setAllDiscoveredSuburbs(updated);
     }
-    if (!data.servicedSuburbs.includes(suburb.suburb)) {
-      onChange({ ...data, servicedSuburbs: [...data.servicedSuburbs, suburb.suburb].sort() });
+    const suburbId = `${suburb.suburb}|${suburb.postcode}`;
+    if (!data.servicedSuburbs.includes(suburbId)) {
+      onChange({ ...data, servicedSuburbs: [...data.servicedSuburbs, suburbId].sort() });
     }
     setManualSuburbSearch("");
     setManualSuburbResults([]);
