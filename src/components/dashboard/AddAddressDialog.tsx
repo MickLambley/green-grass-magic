@@ -302,6 +302,18 @@ const AddAddressDialog = ({ open, onOpenChange, onSuccess }: AddAddressDialogPro
         </Button>
         <Button
           type="button"
+          variant="ghost"
+          onClick={() => {
+            setCalculatedArea(0);
+            form.setValue("square_meters", 0);
+            setCurrentStep("details");
+          }}
+          disabled={!canProceedToMap}
+        >
+          Skip to details
+        </Button>
+        <Button
+          type="button"
           className="flex-1"
           onClick={() => setCurrentStep("map")}
           disabled={!canProceedToMap}
@@ -333,6 +345,17 @@ const AddAddressDialog = ({ open, onOpenChange, onSuccess }: AddAddressDialogPro
         >
           <ArrowLeft className="w-4 h-4 mr-1" />
           Back
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            setCalculatedArea(0);
+            form.setValue("square_meters", 0);
+            setCurrentStep("details");
+          }}
+        >
+          Skip — let contractor quote
         </Button>
         <Button
           type="button"
@@ -417,7 +440,7 @@ const AddAddressDialog = ({ open, onOpenChange, onSuccess }: AddAddressDialogPro
         <Button
           type="button"
           variant="outline"
-          onClick={() => setCurrentStep("map")}
+          onClick={() => setCurrentStep(calculatedArea > 0 ? "map" : "address")}
         >
           <ArrowLeft className="w-4 h-4 mr-1" />
           Back
@@ -452,7 +475,7 @@ const AddAddressDialog = ({ open, onOpenChange, onSuccess }: AddAddressDialogPro
       case "address":
         return "Enter your property address.";
       case "map":
-        return "Draw the outline of your lawn areas on the satellite map.";
+        return "Optionally draw the outline of your lawn areas, or skip to let your contractor measure and quote.";
       case "details":
         return "Add additional details about your property.";
     }
