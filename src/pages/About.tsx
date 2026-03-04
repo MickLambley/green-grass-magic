@@ -2,26 +2,32 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { Users, Target, Heart, ArrowRight } from "lucide-react";
+import { Users, Target, Heart, ArrowRight, Wrench } from "lucide-react";
 
 const values = [
   {
     icon: Users,
-    title: "Customer First",
+    title: "Built for Contractors",
     description:
-      "Everything we do is centered around making lawn care effortless for our customers. Your satisfaction drives our innovation.",
+      "Yardly is designed to help lawn care professionals run their business more efficiently — from scheduling to invoicing, all in one place.",
   },
   {
     icon: Target,
-    title: "Quality Focused",
+    title: "Simple & Powerful",
     description:
-      "We partner only with verified, skilled contractors who share our commitment to delivering exceptional results every time.",
+      "We strip away the complexity so you can focus on what you do best — delivering great results for your clients.",
+  },
+  {
+    icon: Wrench,
+    title: "Tools That Work",
+    description:
+      "Route optimisation, automated invoicing, client portals, and your own branded website — everything a modern contractor needs.",
   },
   {
     icon: Heart,
-    title: "Community Driven",
+    title: "Growing Together",
     description:
-      "We're building a community of homeowners and lawn care professionals who take pride in beautiful, well-maintained spaces.",
+      "We're building the platform alongside real contractors, listening to feedback and shipping features that matter.",
   },
 ];
 
@@ -35,12 +41,11 @@ const About = () => {
           <div className="container mx-auto px-4">
             <div className="max-w-3xl mx-auto text-center">
               <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-6">
-                About <span className="gradient-text">Lawnly</span>
+                About <span className="gradient-text">Yardly</span>
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">
-                We're on a mission to make professional lawn care accessible to
-                everyone. No more scheduling headaches, unreliable service, or
-                confusing pricing.
+                The all-in-one platform that helps lawn care contractors manage
+                their business, delight their clients, and grow with confidence.
               </p>
             </div>
           </div>
@@ -56,21 +61,21 @@ const About = () => {
                 </h2>
                 <div className="space-y-4 text-muted-foreground leading-relaxed">
                   <p>
-                    Lawnly was born from a simple frustration: why is it so hard
-                    to find reliable lawn care? Endless phone calls, no-show
-                    contractors, and unpredictable pricing made maintaining a
-                    beautiful lawn feel like a full-time job.
+                    Yardly started with a simple question: why don't lawn care
+                    contractors have better software? Most are stuck juggling
+                    spreadsheets, text messages, and paper invoices — losing time
+                    and money every week.
                   </p>
                   <p>
-                    We set out to change that. By combining technology with a
-                    network of vetted professionals, we've created a platform
-                    that makes booking lawn care as easy as ordering food
-                    delivery.
+                    We built Yardly to change that. A single platform where
+                    contractors can schedule jobs, optimise routes, send
+                    professional invoices, and even launch their own branded
+                    website — all without the tech headaches.
                   </p>
                   <p>
-                    Today, Lawnly serves thousands of homeowners, helping them
-                    reclaim their weekends while ensuring their lawns look
-                    amazing year-round.
+                    Today, Yardly is helping contractors across Australia run
+                    smoother operations, get paid faster, and spend more time
+                    doing the work they love.
                   </p>
                 </div>
               </div>
@@ -79,11 +84,11 @@ const About = () => {
                   <div className="text-center p-8">
                     <div className="w-24 h-24 mx-auto mb-6 rounded-full gradient-hero flex items-center justify-center shadow-large">
                       <span className="text-4xl font-display font-bold text-primary-foreground">
-                        L
+                        Y
                       </span>
                     </div>
                     <p className="text-lg font-display font-semibold text-foreground">
-                      Founded in 2024
+                      Founded in 2025
                     </p>
                   </div>
                 </div>
@@ -97,14 +102,14 @@ const About = () => {
           <div className="container mx-auto px-4">
             <div className="max-w-3xl mx-auto text-center mb-16">
               <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
-                Our Values
+                What We Believe
               </h2>
               <p className="text-lg text-muted-foreground">
-                The principles that guide everything we do at Lawnly.
+                The principles that drive how we build Yardly.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
               {values.map((value) => (
                 <div
                   key={value.title}
@@ -130,15 +135,15 @@ const About = () => {
           <div className="container mx-auto px-4">
             <div className="max-w-3xl mx-auto text-center">
               <h2 className="font-display text-3xl font-bold text-foreground mb-6">
-                Ready to Experience the Difference?
+                Ready to Simplify Your Business?
               </h2>
               <p className="text-lg text-muted-foreground mb-8">
-                Join thousands of homeowners who trust Lawnly for their lawn
-                care needs.
+                Join contractors across Australia who use Yardly to save time,
+                look professional, and grow their business.
               </p>
-              <Link to="/auth?mode=signup">
+              <Link to="/contractor/auth">
                 <Button variant="hero" size="xl">
-                  Get Started Today
+                  Get Started Free
                   <ArrowRight className="w-5 h-5" />
                 </Button>
               </Link>
