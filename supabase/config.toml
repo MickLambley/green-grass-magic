@@ -45,5 +45,3 @@ verify_jwt = false
 [functions.update-service-areas]
 verify_jwt = false
 
-[functions.preload-suburb-boundaries]
-verify_jwt = false
