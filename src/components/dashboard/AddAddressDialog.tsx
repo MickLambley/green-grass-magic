@@ -336,6 +336,17 @@ const AddAddressDialog = ({ open, onOpenChange, onSuccess }: AddAddressDialogPro
         </Button>
         <Button
           type="button"
+          variant="ghost"
+          onClick={() => {
+            setCalculatedArea(0);
+            form.setValue("square_meters", 0);
+            setCurrentStep("details");
+          }}
+        >
+          Skip — let contractor quote
+        </Button>
+        <Button
+          type="button"
           className="flex-1"
           onClick={() => setCurrentStep("details")}
         >
