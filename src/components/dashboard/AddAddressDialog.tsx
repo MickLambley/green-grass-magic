@@ -475,7 +475,7 @@ const AddAddressDialog = ({ open, onOpenChange, onSuccess }: AddAddressDialogPro
       case "address":
         return "Enter your property address.";
       case "map":
-        return "Draw the outline of your lawn areas on the satellite map.";
+        return "Optionally draw the outline of your lawn areas, or skip to let your contractor measure and quote.";
       case "details":
         return "Add additional details about your property.";
     }
