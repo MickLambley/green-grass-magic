@@ -440,7 +440,7 @@ const AddAddressDialog = ({ open, onOpenChange, onSuccess }: AddAddressDialogPro
         <Button
           type="button"
           variant="outline"
-          onClick={() => setCurrentStep("map")}
+          onClick={() => setCurrentStep(calculatedArea > 0 ? "map" : "address")}
         >
           <ArrowLeft className="w-4 h-4 mr-1" />
           Back
