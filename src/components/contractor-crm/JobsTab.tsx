@@ -537,6 +537,10 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       total_price: job.total_price,
       client_name: job.client_name,
       payment_status: "unpaid",
+      requires_quote: (job as any).requires_quote || false,
+      quote_type: (job as any).quote_type || null,
+      quoted_rate: (job as any).quoted_rate || null,
+      quoted_hours: (job as any).quoted_hours || null,
     });
     setCompletionDialogOpen(true);
   };
