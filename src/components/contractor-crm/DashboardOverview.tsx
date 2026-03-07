@@ -265,6 +265,7 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
         open={completionDialogOpen}
         onOpenChange={setCompletionDialogOpen}
         job={completionJob}
+        contractorId={contractorId}
         onCompleted={fetchAll}
       />
     </div>

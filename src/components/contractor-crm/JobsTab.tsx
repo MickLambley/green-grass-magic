@@ -1072,6 +1072,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
         open={completionDialogOpen}
         onOpenChange={setCompletionDialogOpen}
         job={completionJob}
+        contractorId={contractorId}
         onCompleted={fetchData}
       />
 
