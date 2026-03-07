@@ -34,13 +34,14 @@ type CompletionStep = "photos" | "confirm" | "completing" | "options" | "done";
 
 const RECOMMENDED_PHOTOS = 2;
 
-const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobCompletionDialogProps) => {
+const JobCompletionDialog = ({ open, onOpenChange, job, contractorId, gstRegistered, onCompleted }: JobCompletionDialogProps) => {
   const [step, setStep] = useState<CompletionStep>("photos");
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [photosAcknowledged, setPhotosAcknowledged] = useState(false);
+  const [showAmendDialog, setShowAmendDialog] = useState(false);
 
   // Photo upload state
   const [beforePhotos, setBeforePhotos] = useState<File[]>([]);
