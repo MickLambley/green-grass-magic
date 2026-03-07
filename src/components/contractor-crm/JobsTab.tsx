@@ -113,6 +113,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
   const [completionJob, setCompletionJob] = useState<{
     id: string; title: string; source: string; total_price: number | null; client_name: string; payment_status: string;
+    requires_quote?: boolean; quote_type?: string | null; quoted_rate?: number | null; quoted_hours?: number | null;
   } | null>(null);
   const [suggestTimeOpen, setSuggestTimeOpen] = useState(false);
   const [suggestTimeJob, setSuggestTimeJob] = useState<{
