@@ -527,6 +527,30 @@ const JobCompletionDialog = ({ open, onOpenChange, job, contractorId, gstRegiste
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Invoice Amendment Dialog */}
+    {contractorId && (
+      <InvoiceAmendmentDialog
+        open={showAmendDialog}
+        onOpenChange={setShowAmendDialog}
+        job={job ? {
+          id: job.id,
+          title: job.title,
+          total_price: job.total_price,
+          quote_type: job.quote_type || null,
+          quoted_rate: job.quoted_rate || null,
+          quoted_hours: job.quoted_hours || null,
+        } : null}
+        contractorId={contractorId}
+        gstRegistered={gstRegistered || false}
+        onComplete={() => {
+          setResult("Invoice amended and saved.");
+          setStep("done");
+          setShowAmendDialog(false);
+        }}
+      />
+    )}
+    </>
   );
 };
 
