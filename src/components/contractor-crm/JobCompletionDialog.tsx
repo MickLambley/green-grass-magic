@@ -32,7 +32,7 @@ interface JobCompletionDialogProps {
 
 type CompletionStep = "photos" | "confirm" | "completing" | "options" | "done";
 
-const RECOMMENDED_PHOTOS = 2; // recommended per type
+const RECOMMENDED_PHOTOS = 2;
 
 const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobCompletionDialogProps) => {
   const [step, setStep] = useState<CompletionStep>("photos");
