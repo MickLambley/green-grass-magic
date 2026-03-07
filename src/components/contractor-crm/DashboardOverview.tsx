@@ -42,6 +42,7 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
   const [completionJob, setCompletionJob] = useState<{
     id: string; title: string; source: string; total_price: number | null; client_name: string; payment_status: string;
+    requires_quote?: boolean;
   } | null>(null);
 
   const handleQuickComplete = (job: Job & { client_name?: string }) => {
