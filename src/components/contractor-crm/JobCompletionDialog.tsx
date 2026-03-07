@@ -253,6 +253,7 @@ const JobCompletionDialog = ({ open, onOpenChange, job, contractorId, gstRegiste
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent className="sm:max-w-md">
         {/* STEP: Photo Documentation */}
