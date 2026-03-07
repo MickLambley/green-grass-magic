@@ -741,8 +741,13 @@ export type Database = {
           payment_method_id: string | null
           payment_status: string
           quote_breakdown: Json | null
+          quote_status: string
+          quote_type: string | null
+          quoted_hours: number | null
+          quoted_rate: number | null
           recurrence_rule: Json | null
           recurring_job_id: string | null
+          requires_quote: boolean
           route_optimization_locked: boolean
           scheduled_date: string
           scheduled_time: string | null
@@ -777,8 +782,13 @@ export type Database = {
           payment_method_id?: string | null
           payment_status?: string
           quote_breakdown?: Json | null
+          quote_status?: string
+          quote_type?: string | null
+          quoted_hours?: number | null
+          quoted_rate?: number | null
           recurrence_rule?: Json | null
           recurring_job_id?: string | null
+          requires_quote?: boolean
           route_optimization_locked?: boolean
           scheduled_date: string
           scheduled_time?: string | null
@@ -813,8 +823,13 @@ export type Database = {
           payment_method_id?: string | null
           payment_status?: string
           quote_breakdown?: Json | null
+          quote_status?: string
+          quote_type?: string | null
+          quoted_hours?: number | null
+          quoted_rate?: number | null
           recurrence_rule?: Json | null
           recurring_job_id?: string | null
+          requires_quote?: boolean
           route_optimization_locked?: boolean
           scheduled_date?: string
           scheduled_time?: string | null
@@ -1078,6 +1093,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "route_optimizations_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_offerings: {
+        Row: {
+          category: string
+          contractor_id: string
+          created_at: string
+          default_rate: number | null
+          description: string | null
+          id: string
+          is_active: boolean
+          is_default: boolean
+          name: string
+          rate_type: string
+          requires_quote: boolean
+        }
+        Insert: {
+          category?: string
+          contractor_id: string
+          created_at?: string
+          default_rate?: number | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name: string
+          rate_type?: string
+          requires_quote?: boolean
+        }
+        Update: {
+          category?: string
+          contractor_id?: string
+          created_at?: string
+          default_rate?: number | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name?: string
+          rate_type?: string
+          requires_quote?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_offerings_contractor_id_fkey"
             columns: ["contractor_id"]
             isOneToOne: false
             referencedRelation: "contractors"
