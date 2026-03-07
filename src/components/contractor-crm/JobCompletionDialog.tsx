@@ -19,7 +19,13 @@ interface JobCompletionDialogProps {
     total_price: number | null;
     client_name: string;
     payment_status: string;
+    requires_quote?: boolean;
+    quote_type?: string | null;
+    quoted_rate?: number | null;
+    quoted_hours?: number | null;
   } | null;
+  contractorId?: string;
+  gstRegistered?: boolean;
   onCompleted: () => void;
 }
 
