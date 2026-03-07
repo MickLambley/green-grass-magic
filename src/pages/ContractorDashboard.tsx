@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Leaf, LogOut, Users, Calendar, FileText, Receipt,
   LayoutDashboard, Settings, Globe, Loader2, Menu, X,
-  Bell, DollarSign, AlertTriangle, Clock,
+  Bell, DollarSign, AlertTriangle, Clock, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
@@ -25,6 +25,7 @@ import RouteOptimizationBanner from "@/components/contractor-crm/RouteOptimizati
 import RouteOptimizationModal from "@/components/contractor-crm/RouteOptimizationModal";
 import OptimizationPreviewDialog from "@/components/contractor-crm/OptimizationPreviewDialog";
 import StripeConnectBanner from "@/components/contractor-crm/StripeConnectBanner";
+import ServiceOfferingsTab from "@/components/contractor-crm/ServiceOfferingsTab";
 type Contractor = Tables<"contractors">;
 
 const NAV_ITEMS = [
@@ -33,6 +34,7 @@ const NAV_ITEMS = [
   { key: "clients", label: "Clients", icon: Users },
   { key: "quotes", label: "Quotes", icon: FileText },
   { key: "invoices", label: "Invoices", icon: Receipt },
+  { key: "services", label: "Services", icon: Sparkles },
   { key: "pricing", label: "Pricing", icon: DollarSign },
   { key: "scheduling", label: "Scheduling", icon: Clock },
   { key: "disputes", label: "Issues", icon: AlertTriangle },
@@ -352,6 +354,7 @@ const ContractorDashboard = () => {
           )}
           {activeTab === "quotes" && <QuotesTab contractorId={contractor.id} />}
           {activeTab === "invoices" && <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} />}
+          {activeTab === "services" && <ServiceOfferingsTab contractorId={contractor.id} />}
           {activeTab === "pricing" && <ContractorPricingTab contractor={contractor} onUpdate={setContractor} />}
           {activeTab === "scheduling" && <AlternativeTimeTab contractorId={contractor.id} />}
           {activeTab === "disputes" && <DisputeManagementTab contractorId={contractor.id} />}

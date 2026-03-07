@@ -113,6 +113,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
   const [completionJob, setCompletionJob] = useState<{
     id: string; title: string; source: string; total_price: number | null; client_name: string; payment_status: string;
+    requires_quote?: boolean; quote_type?: string | null; quoted_rate?: number | null; quoted_hours?: number | null;
   } | null>(null);
   const [suggestTimeOpen, setSuggestTimeOpen] = useState(false);
   const [suggestTimeJob, setSuggestTimeJob] = useState<{
@@ -536,6 +537,10 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       total_price: job.total_price,
       client_name: job.client_name,
       payment_status: "unpaid",
+      requires_quote: (job as any).requires_quote || false,
+      quote_type: (job as any).quote_type || null,
+      quoted_rate: (job as any).quoted_rate || null,
+      quoted_hours: (job as any).quoted_hours || null,
     });
     setCompletionDialogOpen(true);
   };
@@ -1067,6 +1072,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
         open={completionDialogOpen}
         onOpenChange={setCompletionDialogOpen}
         job={completionJob}
+        contractorId={contractorId}
         onCompleted={fetchData}
       />
 

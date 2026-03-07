@@ -6,8 +6,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, CheckCircle2, Receipt, Link2, Copy, ExternalLink, Camera, X, ImagePlus, CreditCard, FileText } from "lucide-react";
+import { Loader2, CheckCircle2, Receipt, Link2, Copy, ExternalLink, Camera, X, ImagePlus, CreditCard, FileText, Edit } from "lucide-react";
 import { toast } from "sonner";
+import InvoiceAmendmentDialog from "./InvoiceAmendmentDialog";
 
 interface JobCompletionDialogProps {
   open: boolean;
@@ -19,21 +20,28 @@ interface JobCompletionDialogProps {
     total_price: number | null;
     client_name: string;
     payment_status: string;
+    requires_quote?: boolean;
+    quote_type?: string | null;
+    quoted_rate?: number | null;
+    quoted_hours?: number | null;
   } | null;
+  contractorId?: string;
+  gstRegistered?: boolean;
   onCompleted: () => void;
 }
 
 type CompletionStep = "photos" | "confirm" | "completing" | "options" | "done";
 
-const RECOMMENDED_PHOTOS = 2; // recommended per type
+const RECOMMENDED_PHOTOS = 2;
 
-const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobCompletionDialogProps) => {
+const JobCompletionDialog = ({ open, onOpenChange, job, contractorId, gstRegistered, onCompleted }: JobCompletionDialogProps) => {
   const [step, setStep] = useState<CompletionStep>("photos");
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [photosAcknowledged, setPhotosAcknowledged] = useState(false);
+  const [showAmendDialog, setShowAmendDialog] = useState(false);
 
   // Photo upload state
   const [beforePhotos, setBeforePhotos] = useState<File[]>([]);
@@ -245,6 +253,7 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent className="sm:max-w-md">
         {/* STEP: Photo Documentation */}
@@ -457,6 +466,25 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
                 </div>
               </button>
 
+              {/* Amend Invoice option - for quoted/variable jobs */}
+              {job.requires_quote && contractorId && (
+                <button
+                  onClick={() => setShowAmendDialog(true)}
+                  disabled={isProcessing}
+                  className="w-full flex items-start gap-4 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 transition-all text-left"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Edit className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-foreground text-sm">Amend & Create Invoice</h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Adjust line items to reflect the actual work performed, then generate the invoice.
+                    </p>
+                  </div>
+                </button>
+              )}
+
               {isProcessing && (
                 <div className="flex items-center justify-center py-2">
                   <Loader2 className="w-5 h-5 animate-spin text-primary mr-2" />
@@ -500,6 +528,30 @@ const JobCompletionDialog = ({ open, onOpenChange, job, onCompleted }: JobComple
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Invoice Amendment Dialog */}
+    {contractorId && (
+      <InvoiceAmendmentDialog
+        open={showAmendDialog}
+        onOpenChange={setShowAmendDialog}
+        job={job ? {
+          id: job.id,
+          title: job.title,
+          total_price: job.total_price,
+          quote_type: job.quote_type || null,
+          quoted_rate: job.quoted_rate || null,
+          quoted_hours: job.quoted_hours || null,
+        } : null}
+        contractorId={contractorId}
+        gstRegistered={gstRegistered || false}
+        onComplete={() => {
+          setResult("Invoice amended and saved.");
+          setStep("done");
+          setShowAmendDialog(false);
+        }}
+      />
+    )}
+    </>
   );
 };
 

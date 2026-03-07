@@ -14,10 +14,9 @@ const MAX_NOTES_LEN = 500;
 const MAX_ADDRESS_LEN = 300;
 const MAX_SERVICE_LEN = 100;
 
-// In-memory rate limiter (per isolate — best-effort for edge)
 const ipRequests = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 5;
-const RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const RATE_WINDOW_MS = 60 * 60 * 1000;
 
 function isRateLimited(ip: string): boolean {
   const now = Date.now();
@@ -49,7 +48,46 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    // Rate limiting
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceKey);
+
+    const body = await req.json();
+
+    // ─── ACTION: GET SERVICES ───
+    if (body.action === "get_services") {
+      const { contractor_slug } = body;
+      if (!contractor_slug) {
+        return new Response(JSON.stringify({ error: "Missing contractor_slug" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: contractor } = await supabase
+        .from("contractors")
+        .select("id, website_published")
+        .eq("subdomain", contractor_slug)
+        .single();
+
+      if (!contractor || !contractor.website_published) {
+        return new Response(JSON.stringify({ services: [] }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: offerings } = await supabase
+        .from("service_offerings")
+        .select("name, requires_quote, category")
+        .eq("contractor_id", contractor.id)
+        .eq("is_active", true)
+        .order("created_at");
+
+      return new Response(JSON.stringify({ services: offerings || [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ─── BOOKING / QUOTE REQUEST ───
     const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || 
                      req.headers.get("cf-connecting-ip") || "unknown";
     if (isRateLimited(clientIp)) {
@@ -58,21 +96,14 @@ serve(async (req) => {
       });
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceKey);
+    const { contractor_slug, customer_name, customer_email, customer_phone, service_type, address, preferred_date, preferred_time, notes, customer_user_id, requires_quote } = body;
 
-    const body = await req.json();
-    const { contractor_slug, customer_name, customer_email, customer_phone, service_type, address, preferred_date, preferred_time, notes, customer_user_id } = body;
-
-    // Required field validation
     if (!contractor_slug || !customer_name || !customer_email || !service_type || !preferred_date) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Input format validation
     const cleanName = sanitizeText(String(customer_name), MAX_NAME_LEN);
     const cleanEmail = sanitizeText(String(customer_email), MAX_EMAIL_LEN).toLowerCase();
     const cleanService = sanitizeText(String(service_type), MAX_SERVICE_LEN);
@@ -103,7 +134,6 @@ serve(async (req) => {
       });
     }
 
-    // Validate customer_user_id if provided — must be a valid UUID and belong to an actual auth user
     let validatedCustomerUserId: string | null = null;
     if (customer_user_id) {
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(customer_user_id)) {
@@ -111,17 +141,12 @@ serve(async (req) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      // Verify this user actually exists in auth
       const { data: authUser, error: authErr } = await supabase.auth.admin.getUserById(customer_user_id);
-      if (authErr || !authUser?.user) {
-        console.warn("customer_user_id does not match a real user, ignoring:", customer_user_id);
-        // Silently ignore invalid user_id rather than linking to a non-existent user
-      } else {
+      if (!authErr && authUser?.user) {
         validatedCustomerUserId = customer_user_id;
       }
     }
 
-    // Find contractor by subdomain
     const { data: contractor, error: cErr } = await supabase
       .from("contractors")
       .select("id, user_id, business_name, website_published")
@@ -138,6 +163,19 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "This contractor's website is not active" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Determine if this service requires a quote
+    let isQuoteRequest = !!requires_quote;
+    if (!isQuoteRequest) {
+      const { data: offering } = await supabase
+        .from("service_offerings")
+        .select("requires_quote")
+        .eq("contractor_id", contractor.id)
+        .eq("name", cleanService)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (offering?.requires_quote) isQuoteRequest = true;
     }
 
     // Find or create client
@@ -182,18 +220,31 @@ serve(async (req) => {
     }
 
     // Create job
+    const jobData: Record<string, unknown> = {
+      contractor_id: contractor.id,
+      client_id: clientId,
+      title: cleanService || "Lawn Mowing",
+      description: cleanNotes,
+      scheduled_date: preferred_date,
+      scheduled_time: preferred_time || null,
+      source: "website_booking",
+      customer_email: cleanEmail,
+      customer_phone: customer_phone || null,
+      customer_user_id: validatedCustomerUserId,
+    };
+
+    if (isQuoteRequest) {
+      jobData.status = "pending_confirmation";
+      jobData.requires_quote = true;
+      jobData.quote_status = "pending";
+      jobData.payment_status = "unpaid";
+    } else {
+      jobData.status = "pending_confirmation";
+    }
+
     const { data: job, error: jobErr } = await supabase
       .from("jobs")
-      .insert({
-        contractor_id: contractor.id,
-        client_id: clientId,
-        title: cleanService || "Lawn Mowing",
-        description: cleanNotes,
-        scheduled_date: preferred_date,
-        scheduled_time: preferred_time || null,
-        status: "pending_confirmation",
-        source: "website_booking",
-      })
+      .insert(jobData)
       .select("id")
       .single();
 
@@ -205,14 +256,60 @@ serve(async (req) => {
     }
 
     // Notify contractor
+    const notifTitle = isQuoteRequest ? "📋 New Quote Request" : "🌐 New Website Booking";
+    const notifMessage = isQuoteRequest
+      ? `${cleanName} has requested a quote for ${cleanService} on ${preferred_date}. Review and send a quote.`
+      : `${cleanName} has requested a ${cleanService} on ${preferred_date}. Review and confirm the job.`;
+
     await supabase.from("notifications").insert({
       user_id: contractor.user_id,
-      title: "🌐 New Website Booking",
-      message: `${cleanName} has requested a ${cleanService} on ${preferred_date}. Review and confirm the job.`,
+      title: notifTitle,
+      message: notifMessage,
       type: "booking",
     });
 
-    return new Response(JSON.stringify({ success: true, job_id: job.id }), {
+    // Send email notification to contractor for quote requests
+    if (isQuoteRequest) {
+      try {
+        const resendApiKey = Deno.env.get("RESEND_API_KEY");
+        // Get contractor email
+        const { data: contractorAuth } = await supabase.auth.admin.getUserById(contractor.user_id);
+        const contractorEmail = contractorAuth?.user?.email;
+
+        if (resendApiKey && contractorEmail) {
+          await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
+            body: JSON.stringify({
+              from: "Yardly <onboarding@resend.dev>",
+              to: [contractorEmail],
+              subject: `New Quote Request: ${cleanService} from ${cleanName}`,
+              html: `
+                <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h1 style="color: #16a34a;">📋 New Quote Request</h1>
+                  <p>You have a new quote request from <strong>${cleanName}</strong>.</p>
+                  <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p><strong>Service:</strong> ${cleanService}</p>
+                    <p><strong>Preferred Date:</strong> ${preferred_date}</p>
+                    ${cleanAddress ? `<p><strong>Address:</strong> ${cleanAddress}</p>` : ""}
+                    ${cleanNotes ? `<p><strong>Details:</strong> ${cleanNotes}</p>` : ""}
+                    <p><strong>Email:</strong> ${cleanEmail}</p>
+                    ${customer_phone ? `<p><strong>Phone:</strong> ${customer_phone}</p>` : ""}
+                  </div>
+                  <p>Log in to your Yardly dashboard to review and send a quote.</p>
+                  <p style="color: #666; font-size: 14px;">Powered by Yardly</p>
+                </div>
+              `,
+            }),
+          });
+          console.log("Quote request email sent to contractor");
+        }
+      } catch (e) {
+        console.error("Email notification failed (non-blocking):", e);
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, job_id: job.id, is_quote_request: isQuoteRequest }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
