@@ -6,8 +6,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, CheckCircle2, Receipt, Link2, Copy, ExternalLink, Camera, X, ImagePlus, CreditCard, FileText } from "lucide-react";
+import { Loader2, CheckCircle2, Receipt, Link2, Copy, ExternalLink, Camera, X, ImagePlus, CreditCard, FileText, Edit } from "lucide-react";
 import { toast } from "sonner";
+import InvoiceAmendmentDialog from "./InvoiceAmendmentDialog";
 
 interface JobCompletionDialogProps {
   open: boolean;
