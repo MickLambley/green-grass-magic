@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,7 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, CheckCircle2, MapPin } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, CheckCircle2, MapPin, FileQuestion } from "lucide-react";
 import { toast } from "sonner";
 import LawnDrawingMap, { type LawnDrawingMapRef } from "@/components/dashboard/LawnDrawingMap";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -18,13 +19,65 @@ interface PublicBookingFormProps {
   onClose: () => void;
 }
 
+interface ServiceOption {
+  name: string;
+  requires_quote: boolean;
+  category: string;
+}
+
+const FALLBACK_SERVICES: ServiceOption[] = [
+  { name: "Lawn Mowing", requires_quote: false, category: "lawn" },
+  { name: "Edging & Trimming", requires_quote: false, category: "lawn" },
+  { name: "Hedge Trimming", requires_quote: true, category: "garden" },
+  { name: "Garden Cleanup", requires_quote: true, category: "garden" },
+  { name: "Full Service", requires_quote: false, category: "lawn" },
+  { name: "Other", requires_quote: true, category: "other" },
+];
+
+const useContractorServices = (contractorSlug: string) => {
+  const [services, setServices] = useState<ServiceOption[]>(FALLBACK_SERVICES);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const resp = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-booking`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({ contractor_slug: contractorSlug, action: "get_services" }),
+          }
+        );
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.services?.length > 0) {
+            setServices(data.services);
+          }
+        }
+      } catch {
+        // Use fallback
+      }
+      setLoaded(true);
+    };
+    load();
+  }, [contractorSlug]);
+
+  return { services, loaded };
+};
+
 const BookingFormContent = ({ contractorSlug, contractorName, onClose }: PublicBookingFormProps) => {
   const stripe = useStripe();
   const elements = useElements();
   const lawnMapRef = useRef<LawnDrawingMapRef>(null);
+  const { services } = useContractorServices(contractorSlug);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isQuoteRequest, setIsQuoteRequest] = useState(false);
   const [showLawnDrawing, setShowLawnDrawing] = useState(false);
   const [lawnArea, setLawnArea] = useState(0);
   const [form, setForm] = useState({
@@ -38,10 +91,48 @@ const BookingFormContent = ({ contractorSlug, contractorName, onClose }: PublicB
     notes: "",
   });
 
+  // Check if selected service requires quote
+  useEffect(() => {
+    const selected = services.find(s => s.name === form.service_type);
+    setIsQuoteRequest(selected?.requires_quote ?? false);
+  }, [form.service_type, services]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.customer_name || !form.customer_email || !form.preferred_date) {
       toast.error("Please fill in all required fields");
+      return;
+    }
+
+    // For quote requests, skip Stripe
+    if (isQuoteRequest) {
+      setIsSubmitting(true);
+      try {
+        const resp = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-booking`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({
+              contractor_slug: contractorSlug,
+              ...form,
+              requires_quote: true,
+              lawn_area_sqm: lawnArea > 0 ? lawnArea : undefined,
+            }),
+          }
+        );
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.error || "Request failed");
+        }
+        setIsSuccess(true);
+      } catch (err: any) {
+        toast.error(err.message || "Failed to submit request");
+      }
+      setIsSubmitting(false);
       return;
     }
 
@@ -52,7 +143,6 @@ const BookingFormContent = ({ contractorSlug, contractorName, onClose }: PublicB
 
     setIsSubmitting(true);
     try {
-      // Create SetupIntent via edge function
       const setupResp = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-booking`,
         {
@@ -76,7 +166,6 @@ const BookingFormContent = ({ contractorSlug, contractorName, onClose }: PublicB
 
       const result = await setupResp.json();
 
-      // If SetupIntent client_secret returned, confirm card
       if (result.setupIntentClientSecret) {
         const cardElement = elements.getElement(CardElement);
         if (!cardElement) throw new Error("Card element not found");
@@ -101,7 +190,6 @@ const BookingFormContent = ({ contractorSlug, contractorName, onClose }: PublicB
     setIsSubmitting(false);
   };
 
-  // Get tomorrow's date as min date
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate = tomorrow.toISOString().split("T")[0];
@@ -112,18 +200,26 @@ const BookingFormContent = ({ contractorSlug, contractorName, onClose }: PublicB
         {isSuccess ? (
           <div className="py-8 text-center">
             <CheckCircle2 className="w-16 h-16 text-primary mx-auto mb-4" />
-            <h3 className="font-display text-xl font-bold text-foreground mb-2">Booking Submitted!</h3>
+            <h3 className="font-display text-xl font-bold text-foreground mb-2">
+              {isQuoteRequest ? "Quote Request Submitted!" : "Booking Submitted!"}
+            </h3>
             <p className="text-muted-foreground mb-6">
-              {contractorName} will review your request and get back to you shortly.
+              {isQuoteRequest
+                ? `${contractorName} will review your request and send you a quote.`
+                : `${contractorName} will review your request and get back to you shortly.`}
             </p>
             <Button onClick={onClose}>Close</Button>
           </div>
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle className="font-display">Book a Service</DialogTitle>
+              <DialogTitle className="font-display">
+                {isQuoteRequest ? "Request a Quote" : "Book a Service"}
+              </DialogTitle>
               <DialogDescription>
-                Fill out the form below and {contractorName} will confirm your booking.
+                {isQuoteRequest
+                  ? `Describe what you need and ${contractorName} will send you a personalised quote.`
+                  : `Fill out the form below and ${contractorName} will confirm your booking.`}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4 mt-2">
@@ -165,16 +261,31 @@ const BookingFormContent = ({ contractorSlug, contractorName, onClose }: PublicB
                   <Select value={form.service_type} onValueChange={(v) => setForm({ ...form, service_type: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Lawn Mowing">Lawn Mowing</SelectItem>
-                      <SelectItem value="Edging & Trimming">Edging & Trimming</SelectItem>
-                      <SelectItem value="Hedge Trimming">Hedge Trimming</SelectItem>
-                      <SelectItem value="Garden Cleanup">Garden Cleanup</SelectItem>
-                      <SelectItem value="Full Service">Full Service</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
+                      {services.map(s => (
+                        <SelectItem key={s.name} value={s.name}>
+                          <span className="flex items-center gap-2">
+                            {s.name}
+                            {s.requires_quote && <span className="text-[10px] text-muted-foreground">(Quote)</span>}
+                          </span>
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
+
+              {isQuoteRequest && (
+                <div className="bg-accent/50 border border-accent rounded-lg p-3 flex items-start gap-3">
+                  <FileQuestion className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Quote Required</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      This service requires a custom quote. {contractorName} will review your request and send you a price. No payment is needed now.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>Address</Label>
                 <Input
@@ -185,8 +296,8 @@ const BookingFormContent = ({ contractorSlug, contractorName, onClose }: PublicB
                 />
               </div>
 
-              {/* Optional Lawn Drawing */}
-              {form.address && (
+              {/* Optional Lawn Drawing - only for lawn services */}
+              {form.address && !isQuoteRequest && (
                 <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -240,40 +351,45 @@ const BookingFormContent = ({ contractorSlug, contractorName, onClose }: PublicB
                 </Label>
               </div>
               <div className="space-y-2">
-                <Label>Notes</Label>
+                <Label>{isQuoteRequest ? "Describe what you need *" : "Notes"}</Label>
                 <Textarea
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  placeholder="Any special instructions or details..."
-                  rows={3}
+                  placeholder={isQuoteRequest
+                    ? "Please describe the work needed, approximate area, access details, etc."
+                    : "Any special instructions or details..."}
+                  rows={isQuoteRequest ? 4 : 3}
                   maxLength={500}
+                  required={isQuoteRequest}
                 />
               </div>
 
-              {/* Stripe Card Element */}
-              <div className="space-y-2">
-                <Label>Payment Method *</Label>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Your card will be saved securely. You'll only be charged after the job is completed.
-                </p>
-                <div className="p-3 border border-border rounded-lg bg-card">
-                  <CardElement
-                    options={{
-                      style: {
-                        base: {
-                          fontSize: "14px",
-                          color: "hsl(var(--foreground))",
-                          "::placeholder": { color: "hsl(var(--muted-foreground))" },
+              {/* Stripe Card Element - only for non-quote bookings */}
+              {!isQuoteRequest && (
+                <div className="space-y-2">
+                  <Label>Payment Method *</Label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Your card will be saved securely. You'll only be charged after the job is completed.
+                  </p>
+                  <div className="p-3 border border-border rounded-lg bg-card">
+                    <CardElement
+                      options={{
+                        style: {
+                          base: {
+                            fontSize: "14px",
+                            color: "hsl(var(--foreground))",
+                            "::placeholder": { color: "hsl(var(--muted-foreground))" },
+                          },
                         },
-                      },
-                    }}
-                  />
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <Button type="submit" className="w-full" disabled={isSubmitting || !stripe}>
+              <Button type="submit" className="w-full" disabled={isSubmitting || (!isQuoteRequest && !stripe)}>
                 {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                Submit Booking Request
+                {isQuoteRequest ? "Request Quote" : "Submit Booking Request"}
               </Button>
             </form>
           </>
@@ -286,7 +402,6 @@ const BookingFormContent = ({ contractorSlug, contractorName, onClose }: PublicB
 const PublicBookingForm = (props: PublicBookingFormProps) => {
   const stripeInstance = getStripe();
   if (!stripeInstance) {
-    // Fallback if Stripe not configured — submit without payment
     return <BookingFormFallback {...props} />;
   }
 
@@ -297,11 +412,13 @@ const PublicBookingForm = (props: PublicBookingFormProps) => {
   );
 };
 
-// Fallback form without Stripe (keeps original behavior)
+// Fallback form without Stripe
 const BookingFormFallback = ({ contractorSlug, contractorName, onClose }: PublicBookingFormProps) => {
   const lawnMapRef = useRef<LawnDrawingMapRef>(null);
+  const { services } = useContractorServices(contractorSlug);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isQuoteRequest, setIsQuoteRequest] = useState(false);
   const [showLawnDrawing, setShowLawnDrawing] = useState(false);
   const [lawnArea, setLawnArea] = useState(0);
   const [form, setForm] = useState({
@@ -309,6 +426,11 @@ const BookingFormFallback = ({ contractorSlug, contractorName, onClose }: Public
     service_type: "Lawn Mowing", address: "", preferred_date: "",
     preferred_time: "", notes: "",
   });
+
+  useEffect(() => {
+    const selected = services.find(s => s.name === form.service_type);
+    setIsQuoteRequest(selected?.requires_quote ?? false);
+  }, [form.service_type, services]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -329,17 +451,18 @@ const BookingFormFallback = ({ contractorSlug, contractorName, onClose }: Public
           body: JSON.stringify({
             contractor_slug: contractorSlug,
             ...form,
+            requires_quote: isQuoteRequest,
             lawn_area_sqm: lawnArea > 0 ? lawnArea : undefined,
           }),
         }
       );
       if (!resp.ok) {
         const err = await resp.json();
-        throw new Error(err.error || "Booking failed");
+        throw new Error(err.error || "Request failed");
       }
       setIsSuccess(true);
     } catch (err: any) {
-      toast.error(err.message || "Failed to submit booking");
+      toast.error(err.message || "Failed to submit request");
     }
     setIsSubmitting(false);
   };
@@ -354,15 +477,27 @@ const BookingFormFallback = ({ contractorSlug, contractorName, onClose }: Public
         {isSuccess ? (
           <div className="py-8 text-center">
             <CheckCircle2 className="w-16 h-16 text-primary mx-auto mb-4" />
-            <h3 className="font-display text-xl font-bold text-foreground mb-2">Booking Submitted!</h3>
-            <p className="text-muted-foreground mb-6">{contractorName} will review your request and get back to you shortly.</p>
+            <h3 className="font-display text-xl font-bold text-foreground mb-2">
+              {isQuoteRequest ? "Quote Request Submitted!" : "Booking Submitted!"}
+            </h3>
+            <p className="text-muted-foreground mb-6">
+              {isQuoteRequest
+                ? `${contractorName} will review your request and send you a quote.`
+                : `${contractorName} will review your request and get back to you shortly.`}
+            </p>
             <Button onClick={onClose}>Close</Button>
           </div>
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle className="font-display">Book a Service</DialogTitle>
-              <DialogDescription>Fill out the form below and {contractorName} will confirm your booking.</DialogDescription>
+              <DialogTitle className="font-display">
+                {isQuoteRequest ? "Request a Quote" : "Book a Service"}
+              </DialogTitle>
+              <DialogDescription>
+                {isQuoteRequest
+                  ? `Describe what you need and ${contractorName} will send you a personalised quote.`
+                  : `Fill out the form below and ${contractorName} will confirm your booking.`}
+              </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4 mt-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -385,21 +520,36 @@ const BookingFormFallback = ({ contractorSlug, contractorName, onClose }: Public
                   <Select value={form.service_type} onValueChange={(v) => setForm({ ...form, service_type: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Lawn Mowing">Lawn Mowing</SelectItem>
-                      <SelectItem value="Edging & Trimming">Edging & Trimming</SelectItem>
-                      <SelectItem value="Hedge Trimming">Hedge Trimming</SelectItem>
-                      <SelectItem value="Garden Cleanup">Garden Cleanup</SelectItem>
-                      <SelectItem value="Full Service">Full Service</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
+                      {services.map(s => (
+                        <SelectItem key={s.name} value={s.name}>
+                          <span className="flex items-center gap-2">
+                            {s.name}
+                            {s.requires_quote && <span className="text-[10px] text-muted-foreground">(Quote)</span>}
+                          </span>
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
+
+              {isQuoteRequest && (
+                <div className="bg-accent/50 border border-accent rounded-lg p-3 flex items-start gap-3">
+                  <FileQuestion className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Quote Required</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      This service requires a custom quote. No payment is needed now.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>Address</Label>
                 <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="123 Main St, Suburb" maxLength={200} />
               </div>
-              {form.address && (
+              {form.address && !isQuoteRequest && (
                 <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -442,12 +592,21 @@ const BookingFormFallback = ({ contractorSlug, contractorName, onClose }: Public
                 </Label>
               </div>
               <div className="space-y-2">
-                <Label>Notes</Label>
-                <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Any special instructions or details..." rows={3} maxLength={500} />
+                <Label>{isQuoteRequest ? "Describe what you need *" : "Notes"}</Label>
+                <Textarea
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  placeholder={isQuoteRequest
+                    ? "Please describe the work needed, approximate area, access details, etc."
+                    : "Any special instructions or details..."}
+                  rows={isQuoteRequest ? 4 : 3}
+                  maxLength={500}
+                  required={isQuoteRequest}
+                />
               </div>
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                Submit Booking Request
+                {isQuoteRequest ? "Request Quote" : "Submit Booking Request"}
               </Button>
             </form>
           </>
