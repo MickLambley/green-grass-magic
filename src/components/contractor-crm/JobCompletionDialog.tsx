@@ -465,6 +465,25 @@ const JobCompletionDialog = ({ open, onOpenChange, job, contractorId, gstRegiste
                 </div>
               </button>
 
+              {/* Amend Invoice option - for quoted/variable jobs */}
+              {job.requires_quote && contractorId && (
+                <button
+                  onClick={() => setShowAmendDialog(true)}
+                  disabled={isProcessing}
+                  className="w-full flex items-start gap-4 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 transition-all text-left"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Edit className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-foreground text-sm">Amend & Create Invoice</h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Adjust line items to reflect the actual work performed, then generate the invoice.
+                    </p>
+                  </div>
+                </button>
+              )}
+
               {isProcessing && (
                 <div className="flex items-center justify-center py-2">
                   <Loader2 className="w-5 h-5 animate-spin text-primary mr-2" />
