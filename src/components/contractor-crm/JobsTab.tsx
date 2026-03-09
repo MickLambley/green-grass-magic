@@ -6,6 +6,7 @@ import PlatformBookingDetailDialog from "./PlatformBookingDetailDialog";
 import JobCompletionDialog from "./JobCompletionDialog";
 import SuggestTimeDialog from "./SuggestTimeDialog";
 import MarkPaidDialog from "./MarkPaidDialog";
+import QuoteResponseDialog from "./QuoteResponseDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
