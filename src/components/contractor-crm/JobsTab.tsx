@@ -539,6 +539,17 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     setMarkPaidOpen(true);
   };
 
+  const handleOpenQuoteResponse = (job: UnifiedJob) => {
+    setQuoteResponseJob({
+      id: job.id,
+      title: job.title,
+      client_name: job.client_name,
+      description: job.description,
+      customer_email: job.customer_email,
+    });
+    setQuoteResponseOpen(true);
+  };
+
   const handleStartCompletion = (job: UnifiedJob) => {
     setCompletionJob({
       id: job.id,
