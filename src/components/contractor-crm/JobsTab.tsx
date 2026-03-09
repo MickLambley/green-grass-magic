@@ -692,9 +692,14 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                       <Badge variant="outline" className="text-[10px] bg-sunshine/20 text-sunshine border-sunshine/30">
                         {job.source === "platform" ? "🌐 Website" : "Manual"}
                       </Badge>
-                      {job.requires_quote && job.quote_status === "pending_quote" && (
+                      {job.requires_quote && job.quote_status === "pending" && (
+                        <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30 animate-pulse">
+                          ⚡ Quote Needed
+                        </Badge>
+                      )}
+                      {job.requires_quote && job.quote_status === "quoted" && (
                         <Badge variant="outline" className="text-[10px] bg-sky/20 text-sky border-sky/30">
-                          Quote Needed
+                          💬 Quote Sent
                         </Badge>
                       )}
                     </div>
