@@ -111,6 +111,9 @@ const ContractorSiteDashboard = () => {
       {activeTab === "jobs" && (
         <PortalJobsList userId={user.id} contractor={contractor} />
       )}
+      {activeTab === "quotes" && (
+        <PortalQuotesTab userId={user.id} contractor={contractor} />
+      )}
       {activeTab === "disputes" && (
         <PortalDisputesList userId={user.id} contractor={contractor} />
       )}

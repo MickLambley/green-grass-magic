@@ -38,6 +38,7 @@ export const PortalLayout = ({ contractor, user, activeTab, onTabChange, childre
   const tabs = [
     { id: "overview", label: "Overview", icon: Home },
     { id: "jobs", label: "My Jobs", icon: Calendar },
+    { id: "quotes", label: "Quotes", icon: FileText },
     { id: "disputes", label: "Issues", icon: AlertCircle },
   ];
 
