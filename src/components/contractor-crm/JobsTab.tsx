@@ -936,7 +936,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        {(job.status === "pending_confirmation" || job.status === "pending") && (
+                        {/* Send Quote button for quote-required pending jobs */}
+                        {job.requires_quote && job.quote_status === "pending_quote" && (
+                          <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleOpenQuoteResponse(job); }} title="Send Quote">
+                            <Send className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {(job.status === "pending_confirmation" || job.status === "pending") && !(job.requires_quote && job.quote_status === "pending_quote") && (
                           <>
                             <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleConfirmJob(job.id, job.source); }} title="Accept">
                               <Check className="w-4 h-4" />
