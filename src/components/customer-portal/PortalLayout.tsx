@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
-import { Leaf, Home, Calendar, LogOut, ExternalLink, Menu, X, Bell, AlertCircle } from "lucide-react";
+import { Leaf, Home, Calendar, LogOut, ExternalLink, Menu, X, Bell, AlertCircle, FileText } from "lucide-react";
 import NotificationsPopover from "@/components/dashboard/NotificationsPopover";
 
 export interface ContractorBrand {
