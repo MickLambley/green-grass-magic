@@ -688,9 +688,16 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                       <p className="font-medium text-foreground text-sm">{job.title}</p>
                       <p className="text-xs text-muted-foreground">{job.client_name}</p>
                     </div>
-                    <Badge variant="outline" className="text-[10px] bg-sunshine/20 text-sunshine border-sunshine/30">
-                      {job.source === "platform" ? "🌐 Website" : "Manual"}
-                    </Badge>
+                    <div className="flex items-center gap-1">
+                      <Badge variant="outline" className="text-[10px] bg-sunshine/20 text-sunshine border-sunshine/30">
+                        {job.source === "platform" ? "🌐 Website" : "Manual"}
+                      </Badge>
+                      {job.requires_quote && job.quote_status === "pending_quote" && (
+                        <Badge variant="outline" className="text-[10px] bg-sky/20 text-sky border-sky/30">
+                          Quote Needed
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   {/* Pending alternative suggestions indicator */}
                   {pendingSuggestionJobIds.has(job.id) && (
