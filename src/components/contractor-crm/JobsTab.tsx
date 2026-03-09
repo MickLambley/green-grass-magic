@@ -969,7 +969,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                             <Send className="w-4 h-4" />
                           </Button>
                         )}
-                        {(job.status === "pending_confirmation" || job.status === "pending") && !(job.requires_quote && job.quote_status === "pending_quote") && (
+                        {(job.status === "pending_confirmation" || job.status === "pending") && !(job.requires_quote && job.quote_status === "pending") && (
                           <>
                             <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleConfirmJob(job.id, job.source); }} title="Accept">
                               <Check className="w-4 h-4" />
