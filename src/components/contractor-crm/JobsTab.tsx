@@ -721,7 +721,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {job.requires_quote && job.quote_status === "pending_quote" ? (
+                    {job.requires_quote && job.quote_status === "pending" ? (
                       <>
                         <Button size="sm" className="flex-1" onClick={() => handleOpenQuoteResponse(job)}>
                           <Send className="w-3.5 h-3.5 mr-1" /> Send Quote
