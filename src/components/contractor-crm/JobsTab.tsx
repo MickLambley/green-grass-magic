@@ -681,7 +681,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {pendingJobs.map((job) => (
-              <Card key={job.id} className={`bg-sunshine/5 ${pendingSuggestionJobIds.has(job.id) ? "border-sky/40 ring-1 ring-sky/20" : "border-sunshine/30"}`}>
+              <Card key={job.id} className={`${job.requires_quote && job.quote_status === "pending" ? "bg-amber-500/5 border-amber-500/40 ring-1 ring-amber-500/20" : pendingSuggestionJobIds.has(job.id) ? "bg-sunshine/5 border-sky/40 ring-1 ring-sky/20" : "bg-sunshine/5 border-sunshine/30"}`}>
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-start justify-between">
                     <div>
