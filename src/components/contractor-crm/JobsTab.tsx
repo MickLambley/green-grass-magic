@@ -931,13 +931,35 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                       {job.total_price ? `$${Number(job.total_price).toFixed(2)}` : "—"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={statusColors[job.status] || ""}>
-                        {job.source === "platform" && <span className="mr-1">🌐</span>}
-                        {job.status === "in_progress" ? "In Progress" 
-                          : job.status === "pending_confirmation" ? "Pending" 
-                          : job.status === "pending" ? "Awaiting Accept"
-                          : job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className={statusColors[job.status] || ""}>
+                          {job.source === "platform" && <span className="mr-1">🌐</span>}
+                          {job.status === "in_progress" ? "In Progress" 
+                            : job.status === "pending_confirmation" ? "Pending" 
+                            : job.status === "pending" ? "Awaiting Accept"
+                            : job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+                        </Badge>
+                        {job.requires_quote && job.quote_status === "pending" && (
+                          <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30 animate-pulse">
+                            ⚡ Quote Needed
+                          </Badge>
+                        )}
+                        {job.requires_quote && job.quote_status === "quoted" && (
+                          <Badge variant="outline" className="text-[10px] bg-sky/20 text-sky border-sky/30">
+                            💬 Quoted
+                          </Badge>
+                        )}
+                        {job.requires_quote && job.quote_status === "accepted" && (
+                          <Badge variant="outline" className="text-[10px] bg-primary/20 text-primary border-primary/30">
+                            ✅ Accepted
+                          </Badge>
+                        )}
+                        {job.requires_quote && job.quote_status === "declined" && (
+                          <Badge variant="outline" className="text-[10px] bg-destructive/20 text-destructive border-destructive/30">
+                            Declined
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
