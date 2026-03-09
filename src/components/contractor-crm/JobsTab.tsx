@@ -6,6 +6,7 @@ import PlatformBookingDetailDialog from "./PlatformBookingDetailDialog";
 import JobCompletionDialog from "./JobCompletionDialog";
 import SuggestTimeDialog from "./SuggestTimeDialog";
 import MarkPaidDialog from "./MarkPaidDialog";
+import QuoteResponseDialog from "./QuoteResponseDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,7 +27,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock, Trash2, MessageSquare } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock, Trash2, MessageSquare, Send } from "lucide-react";
 import DayTimeline from "./DayTimeline";
 import RecurringEditDialog from "./RecurringEditDialog";
 import { toast } from "sonner";
@@ -88,11 +89,13 @@ interface UnifiedJob {
   // CRM-only fields
   client_id?: string;
   duration_minutes?: number | null;
+  requires_quote?: boolean;
+  quote_status?: string;
+  customer_email?: string | null;
   // Platform-only fields
   address_street?: string;
   address_city?: string;
   address_state?: string;
-  customer_email?: string | null;
 }
 
 const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorkingHours, onOpenRouteOptimization }: JobsTabProps) => {
@@ -132,6 +135,10 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [pendingEditJob, setPendingEditJob] = useState<Job | null>(null);
   const [listPage, setListPage] = useState(0);
   const PAGE_SIZE = 25;
+  const [quoteResponseOpen, setQuoteResponseOpen] = useState(false);
+  const [quoteResponseJob, setQuoteResponseJob] = useState<{
+    id: string; title: string; client_name: string; description: string | null; customer_email?: string | null;
+  } | null>(null);
 
   const handleRunOptimization = async () => {
     setIsOptimizing(true);
@@ -232,6 +239,9 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           source: "crm",
           client_id: j.client_id,
           duration_minutes: j.duration_minutes,
+          requires_quote: j.requires_quote,
+          quote_status: j.quote_status,
+          customer_email: j.customer_email,
         });
       });
     }
@@ -529,6 +539,17 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     setMarkPaidOpen(true);
   };
 
+  const handleOpenQuoteResponse = (job: UnifiedJob) => {
+    setQuoteResponseJob({
+      id: job.id,
+      title: job.title,
+      client_name: job.client_name,
+      description: job.description,
+      customer_email: job.customer_email,
+    });
+    setQuoteResponseOpen(true);
+  };
+
   const handleStartCompletion = (job: UnifiedJob) => {
     setCompletionJob({
       id: job.id,
@@ -667,9 +688,16 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                       <p className="font-medium text-foreground text-sm">{job.title}</p>
                       <p className="text-xs text-muted-foreground">{job.client_name}</p>
                     </div>
-                    <Badge variant="outline" className="text-[10px] bg-sunshine/20 text-sunshine border-sunshine/30">
-                      {job.source === "platform" ? "🌐 Website" : "Manual"}
-                    </Badge>
+                    <div className="flex items-center gap-1">
+                      <Badge variant="outline" className="text-[10px] bg-sunshine/20 text-sunshine border-sunshine/30">
+                        {job.source === "platform" ? "🌐 Website" : "Manual"}
+                      </Badge>
+                      {job.requires_quote && job.quote_status === "pending_quote" && (
+                        <Badge variant="outline" className="text-[10px] bg-sky/20 text-sky border-sky/30">
+                          Quote Needed
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   {/* Pending alternative suggestions indicator */}
                   {pendingSuggestionJobIds.has(job.id) && (
@@ -688,15 +716,28 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button size="sm" className="flex-1" onClick={() => handleConfirmJob(job.id, job.source)}>
-                      <Check className="w-3.5 h-3.5 mr-1" /> {pendingSuggestionJobIds.has(job.id) ? "Override & Confirm" : "Confirm"}
-                    </Button>
-                    <Button size="sm" variant="outline" className="flex-1" onClick={() => handleSuggestTime(job)}>
-                      <Calendar className="w-3.5 h-3.5 mr-1" /> Reschedule
-                    </Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDeclineJob(job.id, job.source)}>
-                      <X className="w-3.5 h-3.5" />
-                    </Button>
+                    {job.requires_quote && job.quote_status === "pending_quote" ? (
+                      <>
+                        <Button size="sm" className="flex-1" onClick={() => handleOpenQuoteResponse(job)}>
+                          <Send className="w-3.5 h-3.5 mr-1" /> Send Quote
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDeclineJob(job.id, job.source)}>
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button size="sm" className="flex-1" onClick={() => handleConfirmJob(job.id, job.source)}>
+                          <Check className="w-3.5 h-3.5 mr-1" /> {pendingSuggestionJobIds.has(job.id) ? "Override & Confirm" : "Confirm"}
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => handleSuggestTime(job)}>
+                          <Calendar className="w-3.5 h-3.5 mr-1" /> Reschedule
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDeclineJob(job.id, job.source)}>
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -895,7 +936,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        {(job.status === "pending_confirmation" || job.status === "pending") && (
+                        {/* Send Quote button for quote-required pending jobs */}
+                        {job.requires_quote && job.quote_status === "pending_quote" && (
+                          <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleOpenQuoteResponse(job); }} title="Send Quote">
+                            <Send className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {(job.status === "pending_confirmation" || job.status === "pending") && !(job.requires_quote && job.quote_status === "pending_quote") && (
                           <>
                             <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleConfirmJob(job.id, job.source); }} title="Accept">
                               <Check className="w-4 h-4" />
@@ -1091,6 +1138,15 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
         onOpenChange={setMarkPaidOpen}
         job={markPaidJob}
         onMarked={fetchData}
+      />
+
+      {/* Quote Response Dialog */}
+      <QuoteResponseDialog
+        open={quoteResponseOpen}
+        onOpenChange={setQuoteResponseOpen}
+        job={quoteResponseJob}
+        contractorId={contractorId}
+        onQuoteSent={fetchData}
       />
 
       {/* Delete Confirmation */}
