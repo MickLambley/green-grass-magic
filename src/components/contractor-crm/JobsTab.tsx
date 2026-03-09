@@ -681,7 +681,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {pendingJobs.map((job) => (
-              <Card key={job.id} className={`bg-sunshine/5 ${pendingSuggestionJobIds.has(job.id) ? "border-sky/40 ring-1 ring-sky/20" : "border-sunshine/30"}`}>
+              <Card key={job.id} className={`${job.requires_quote && job.quote_status === "pending" ? "bg-amber-500/5 border-amber-500/40 ring-1 ring-amber-500/20" : pendingSuggestionJobIds.has(job.id) ? "bg-sunshine/5 border-sky/40 ring-1 ring-sky/20" : "bg-sunshine/5 border-sunshine/30"}`}>
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-start justify-between">
                     <div>
@@ -692,9 +692,14 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                       <Badge variant="outline" className="text-[10px] bg-sunshine/20 text-sunshine border-sunshine/30">
                         {job.source === "platform" ? "🌐 Website" : "Manual"}
                       </Badge>
-                      {job.requires_quote && job.quote_status === "pending_quote" && (
+                      {job.requires_quote && job.quote_status === "pending" && (
+                        <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30 animate-pulse">
+                          ⚡ Quote Needed
+                        </Badge>
+                      )}
+                      {job.requires_quote && job.quote_status === "quoted" && (
                         <Badge variant="outline" className="text-[10px] bg-sky/20 text-sky border-sky/30">
-                          Quote Needed
+                          💬 Quote Sent
                         </Badge>
                       )}
                     </div>
@@ -716,7 +721,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {job.requires_quote && job.quote_status === "pending_quote" ? (
+                    {job.requires_quote && job.quote_status === "pending" ? (
                       <>
                         <Button size="sm" className="flex-1" onClick={() => handleOpenQuoteResponse(job)}>
                           <Send className="w-3.5 h-3.5 mr-1" /> Send Quote
@@ -926,23 +931,45 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                       {job.total_price ? `$${Number(job.total_price).toFixed(2)}` : "—"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={statusColors[job.status] || ""}>
-                        {job.source === "platform" && <span className="mr-1">🌐</span>}
-                        {job.status === "in_progress" ? "In Progress" 
-                          : job.status === "pending_confirmation" ? "Pending" 
-                          : job.status === "pending" ? "Awaiting Accept"
-                          : job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className={statusColors[job.status] || ""}>
+                          {job.source === "platform" && <span className="mr-1">🌐</span>}
+                          {job.status === "in_progress" ? "In Progress" 
+                            : job.status === "pending_confirmation" ? "Pending" 
+                            : job.status === "pending" ? "Awaiting Accept"
+                            : job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+                        </Badge>
+                        {job.requires_quote && job.quote_status === "pending" && (
+                          <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30 animate-pulse">
+                            ⚡ Quote Needed
+                          </Badge>
+                        )}
+                        {job.requires_quote && job.quote_status === "quoted" && (
+                          <Badge variant="outline" className="text-[10px] bg-sky/20 text-sky border-sky/30">
+                            💬 Quoted
+                          </Badge>
+                        )}
+                        {job.requires_quote && job.quote_status === "accepted" && (
+                          <Badge variant="outline" className="text-[10px] bg-primary/20 text-primary border-primary/30">
+                            ✅ Accepted
+                          </Badge>
+                        )}
+                        {job.requires_quote && job.quote_status === "declined" && (
+                          <Badge variant="outline" className="text-[10px] bg-destructive/20 text-destructive border-destructive/30">
+                            Declined
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         {/* Send Quote button for quote-required pending jobs */}
-                        {job.requires_quote && job.quote_status === "pending_quote" && (
+                        {job.requires_quote && job.quote_status === "pending" && (
                           <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleOpenQuoteResponse(job); }} title="Send Quote">
                             <Send className="w-4 h-4" />
                           </Button>
                         )}
-                        {(job.status === "pending_confirmation" || job.status === "pending") && !(job.requires_quote && job.quote_status === "pending_quote") && (
+                        {(job.status === "pending_confirmation" || job.status === "pending") && !(job.requires_quote && job.quote_status === "pending") && (
                           <>
                             <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleConfirmJob(job.id, job.source); }} title="Accept">
                               <Check className="w-4 h-4" />
