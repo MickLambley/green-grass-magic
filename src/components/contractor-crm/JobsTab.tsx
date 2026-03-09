@@ -135,6 +135,10 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [pendingEditJob, setPendingEditJob] = useState<Job | null>(null);
   const [listPage, setListPage] = useState(0);
   const PAGE_SIZE = 25;
+  const [quoteResponseOpen, setQuoteResponseOpen] = useState(false);
+  const [quoteResponseJob, setQuoteResponseJob] = useState<{
+    id: string; title: string; client_name: string; description: string | null; customer_email?: string | null;
+  } | null>(null);
 
   const handleRunOptimization = async () => {
     setIsOptimizing(true);
