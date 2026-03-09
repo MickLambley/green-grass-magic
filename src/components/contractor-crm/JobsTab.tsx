@@ -1140,6 +1140,15 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
         onMarked={fetchData}
       />
 
+      {/* Quote Response Dialog */}
+      <QuoteResponseDialog
+        open={quoteResponseOpen}
+        onOpenChange={setQuoteResponseOpen}
+        job={quoteResponseJob}
+        contractorId={contractorId}
+        onQuoteSent={fetchData}
+      />
+
       {/* Delete Confirmation */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
