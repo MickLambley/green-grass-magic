@@ -716,15 +716,28 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button size="sm" className="flex-1" onClick={() => handleConfirmJob(job.id, job.source)}>
-                      <Check className="w-3.5 h-3.5 mr-1" /> {pendingSuggestionJobIds.has(job.id) ? "Override & Confirm" : "Confirm"}
-                    </Button>
-                    <Button size="sm" variant="outline" className="flex-1" onClick={() => handleSuggestTime(job)}>
-                      <Calendar className="w-3.5 h-3.5 mr-1" /> Reschedule
-                    </Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDeclineJob(job.id, job.source)}>
-                      <X className="w-3.5 h-3.5" />
-                    </Button>
+                    {job.requires_quote && job.quote_status === "pending_quote" ? (
+                      <>
+                        <Button size="sm" className="flex-1" onClick={() => handleOpenQuoteResponse(job)}>
+                          <Send className="w-3.5 h-3.5 mr-1" /> Send Quote
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDeclineJob(job.id, job.source)}>
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button size="sm" className="flex-1" onClick={() => handleConfirmJob(job.id, job.source)}>
+                          <Check className="w-3.5 h-3.5 mr-1" /> {pendingSuggestionJobIds.has(job.id) ? "Override & Confirm" : "Confirm"}
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => handleSuggestTime(job)}>
+                          <Calendar className="w-3.5 h-3.5 mr-1" /> Reschedule
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDeclineJob(job.id, job.source)}>
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>
