@@ -6,6 +6,7 @@ import { Loader2, Leaf } from "lucide-react";
 import PortalLayout, { ContractorBrand } from "@/components/customer-portal/PortalLayout";
 import PortalOverview from "@/components/customer-portal/PortalOverview";
 import PortalJobsList from "@/components/customer-portal/PortalJobsList";
+import PortalQuotesTab from "@/components/customer-portal/PortalQuotesTab";
 import PortalDisputesList from "@/components/customer-portal/PortalDisputesList";
 
 const ContractorSiteDashboard = () => {
@@ -109,6 +110,9 @@ const ContractorSiteDashboard = () => {
       )}
       {activeTab === "jobs" && (
         <PortalJobsList userId={user.id} contractor={contractor} />
+      )}
+      {activeTab === "quotes" && (
+        <PortalQuotesTab userId={user.id} contractor={contractor} />
       )}
       {activeTab === "disputes" && (
         <PortalDisputesList userId={user.id} contractor={contractor} />
