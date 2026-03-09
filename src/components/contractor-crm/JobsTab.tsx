@@ -89,11 +89,13 @@ interface UnifiedJob {
   // CRM-only fields
   client_id?: string;
   duration_minutes?: number | null;
+  requires_quote?: boolean;
+  quote_status?: string;
+  customer_email?: string | null;
   // Platform-only fields
   address_street?: string;
   address_city?: string;
   address_state?: string;
-  customer_email?: string | null;
 }
 
 const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorkingHours, onOpenRouteOptimization }: JobsTabProps) => {
