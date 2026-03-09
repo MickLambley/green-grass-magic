@@ -239,6 +239,9 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           source: "crm",
           client_id: j.client_id,
           duration_minutes: j.duration_minutes,
+          requires_quote: j.requires_quote,
+          quote_status: j.quote_status,
+          customer_email: j.customer_email,
         });
       });
     }
