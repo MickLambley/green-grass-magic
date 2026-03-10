@@ -687,6 +687,12 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                     <div>
                       <p className="font-medium text-foreground text-sm">{job.title}</p>
                       <p className="text-xs text-muted-foreground">{job.client_name}</p>
+                      {job.client_address && (job.client_address.city || job.client_address.postcode) && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground/70 mt-0.5">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{[job.client_address.city, job.client_address.postcode].filter(Boolean).join(" ")}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       <Badge variant="outline" className="text-[10px] bg-sunshine/20 text-sunshine border-sunshine/30">
@@ -918,7 +924,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                         <div className="flex items-center gap-1 text-xs text-muted-foreground/70 mt-0.5">
                           <MapPin className="w-3 h-3 shrink-0" />
                           <span className="truncate max-w-[200px]">
-                            {[job.client_address.street, job.client_address.city, job.client_address.state].filter(Boolean).join(", ")}
+                            {[job.client_address.street, job.client_address.city, job.client_address.postcode].filter(Boolean).join(", ")}
                           </span>
                         </div>
                       )}
