@@ -665,7 +665,13 @@ serve(async (req) => {
         });
       }
 
-      const result = await runOptimization(contractor.id, supabase, isPreview); // dryRun=isPreview
+      const result = await runOptimization(contractor.id, supabase, isPreview);
+      if (result?.error) {
+        return new Response(JSON.stringify({ error: result.error }), {
+          status: 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify({ success: true, result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
