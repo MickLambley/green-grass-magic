@@ -13,6 +13,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "./WorkingHoursEditor";
 import { z } from "zod";
 import ServiceAreaSettingsCard from "./ServiceAreaSettingsCard";
+import StripeConnectSettingsCard from "./StripeConnectSettingsCard";
 
 type Contractor = Tables<"contractors">;
 
