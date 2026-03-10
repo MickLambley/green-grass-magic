@@ -117,12 +117,12 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
         const nextAddr = sortedJobs[i + 1].client_address;
         const sameAddress = currentAddr?.street && nextAddr?.street && currentAddr.street === nextAddr.street;
         const needsTravel = !sameAddress && (currentAddr?.street || nextAddr?.street);
-        const travelWarning = !!needsTravel && gap < MIN_TRAVEL_BUFFER && gap >= 0;
+        const travelWarning = !!needsTravel && gap <= 0;
         
         if (gap > 0) {
-          result.push({ type: "travel", startMinutes: endMin, durationMinutes: gap, travelMinutes: gap, travelWarning });
+          result.push({ type: "travel", startMinutes: endMin, durationMinutes: gap, travelMinutes: gap, travelWarning: false });
         } else if (gap <= 0 && needsTravel) {
-          // Overlapping jobs that need travel — insert a warning-only travel entry
+          // Overlapping or zero-gap jobs that need travel — insert a warning-only travel entry
           result.push({ type: "travel", startMinutes: endMin, durationMinutes: 0, travelMinutes: 0, travelWarning: true });
         }
       }
