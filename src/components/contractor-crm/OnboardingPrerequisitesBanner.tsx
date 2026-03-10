@@ -18,6 +18,7 @@ const OnboardingPrerequisitesBanner = ({
   stripeAccountId,
   stripeOnboardingComplete,
   onNavigateToSettings,
+  refreshKey,
 }: OnboardingPrerequisitesBannerProps) => {
   const [hasServiceArea, setHasServiceArea] = useState<boolean | null>(null);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
