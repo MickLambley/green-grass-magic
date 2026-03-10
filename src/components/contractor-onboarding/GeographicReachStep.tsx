@@ -24,6 +24,8 @@ interface GeographicReachStepProps {
   onNext: () => void;
   onBack: () => void;
   hideNavigation?: boolean;
+  /** When true, preserve existing suburb selections instead of auto-selecting all on fetch */
+  persistSelections?: boolean;
 }
 
 export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNavigation }: GeographicReachStepProps) => {
