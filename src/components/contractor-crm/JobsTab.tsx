@@ -924,7 +924,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                         <div className="flex items-center gap-1 text-xs text-muted-foreground/70 mt-0.5">
                           <MapPin className="w-3 h-3 shrink-0" />
                           <span className="truncate max-w-[200px]">
-                            {[job.client_address.street, job.client_address.city, job.client_address.state].filter(Boolean).join(", ")}
+                            {[job.client_address.street, job.client_address.city, job.client_address.postcode].filter(Boolean).join(", ")}
                           </span>
                         </div>
                       )}
