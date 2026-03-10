@@ -435,12 +435,6 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                                 )}
                               </div>
                               <p className="text-[11px] text-muted-foreground truncate">{job.client_name}</p>
-                              {job.client_address && (job.client_address.city || job.client_address.postcode) && (
-                                <p className="text-[10px] text-muted-foreground/70 truncate flex items-center gap-0.5">
-                                  <MapPin className="w-2.5 h-2.5 shrink-0" />
-                                  {[job.client_address.city, job.client_address.postcode].filter(Boolean).join(" ")}
-                                </p>
-                              )}
                             </div>
                           </div>
                           <div className="text-right shrink-0">
@@ -453,10 +447,10 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                             <Clock className="w-2.5 h-2.5" />
                             {formatDuration(entry.durationMinutes)}
                           </span>
-                          {job.client_address?.street && (
+                          {(job.client_address?.street || job.client_address?.city || job.client_address?.postcode) && (
                             <span className="flex items-center gap-1 text-[10px] text-muted-foreground truncate">
                               <MapPin className="w-2.5 h-2.5 shrink-0" />
-                              <span className="truncate">{job.client_address.street}</span>
+                              <span className="truncate">{[job.client_address.street, job.client_address.city, job.client_address.postcode].filter(Boolean).join(", ")}</span>
                             </span>
                           )}
                         </div>
