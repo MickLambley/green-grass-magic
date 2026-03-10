@@ -72,6 +72,15 @@ function minutesToTime(totalMinutes: number): string {
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 
+function getTravelMinutes(fromId: string, toId: string, distanceMap: Map<string, number>): number {
+  if (fromId === toId) return 0;
+  const travelKey = `${fromId}->${toId}`;
+  const apiTravel = distanceMap.get(travelKey);
+  // Use API result if available, otherwise fallback to minimum buffer
+  if (apiTravel !== undefined && apiTravel > 0) return apiTravel;
+  return MIN_TRAVEL_BUFFER_MINUTES;
+}
+
 function calculateSequentialTimes(
   jobOrder: string[],
   jobMap: Map<string, { duration_minutes: number }>,
@@ -93,8 +102,7 @@ function calculateSequentialTimes(
     });
 
     if (i < jobOrder.length - 1) {
-      const travelKey = `${jobId}->${jobOrder[i + 1]}`;
-      const travelMinutes = distanceMap.get(travelKey) || 0;
+      const travelMinutes = getTravelMinutes(jobId, jobOrder[i + 1], distanceMap);
       currentMinutes += duration + roundUpTo5(travelMinutes);
     }
   }
