@@ -23,9 +23,10 @@ interface GeographicReachStepProps {
   onChange: (data: GeographicData) => void;
   onNext: () => void;
   onBack: () => void;
+  hideNavigation?: boolean;
 }
 
-export const GeographicReachStep = ({ data, onChange, onNext, onBack }: GeographicReachStepProps) => {
+export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNavigation }: GeographicReachStepProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
@@ -426,14 +427,16 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack }: Geograph
         </div>
 
         {/* Navigation */}
-        <div className="flex justify-between pt-4">
-          <Button variant="outline" onClick={onBack} className="gap-2">
-            <ArrowLeft className="w-4 h-4" /> Back
-          </Button>
-          <Button onClick={onNext} disabled={!isValid} className="gap-2">
-            Continue <ArrowRight className="w-4 h-4" />
-          </Button>
-        </div>
+        {!hideNavigation && (
+          <div className="flex justify-between pt-4">
+            <Button variant="outline" onClick={onBack} className="gap-2">
+              <ArrowLeft className="w-4 h-4" /> Back
+            </Button>
+            <Button onClick={onNext} disabled={!isValid} className="gap-2">
+              Continue <ArrowRight className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -7,11 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Save, CreditCard, Clock, Mail, Lock } from "lucide-react";
+import { Loader2, Save, CreditCard, Clock, Mail, Lock, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "./WorkingHoursEditor";
 import { z } from "zod";
+import ServiceAreaSettingsCard from "./ServiceAreaSettingsCard";
 
 type Contractor = Tables<"contractors">;
 
@@ -196,6 +197,9 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
           )}
         </CardContent>
       </Card>
+
+      {/* Service Area */}
+      <ServiceAreaSettingsCard contractor={contractor} onUpdate={onUpdate} />
 
       {/* Save */}
       <Button onClick={handleSave} disabled={isSaving} className="w-full sm:w-auto">
