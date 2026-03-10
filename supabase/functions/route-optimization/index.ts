@@ -6,8 +6,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Minimum travel buffer in minutes when distance API fails or returns 0
-const MIN_TRAVEL_BUFFER_MINUTES = 15;
+// Flag to track if distance API failed
+let distanceApiFailed = false;
+let distanceApiErrorMessage = "";
 
 const GOOGLE_MAPS_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") || Deno.env.get("VITE_GOOGLE_MAPS_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -76,9 +77,9 @@ function getTravelMinutes(fromId: string, toId: string, distanceMap: Map<string,
   if (fromId === toId) return 0;
   const travelKey = `${fromId}->${toId}`;
   const apiTravel = distanceMap.get(travelKey);
-  // Use API result if available, otherwise fallback to minimum buffer
   if (apiTravel !== undefined && apiTravel > 0) return apiTravel;
-  return MIN_TRAVEL_BUFFER_MINUTES;
+  // No fallback — return 0 but the caller should check distanceApiFailed
+  return 0;
 }
 
 function calculateSequentialTimes(
@@ -131,7 +132,12 @@ async function getDistanceMatrix(
   origins: { id: string; address: string }[],
   destinations: { id: string; address: string }[]
 ): Promise<DistanceResult[]> {
-  if (!GOOGLE_MAPS_API_KEY || origins.length === 0 || destinations.length === 0) return [];
+  if (origins.length === 0 || destinations.length === 0) return [];
+  if (!GOOGLE_MAPS_API_KEY) {
+    distanceApiFailed = true;
+    distanceApiErrorMessage = "Google Maps API key is not configured. Please contact support.";
+    return [];
+  }
 
   const originAddresses = origins.map(o => encodeURIComponent(o.address)).join("|");
   const destAddresses = destinations.map(d => encodeURIComponent(d.address)).join("|");
@@ -143,8 +149,10 @@ async function getDistanceMatrix(
     const data = await resp.json();
 
     if (data.status !== "OK") {
-      console.error("Distance Matrix API error:", data.status, data.error_message || "");
-      console.log(`Falling back to ${MIN_TRAVEL_BUFFER_MINUTES}min minimum travel buffer`);
+      const errMsg = data.error_message || data.status;
+      console.error("Distance Matrix API error:", data.status, errMsg);
+      distanceApiFailed = true;
+      distanceApiErrorMessage = `Google Maps Distance Matrix API error: ${errMsg}`;
       return [];
     }
 
@@ -164,6 +172,8 @@ async function getDistanceMatrix(
     return results;
   } catch (err) {
     console.error("Distance Matrix fetch error:", err);
+    distanceApiFailed = true;
+    distanceApiErrorMessage = `Google Maps API request failed: ${String(err)}`;
     return [];
   }
 }
@@ -219,6 +229,9 @@ function optimizeRoute(jobIds: string[], distanceMap: Map<string, number>): stri
  * When dryRun=false, actually reschedules jobs.
  */
 async function runOptimization(contractorId: string, supabase: any, dryRun = false) {
+  // Reset API error state for each run
+  distanceApiFailed = false;
+  distanceApiErrorMessage = "";
   const { data: contractorData } = await supabase
     .from("contractors")
     .select("working_hours, user_id")
@@ -320,6 +333,11 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     if (dayJobs.length < 2) continue;
 
     await fetchDistancesForJobs(dayJobs);
+
+    // If the distance API failed, abort and return error
+    if (distanceApiFailed) {
+      return { error: distanceApiErrorMessage || "Failed to calculate travel times between job locations. Please try again later." };
+    }
     
     const jobMap = new Map<string, { duration_minutes: number }>();
     for (const j of dayJobs) {
@@ -647,7 +665,13 @@ serve(async (req) => {
         });
       }
 
-      const result = await runOptimization(contractor.id, supabase, isPreview); // dryRun=isPreview
+      const result = await runOptimization(contractor.id, supabase, isPreview);
+      if (result?.error) {
+        return new Response(JSON.stringify({ error: result.error }), {
+          status: 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify({ success: true, result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

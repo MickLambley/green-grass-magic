@@ -72,8 +72,18 @@ const ContractorDashboard = () => {
       const { data, error } = await supabase.functions.invoke("route-optimization", {
         body: { contractor_id: contractor.id, preview: true },
       });
-      if (error) throw error;
-      if (data?.result && data.result.timeSaved > 0) {
+      if (error) {
+        // Parse the error body for a user-friendly message
+        let errorMsg = "Failed to preview optimization";
+        try {
+          const errBody = typeof error === "object" && error.message ? error.message : String(error);
+          if (errBody) errorMsg = errBody;
+        } catch {}
+        throw new Error(errorMsg);
+      }
+      if (data?.error) {
+        toast.error(data.error);
+      } else if (data?.result && data.result.timeSaved > 0) {
         setOptimizationPreview({
           timeSaved: data.result.timeSaved,
           proposedChanges: data.result.proposedChanges || [],
@@ -82,9 +92,9 @@ const ContractorDashboard = () => {
       } else {
         toast.info("No optimization opportunities found. Ensure jobs have client addresses and are not locked.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Optimization error:", err);
-      toast.error("Failed to preview optimization");
+      toast.error(err?.message || "Failed to preview optimization");
     }
     setIsOptimizing(false);
   };
