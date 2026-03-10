@@ -167,6 +167,8 @@ async function getDistanceMatrix(
     return results;
   } catch (err) {
     console.error("Distance Matrix fetch error:", err);
+    distanceApiFailed = true;
+    distanceApiErrorMessage = `Google Maps API request failed: ${String(err)}`;
     return [];
   }
 }
