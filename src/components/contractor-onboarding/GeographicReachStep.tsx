@@ -28,7 +28,7 @@ interface GeographicReachStepProps {
   persistSelections?: boolean;
 }
 
-export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNavigation }: GeographicReachStepProps) => {
+export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNavigation, persistSelections }: GeographicReachStepProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
@@ -38,6 +38,8 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNaviga
   const dataRef = useRef(data);
   const onChangeRef = useRef(onChange);
   const hasAutoGeocodedRef = useRef(false);
+  const initialLoadDoneRef = useRef(false);
+  const manualSuburbsRef = useRef<SuburbWithCoords[]>([]);
 
   const [isLoadingSuburbs, setIsLoadingSuburbs] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
