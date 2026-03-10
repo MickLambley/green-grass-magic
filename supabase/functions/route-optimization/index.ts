@@ -355,6 +355,14 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
           origDate: date,
         });
       }
+
+      // Count travel-gap corrections as adjustments even if reorder savings are 0
+      for (const st of scheduledTimes) {
+        const details = jobDetailsMap.get(st.jobId);
+        if (details?.current_time && details.current_time !== st.time) {
+          dayTimeSaved = Math.max(dayTimeSaved, 1); // Flag that adjustments were made
+        }
+      }
     }
 
     // Single-job groups
