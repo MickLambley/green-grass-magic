@@ -77,9 +77,9 @@ function getTravelMinutes(fromId: string, toId: string, distanceMap: Map<string,
   if (fromId === toId) return 0;
   const travelKey = `${fromId}->${toId}`;
   const apiTravel = distanceMap.get(travelKey);
-  // Use API result if available, otherwise fallback to minimum buffer
   if (apiTravel !== undefined && apiTravel > 0) return apiTravel;
-  return MIN_TRAVEL_BUFFER_MINUTES;
+  // No fallback — return 0 but the caller should check distanceApiFailed
+  return 0;
 }
 
 function calculateSequentialTimes(
