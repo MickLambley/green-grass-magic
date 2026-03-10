@@ -9,6 +9,8 @@ interface OnboardingPrerequisitesBannerProps {
   stripeAccountId: string | null;
   stripeOnboardingComplete: boolean;
   onNavigateToSettings: () => void;
+  /** Pass contractor.updated_at so the banner re-checks after settings saves */
+  refreshKey?: string;
 }
 
 const OnboardingPrerequisitesBanner = ({
