@@ -73,8 +73,8 @@ const StripeConnectSettingsCard = ({ contractor }: StripeConnectSettingsCardProp
             </>
           ) : isPartial ? (
             <>
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
-              <span className="text-sm font-medium text-amber-600">Setup incomplete</span>
+              <AlertTriangle className="w-4 h-4 text-warning" />
+              <span className="text-sm font-medium text-warning">Setup incomplete</span>
             </>
           ) : (
             <>
