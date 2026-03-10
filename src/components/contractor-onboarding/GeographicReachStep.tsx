@@ -278,11 +278,15 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNaviga
   }, [manualSuburbSearch]);
 
   const addManualSuburb = (suburb: { suburb: string; state: string; postcode: string; lat: number; lng: number }) => {
+    const newSuburb: SuburbWithCoords = { name: suburb.suburb, state: suburb.state, postcode: suburb.postcode, lat: suburb.lat, lng: suburb.lng };
     const alreadyExists = allDiscoveredSuburbs.some((s) => s.name === suburb.suburb && s.postcode === suburb.postcode);
     if (!alreadyExists) {
-      const newSuburb: SuburbWithCoords = { name: suburb.suburb, state: suburb.state, postcode: suburb.postcode, lat: suburb.lat, lng: suburb.lng };
       const updated = [...allDiscoveredSuburbs, newSuburb].sort((a, b) => a.name.localeCompare(b.name));
       setAllDiscoveredSuburbs(updated);
+    }
+    // Track manually added suburbs so they survive radius re-fetches
+    if (!manualSuburbsRef.current.some((s) => s.name === suburb.suburb && s.postcode === suburb.postcode)) {
+      manualSuburbsRef.current = [...manualSuburbsRef.current, newSuburb];
     }
     const suburbId = `${suburb.suburb}|${suburb.postcode}`;
     if (!data.servicedSuburbs.includes(suburbId)) {
