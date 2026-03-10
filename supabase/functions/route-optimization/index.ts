@@ -166,7 +166,16 @@ function calculateRouteTime(jobOrder: string[], distanceMap: Map<string, number>
 }
 
 function optimizeRoute(jobIds: string[], distanceMap: Map<string, number>): string[] {
-  if (jobIds.length <= 2) return jobIds;
+  if (jobIds.length <= 1) return jobIds;
+
+  // For 2 jobs, try both orders
+  if (jobIds.length === 2) {
+    const order1 = [jobIds[0], jobIds[1]];
+    const order2 = [jobIds[1], jobIds[0]];
+    const time1 = calculateRouteTime(order1, distanceMap);
+    const time2 = calculateRouteTime(order2, distanceMap);
+    return time2 < time1 ? order2 : order1;
+  }
 
   const unvisited = new Set(jobIds);
   const route: string[] = [];
