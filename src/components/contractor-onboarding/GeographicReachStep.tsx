@@ -24,9 +24,11 @@ interface GeographicReachStepProps {
   onNext: () => void;
   onBack: () => void;
   hideNavigation?: boolean;
+  /** When true, preserve existing suburb selections instead of auto-selecting all on fetch */
+  persistSelections?: boolean;
 }
 
-export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNavigation }: GeographicReachStepProps) => {
+export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNavigation, persistSelections }: GeographicReachStepProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
@@ -36,6 +38,8 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNaviga
   const dataRef = useRef(data);
   const onChangeRef = useRef(onChange);
   const hasAutoGeocodedRef = useRef(false);
+  const initialLoadDoneRef = useRef(false);
+  const manualSuburbsRef = useRef<SuburbWithCoords[]>([]);
 
   const [isLoadingSuburbs, setIsLoadingSuburbs] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -184,19 +188,43 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNaviga
         }
       }
 
+      // Merge manually added suburbs that aren't in the radius results
+      for (const manual of manualSuburbsRef.current) {
+        const key = `${manual.name}|${manual.postcode}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          suburbsArray.push(manual);
+        }
+      }
+
       suburbsArray.sort((a, b) => a.name.localeCompare(b.name));
       setAllDiscoveredSuburbs(suburbsArray);
 
-      onChangeRef.current({
-        ...dataRef.current,
-        servicedSuburbs: suburbsArray.map((s) => `${s.name}|${s.postcode}`),
-      });
+      const currentData = dataRef.current;
+
+      if (persistSelections && (initialLoadDoneRef.current || currentData.servicedSuburbs.length > 0)) {
+        // Preserve existing selections: keep currently selected suburbs that still exist
+        // in the new discovered list, and DON'T auto-add newly discovered ones
+        const newSuburbIds = new Set(suburbsArray.map((s) => `${s.name}|${s.postcode}`));
+        const preserved = currentData.servicedSuburbs.filter((id) => newSuburbIds.has(id));
+        onChangeRef.current({
+          ...currentData,
+          servicedSuburbs: preserved,
+        });
+      } else {
+        // First load or onboarding: select all
+        onChangeRef.current({
+          ...currentData,
+          servicedSuburbs: suburbsArray.map((s) => `${s.name}|${s.postcode}`),
+        });
+      }
+      initialLoadDoneRef.current = true;
     } catch (error) {
       console.error("Error fetching suburbs:", error);
     } finally {
       setIsLoadingSuburbs(false);
     }
-  }, []);
+  }, [persistSelections]);
 
   // Debounced suburb fetch
   useEffect(() => {
@@ -250,11 +278,15 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNaviga
   }, [manualSuburbSearch]);
 
   const addManualSuburb = (suburb: { suburb: string; state: string; postcode: string; lat: number; lng: number }) => {
+    const newSuburb: SuburbWithCoords = { name: suburb.suburb, state: suburb.state, postcode: suburb.postcode, lat: suburb.lat, lng: suburb.lng };
     const alreadyExists = allDiscoveredSuburbs.some((s) => s.name === suburb.suburb && s.postcode === suburb.postcode);
     if (!alreadyExists) {
-      const newSuburb: SuburbWithCoords = { name: suburb.suburb, state: suburb.state, postcode: suburb.postcode, lat: suburb.lat, lng: suburb.lng };
       const updated = [...allDiscoveredSuburbs, newSuburb].sort((a, b) => a.name.localeCompare(b.name));
       setAllDiscoveredSuburbs(updated);
+    }
+    // Track manually added suburbs so they survive radius re-fetches
+    if (!manualSuburbsRef.current.some((s) => s.name === suburb.suburb && s.postcode === suburb.postcode)) {
+      manualSuburbsRef.current = [...manualSuburbsRef.current, newSuburb];
     }
     const suburbId = `${suburb.suburb}|${suburb.postcode}`;
     if (!data.servicedSuburbs.includes(suburbId)) {
