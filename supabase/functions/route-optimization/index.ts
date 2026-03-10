@@ -132,7 +132,12 @@ async function getDistanceMatrix(
   origins: { id: string; address: string }[],
   destinations: { id: string; address: string }[]
 ): Promise<DistanceResult[]> {
-  if (!GOOGLE_MAPS_API_KEY || origins.length === 0 || destinations.length === 0) return [];
+  if (origins.length === 0 || destinations.length === 0) return [];
+  if (!GOOGLE_MAPS_API_KEY) {
+    distanceApiFailed = true;
+    distanceApiErrorMessage = "Google Maps API key is not configured. Please contact support.";
+    return [];
+  }
 
   const originAddresses = origins.map(o => encodeURIComponent(o.address)).join("|");
   const destAddresses = destinations.map(d => encodeURIComponent(d.address)).join("|");
