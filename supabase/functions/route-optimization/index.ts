@@ -229,6 +229,9 @@ function optimizeRoute(jobIds: string[], distanceMap: Map<string, number>): stri
  * When dryRun=false, actually reschedules jobs.
  */
 async function runOptimization(contractorId: string, supabase: any, dryRun = false) {
+  // Reset API error state for each run
+  distanceApiFailed = false;
+  distanceApiErrorMessage = "";
   const { data: contractorData } = await supabase
     .from("contractors")
     .select("working_hours, user_id")
