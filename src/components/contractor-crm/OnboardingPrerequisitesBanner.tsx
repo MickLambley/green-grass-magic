@@ -9,6 +9,8 @@ interface OnboardingPrerequisitesBannerProps {
   stripeAccountId: string | null;
   stripeOnboardingComplete: boolean;
   onNavigateToSettings: () => void;
+  /** Pass contractor.updated_at so the banner re-checks after settings saves */
+  refreshKey?: string;
 }
 
 const OnboardingPrerequisitesBanner = ({
@@ -16,13 +18,14 @@ const OnboardingPrerequisitesBanner = ({
   stripeAccountId,
   stripeOnboardingComplete,
   onNavigateToSettings,
+  refreshKey,
 }: OnboardingPrerequisitesBannerProps) => {
   const [hasServiceArea, setHasServiceArea] = useState<boolean | null>(null);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
 
   useEffect(() => {
     checkServiceArea();
-  }, [contractorId]);
+  }, [contractorId, refreshKey]);
 
   const checkServiceArea = async () => {
     const { count } = await supabase
