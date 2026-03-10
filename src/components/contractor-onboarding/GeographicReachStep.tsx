@@ -427,14 +427,16 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNaviga
         </div>
 
         {/* Navigation */}
-        <div className="flex justify-between pt-4">
-          <Button variant="outline" onClick={onBack} className="gap-2">
-            <ArrowLeft className="w-4 h-4" /> Back
-          </Button>
-          <Button onClick={onNext} disabled={!isValid} className="gap-2">
-            Continue <ArrowRight className="w-4 h-4" />
-          </Button>
-        </div>
+        {!hideNavigation && (
+          <div className="flex justify-between pt-4">
+            <Button variant="outline" onClick={onBack} className="gap-2">
+              <ArrowLeft className="w-4 h-4" /> Back
+            </Button>
+            <Button onClick={onNext} disabled={!isValid} className="gap-2">
+              Continue <ArrowRight className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
