@@ -198,6 +198,9 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
         </CardContent>
       </Card>
 
+      {/* Service Area */}
+      <ServiceAreaSettingsCard contractor={contractor} onUpdate={onUpdate} />
+
       {/* Save */}
       <Button onClick={handleSave} disabled={isSaving} className="w-full sm:w-auto">
         {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
