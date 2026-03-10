@@ -333,6 +333,11 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     if (dayJobs.length < 2) continue;
 
     await fetchDistancesForJobs(dayJobs);
+
+    // If the distance API failed, abort and return error
+    if (distanceApiFailed) {
+      return { error: distanceApiErrorMessage || "Failed to calculate travel times between job locations. Please try again later." };
+    }
     
     const jobMap = new Map<string, { duration_minutes: number }>();
     for (const j of dayJobs) {
