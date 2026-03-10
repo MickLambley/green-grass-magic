@@ -170,8 +170,7 @@ async function getDistanceMatrix(
 function calculateRouteTime(jobOrder: string[], distanceMap: Map<string, number>): number {
   let total = 0;
   for (let i = 0; i < jobOrder.length - 1; i++) {
-    const key = `${jobOrder[i]}->${jobOrder[i + 1]}`;
-    total += distanceMap.get(key) || 0;
+    total += getTravelMinutes(jobOrder[i], jobOrder[i + 1], distanceMap);
   }
   return total;
 }
