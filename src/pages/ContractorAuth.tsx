@@ -41,17 +41,8 @@ const ContractorAuth = () => {
             .eq("role", "contractor");
 
           if (roles && roles.length > 0) {
-            const { data: contractor } = await supabase
-              .from("contractors")
-              .select("*")
-              .eq("user_id", session.user.id)
-              .single();
-
-            if (contractor && contractor.onboarding_completed) {
-              navigate("/contractor");
-            } else {
-              navigate("/contractor-onboarding");
-            }
+            // Existing contractor — always go to dashboard
+            navigate("/contractor");
           } else {
             // User is on the contractor auth page — add contractor role and profile
             await supabase.from("user_roles").insert({
