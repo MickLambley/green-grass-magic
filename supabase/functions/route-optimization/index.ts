@@ -6,8 +6,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Minimum travel buffer in minutes when distance API fails or returns 0
-const MIN_TRAVEL_BUFFER_MINUTES = 15;
+// Flag to track if distance API failed
+let distanceApiFailed = false;
+let distanceApiErrorMessage = "";
 
 const GOOGLE_MAPS_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") || Deno.env.get("VITE_GOOGLE_MAPS_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
