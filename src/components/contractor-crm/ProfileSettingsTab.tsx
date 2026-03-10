@@ -13,6 +13,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "./WorkingHoursEditor";
 import { z } from "zod";
 import ServiceAreaSettingsCard from "./ServiceAreaSettingsCard";
+import StripeConnectSettingsCard from "./StripeConnectSettingsCard";
 
 type Contractor = Tables<"contractors">;
 
@@ -189,14 +190,11 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
             </div>
           </div>
 
-          {contractor.stripe_account_id && (
-            <div className="flex items-center gap-2 text-sm text-primary">
-              <CreditCard className="w-4 h-4" />
-              <span>Stripe Connect: {contractor.stripe_onboarding_complete ? "Active" : "Setup incomplete"}</span>
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      {/* Stripe Connect */}
+      <StripeConnectSettingsCard contractor={contractor} />
 
       {/* Service Area */}
       <ServiceAreaSettingsCard contractor={contractor} onUpdate={onUpdate} />
