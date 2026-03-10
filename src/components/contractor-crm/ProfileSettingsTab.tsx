@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "./WorkingHoursEditor";
 import { z } from "zod";
+import ServiceAreaSettingsCard from "./ServiceAreaSettingsCard";
 
 type Contractor = Tables<"contractors">;
 
