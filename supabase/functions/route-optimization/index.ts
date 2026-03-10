@@ -144,8 +144,10 @@ async function getDistanceMatrix(
     const data = await resp.json();
 
     if (data.status !== "OK") {
-      console.error("Distance Matrix API error:", data.status, data.error_message || "");
-      console.log(`Falling back to ${MIN_TRAVEL_BUFFER_MINUTES}min minimum travel buffer`);
+      const errMsg = data.error_message || data.status;
+      console.error("Distance Matrix API error:", data.status, errMsg);
+      distanceApiFailed = true;
+      distanceApiErrorMessage = `Google Maps Distance Matrix API error: ${errMsg}`;
       return [];
     }
 
