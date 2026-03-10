@@ -23,9 +23,10 @@ interface GeographicReachStepProps {
   onChange: (data: GeographicData) => void;
   onNext: () => void;
   onBack: () => void;
+  hideNavigation?: boolean;
 }
 
-export const GeographicReachStep = ({ data, onChange, onNext, onBack }: GeographicReachStepProps) => {
+export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNavigation }: GeographicReachStepProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
