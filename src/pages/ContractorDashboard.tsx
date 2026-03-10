@@ -24,7 +24,7 @@ import AlternativeTimeTab from "@/components/contractor-crm/AlternativeTimeTab";
 import RouteOptimizationBanner from "@/components/contractor-crm/RouteOptimizationBanner";
 import RouteOptimizationModal from "@/components/contractor-crm/RouteOptimizationModal";
 import OptimizationPreviewDialog from "@/components/contractor-crm/OptimizationPreviewDialog";
-import StripeConnectBanner from "@/components/contractor-crm/StripeConnectBanner";
+import OnboardingPrerequisitesBanner from "@/components/contractor-crm/OnboardingPrerequisitesBanner";
 import ServiceOfferingsTab from "@/components/contractor-crm/ServiceOfferingsTab";
 type Contractor = Tables<"contractors">;
 
