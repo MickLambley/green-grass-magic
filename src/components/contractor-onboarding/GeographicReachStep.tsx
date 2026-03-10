@@ -188,19 +188,43 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNaviga
         }
       }
 
+      // Merge manually added suburbs that aren't in the radius results
+      for (const manual of manualSuburbsRef.current) {
+        const key = `${manual.name}|${manual.postcode}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          suburbsArray.push(manual);
+        }
+      }
+
       suburbsArray.sort((a, b) => a.name.localeCompare(b.name));
       setAllDiscoveredSuburbs(suburbsArray);
 
-      onChangeRef.current({
-        ...dataRef.current,
-        servicedSuburbs: suburbsArray.map((s) => `${s.name}|${s.postcode}`),
-      });
+      const currentData = dataRef.current;
+
+      if (persistSelections && (initialLoadDoneRef.current || currentData.servicedSuburbs.length > 0)) {
+        // Preserve existing selections: keep currently selected suburbs that still exist
+        // in the new discovered list, and DON'T auto-add newly discovered ones
+        const newSuburbIds = new Set(suburbsArray.map((s) => `${s.name}|${s.postcode}`));
+        const preserved = currentData.servicedSuburbs.filter((id) => newSuburbIds.has(id));
+        onChangeRef.current({
+          ...currentData,
+          servicedSuburbs: preserved,
+        });
+      } else {
+        // First load or onboarding: select all
+        onChangeRef.current({
+          ...currentData,
+          servicedSuburbs: suburbsArray.map((s) => `${s.name}|${s.postcode}`),
+        });
+      }
+      initialLoadDoneRef.current = true;
     } catch (error) {
       console.error("Error fetching suburbs:", error);
     } finally {
       setIsLoadingSuburbs(false);
     }
-  }, []);
+  }, [persistSelections]);
 
   // Debounced suburb fetch
   useEffect(() => {
