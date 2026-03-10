@@ -25,7 +25,7 @@ const OnboardingPrerequisitesBanner = ({
 
   useEffect(() => {
     checkServiceArea();
-  }, [contractorId]);
+  }, [contractorId, refreshKey]);
 
   const checkServiceArea = async () => {
     const { count } = await supabase

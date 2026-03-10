@@ -328,6 +328,7 @@ const ContractorDashboard = () => {
             stripeAccountId={contractor.stripe_account_id}
             stripeOnboardingComplete={contractor.stripe_onboarding_complete}
             onNavigateToSettings={() => switchTab("settings")}
+            refreshKey={contractor.updated_at}
           />
           {activeTab === "overview" && (
             <div className="space-y-6">
