@@ -6,6 +6,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Minimum travel buffer in minutes when distance API fails or returns 0
+const MIN_TRAVEL_BUFFER_MINUTES = 15;
+
 const GOOGLE_MAPS_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") || Deno.env.get("VITE_GOOGLE_MAPS_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -69,6 +72,15 @@ function minutesToTime(totalMinutes: number): string {
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 
+function getTravelMinutes(fromId: string, toId: string, distanceMap: Map<string, number>): number {
+  if (fromId === toId) return 0;
+  const travelKey = `${fromId}->${toId}`;
+  const apiTravel = distanceMap.get(travelKey);
+  // Use API result if available, otherwise fallback to minimum buffer
+  if (apiTravel !== undefined && apiTravel > 0) return apiTravel;
+  return MIN_TRAVEL_BUFFER_MINUTES;
+}
+
 function calculateSequentialTimes(
   jobOrder: string[],
   jobMap: Map<string, { duration_minutes: number }>,
@@ -90,8 +102,7 @@ function calculateSequentialTimes(
     });
 
     if (i < jobOrder.length - 1) {
-      const travelKey = `${jobId}->${jobOrder[i + 1]}`;
-      const travelMinutes = distanceMap.get(travelKey) || 0;
+      const travelMinutes = getTravelMinutes(jobId, jobOrder[i + 1], distanceMap);
       currentMinutes += duration + roundUpTo5(travelMinutes);
     }
   }
@@ -132,7 +143,8 @@ async function getDistanceMatrix(
     const data = await resp.json();
 
     if (data.status !== "OK") {
-      console.error("Distance Matrix API error:", data.status);
+      console.error("Distance Matrix API error:", data.status, data.error_message || "");
+      console.log(`Falling back to ${MIN_TRAVEL_BUFFER_MINUTES}min minimum travel buffer`);
       return [];
     }
 
@@ -159,8 +171,7 @@ async function getDistanceMatrix(
 function calculateRouteTime(jobOrder: string[], distanceMap: Map<string, number>): number {
   let total = 0;
   for (let i = 0; i < jobOrder.length - 1; i++) {
-    const key = `${jobOrder[i]}->${jobOrder[i + 1]}`;
-    total += distanceMap.get(key) || 0;
+    total += getTravelMinutes(jobOrder[i], jobOrder[i + 1], distanceMap);
   }
   return total;
 }
