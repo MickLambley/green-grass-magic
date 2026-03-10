@@ -136,10 +136,7 @@ const ContractorDashboard = () => {
       .eq("user_id", user.id).single();
     if (!contractorData) { toast.error("Profile not found"); navigate("/contractor-auth"); return; }
 
-    if (!contractorData.onboarding_completed) {
-      navigate("/contractor-onboarding");
-      return;
-    }
+    // Allow access even if onboarding is incomplete — banner will prompt
 
     setContractor(contractorData);
 
