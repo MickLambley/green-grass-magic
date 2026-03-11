@@ -212,9 +212,23 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Receipt className="w-12 h-12 text-muted-foreground/50 mb-4" />
-            <h3 className="font-display font-semibold text-lg text-foreground mb-1">No invoices yet</h3>
-            <p className="text-muted-foreground text-sm mb-4">Create your first invoice for a client.</p>
-            {clients.length > 0 && <Button onClick={openCreateDialog} size="sm"><Plus className="w-4 h-4 mr-1" /> New Invoice</Button>}
+            {nextJob ? (
+              <>
+                <h3 className="font-display font-semibold text-lg text-foreground mb-1">No invoices yet</h3>
+                <p className="text-muted-foreground text-sm mb-4">
+                  Your next job is <strong>{nextJob.title}</strong> on <strong>{format(new Date(nextJob.date), "dd MMM yyyy")}</strong>. Send the invoice now?
+                </p>
+                <Button onClick={() => openCreateDialog(nextJob.client_id, nextJob.total_price)} size="sm">
+                  <Plus className="w-4 h-4 mr-1" /> New Invoice
+                </Button>
+              </>
+            ) : (
+              <>
+                <h3 className="font-display font-semibold text-lg text-foreground mb-1">No invoices yet</h3>
+                <p className="text-muted-foreground text-sm mb-4">Create your first invoice for a client.</p>
+                {clients.length > 0 && <Button onClick={() => openCreateDialog()} size="sm"><Plus className="w-4 h-4 mr-1" /> New Invoice</Button>}
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (
