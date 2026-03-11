@@ -251,7 +251,7 @@ const QuotesTab = ({ contractorId }: QuotesTabProps) => {
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <FileText className="w-12 h-12 text-muted-foreground/50 mb-4" />
             <h3 className="font-display font-semibold text-lg text-foreground mb-1">No quotes yet</h3>
-            <p className="text-muted-foreground text-sm mb-4">Create your first quote for a client.</p>
+            <p className="text-muted-foreground text-sm mb-4">Send a quote to win your next job.</p>
             <Button onClick={openCreateDialog} size="sm"><Plus className="w-4 h-4 mr-1" /> New Quote</Button>
           </CardContent>
         </Card>

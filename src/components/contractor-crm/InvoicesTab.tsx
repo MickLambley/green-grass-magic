@@ -203,7 +203,7 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
             </Badge>
           )}
         </div>
-        <Button onClick={openCreateDialog} disabled={clients.length === 0}>
+        <Button onClick={() => openCreateDialog()} disabled={clients.length === 0}>
           <Plus className="w-4 h-4 mr-2" /> New {gstRegistered ? "Tax Invoice" : "Invoice"}
         </Button>
       </div>
