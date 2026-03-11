@@ -26,6 +26,8 @@ import RouteOptimizationModal from "@/components/contractor-crm/RouteOptimizatio
 import OptimizationPreviewDialog from "@/components/contractor-crm/OptimizationPreviewDialog";
 import OnboardingPrerequisitesBanner from "@/components/contractor-crm/OnboardingPrerequisitesBanner";
 import ServiceOfferingsTab from "@/components/contractor-crm/ServiceOfferingsTab";
+import GettingStartedChecklist from "@/components/contractor-crm/GettingStartedChecklist";
+import MobileFAB from "@/components/contractor-crm/MobileFAB";
 type Contractor = Tables<"contractors">;
 
 const NAV_ITEMS = [
@@ -342,6 +344,12 @@ const ContractorDashboard = () => {
           />
           {activeTab === "overview" && (
             <div className="space-y-6">
+              <GettingStartedChecklist
+                contractorId={contractor.id}
+                stripeOnboardingComplete={contractor.stripe_onboarding_complete}
+                websitePublished={contractor.website_published}
+                onNavigate={switchTab}
+              />
               <RouteOptimizationBanner
                 contractorId={contractor.id}
                 subscriptionTier={contractor.subscription_tier}
@@ -350,6 +358,7 @@ const ContractorDashboard = () => {
                 isOptimizing={isOptimizing}
               />
               <DashboardOverview contractorId={contractor.id} onNavigateToJob={() => switchTab("jobs")} />
+              <MobileFAB onNavigate={switchTab} />
             </div>
           )}
           {activeTab === "clients" && <ClientsTab contractorId={contractor.id} />}

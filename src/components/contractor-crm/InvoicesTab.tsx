@@ -48,6 +48,7 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [nextJob, setNextJob] = useState<{ title: string; date: string; client_id: string; client_name: string; total_price: number | null } | null>(null);
 
   const [form, setForm] = useState({
     client_id: "",
@@ -64,9 +65,10 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
 
   const fetchData = async () => {
     setIsLoading(true);
-    const [invoicesRes, clientsRes] = await Promise.all([
+    const [invoicesRes, clientsRes, nextJobRes] = await Promise.all([
       supabase.from("invoices").select("*").eq("contractor_id", contractorId).order("created_at", { ascending: false }),
       supabase.from("clients").select("*").eq("contractor_id", contractorId).order("name"),
+      supabase.from("jobs").select("id, title, scheduled_date, client_id, total_price").eq("contractor_id", contractorId).eq("status", "scheduled").order("scheduled_date").limit(1),
     ]);
 
     if (clientsRes.data) setClients(clientsRes.data);
@@ -77,6 +79,12 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
         client_name: clientMap.get(inv.client_id)?.name || "Unknown",
         client_email: clientMap.get(inv.client_id)?.email || undefined,
       })));
+      // Set next job for empty state
+      if (nextJobRes.data && nextJobRes.data.length > 0) {
+        const j = nextJobRes.data[0];
+        const clientName = clientMap.get(j.client_id)?.name || "Unknown";
+        setNextJob({ title: j.title, date: j.scheduled_date, client_id: j.client_id, client_name: clientName, total_price: j.total_price });
+      }
     }
     setIsLoading(false);
   };
@@ -85,11 +93,12 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
   const calcGst = () => gstRegistered ? calcSubtotal() * 0.1 : 0;
   const calcTotal = () => calcSubtotal() + calcGst();
 
-  const openCreateDialog = () => {
+  const openCreateDialog = (prefillClientId?: string, prefillPrice?: number | null) => {
     setEditingInvoice(null);
     const nextNum = `INV-${String(invoices.length + 1).padStart(4, "0")}`;
-    setForm({ client_id: clients[0]?.id || "", invoice_number: nextNum, due_date: "", notes: "", status: "unpaid" });
-    setLineItems([{ description: "Lawn Mowing", quantity: 1, unit_price: 0 }]);
+    setForm({ client_id: prefillClientId || clients[0]?.id || "", invoice_number: nextNum, due_date: "", notes: "", status: "unpaid" });
+    const price = prefillPrice ? Number(prefillPrice) : 0;
+    setLineItems([{ description: "Lawn Mowing", quantity: 1, unit_price: price }]);
     setDialogOpen(true);
   };
 
@@ -194,7 +203,7 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
             </Badge>
           )}
         </div>
-        <Button onClick={openCreateDialog} disabled={clients.length === 0}>
+        <Button onClick={() => openCreateDialog()} disabled={clients.length === 0}>
           <Plus className="w-4 h-4 mr-2" /> New {gstRegistered ? "Tax Invoice" : "Invoice"}
         </Button>
       </div>
@@ -203,9 +212,23 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Receipt className="w-12 h-12 text-muted-foreground/50 mb-4" />
-            <h3 className="font-display font-semibold text-lg text-foreground mb-1">No invoices yet</h3>
-            <p className="text-muted-foreground text-sm mb-4">Create your first invoice for a client.</p>
-            {clients.length > 0 && <Button onClick={openCreateDialog} size="sm"><Plus className="w-4 h-4 mr-1" /> New Invoice</Button>}
+            {nextJob ? (
+              <>
+                <h3 className="font-display font-semibold text-lg text-foreground mb-1">No invoices yet</h3>
+                <p className="text-muted-foreground text-sm mb-4">
+                  Your next job is <strong>{nextJob.title}</strong> on <strong>{format(new Date(nextJob.date), "dd MMM yyyy")}</strong>. Send the invoice now?
+                </p>
+                <Button onClick={() => openCreateDialog(nextJob.client_id, nextJob.total_price)} size="sm">
+                  <Plus className="w-4 h-4 mr-1" /> New Invoice
+                </Button>
+              </>
+            ) : (
+              <>
+                <h3 className="font-display font-semibold text-lg text-foreground mb-1">No invoices yet</h3>
+                <p className="text-muted-foreground text-sm mb-4">Create your first invoice for a client.</p>
+                {clients.length > 0 && <Button onClick={() => openCreateDialog()} size="sm"><Plus className="w-4 h-4 mr-1" /> New Invoice</Button>}
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (

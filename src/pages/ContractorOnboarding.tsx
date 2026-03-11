@@ -6,19 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Slider } from "@/components/ui/slider";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Leaf, ArrowRight, ArrowLeft, Loader2, Check, Building2,
-  CreditCard, Globe, Users, Calendar, Sparkles, ExternalLink,
-  CheckCircle2, User as UserIcon, Plus, MapPin, Search,
+  Users, Calendar, Clock,
 } from "lucide-react";
-import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "@/components/contractor-crm/WorkingHoursEditor";
-import { GeographicReachStep } from "@/components/contractor-onboarding/GeographicReachStep";
-import type { GeographicData } from "@/components/contractor-onboarding/types";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -32,15 +26,10 @@ interface StepConfig {
 }
 
 const STEPS: StepConfig[] = [
-  { key: "profile", title: "Business Profile", subtitle: "Tell us about your business", icon: Building2 },
-  { key: "stripe", title: "Get Paid", subtitle: "Connect your Stripe account", icon: CreditCard },
-  { key: "website", title: "Your Website", subtitle: "Generate a free website", icon: Globe },
-  { key: "service_area", title: "Service Area", subtitle: "Define where you work", icon: MapPin },
+  { key: "profile", title: "Business Setup", subtitle: "Tell us about your business", icon: Building2 },
   { key: "client", title: "First Client", subtitle: "Add your first client", icon: Users },
   { key: "job", title: "First Job", subtitle: "Schedule your first job", icon: Calendar },
 ];
-
-
 
 const ContractorOnboarding = () => {
   const navigate = useNavigate();
@@ -53,19 +42,7 @@ const ContractorOnboarding = () => {
   // Profile form
   const [profile, setProfile] = useState({
     business_name: "",
-    abn: "",
     phone: "",
-    business_address: "",
-  });
-  const [workingHours, setWorkingHours] = useState<WorkingHours>(DEFAULT_WORKING_HOURS);
-
-  // Geographic data for service area step
-  const [geoData, setGeoData] = useState<GeographicData>({
-    maxTravelDistanceKm: 15,
-    baseAddress: "",
-    baseAddressLat: null,
-    baseAddressLng: null,
-    servicedSuburbs: [],
   });
 
   // Client form
@@ -73,19 +50,18 @@ const ContractorOnboarding = () => {
     name: "",
     email: "",
     phone: "",
-    address: "",
   });
 
   // Job form
   const [jobForm, setJobForm] = useState({
     title: "Lawn Mowing",
     scheduled_date: new Date(Date.now() + 86400000).toISOString().split("T")[0],
-    scheduled_time: "09:00",
     total_price: "",
-    notes: "",
+    recurrence: "one-off" as "one-off" | "weekly" | "fortnightly" | "monthly",
   });
 
   const [createdClientId, setCreatedClientId] = useState<string | null>(null);
+  const [createdClientName, setCreatedClientName] = useState<string>("");
 
   useEffect(() => {
     checkAuth();
@@ -96,7 +72,6 @@ const ContractorOnboarding = () => {
     if (!user) { navigate("/contractor-auth?mode=signup"); return; }
     setUser(user);
 
-    // Ensure contractor role exists
     const { data: roles } = await supabase
       .from("user_roles").select("role")
       .eq("user_id", user.id).eq("role", "contractor");
@@ -105,7 +80,6 @@ const ContractorOnboarding = () => {
       await supabase.from("user_roles").insert({ user_id: user.id, role: "contractor" });
     }
 
-    // Ensure contractor profile exists
     let { data: contractorData } = await supabase
       .from("contractors").select("*")
       .eq("user_id", user.id).single();
@@ -119,50 +93,39 @@ const ContractorOnboarding = () => {
 
     if (contractorData) {
       setContractor(contractorData);
-      if (contractorData.business_name || contractorData.abn) {
+      if (contractorData.business_name) {
         setProfile({
           business_name: contractorData.business_name || "",
-          abn: contractorData.abn || "",
           phone: contractorData.phone || "",
-          business_address: contractorData.business_address || "",
         });
-        if (contractorData.working_hours) {
-          setWorkingHours(contractorData.working_hours as unknown as WorkingHours);
-        }
-        if (contractorData.business_name) {
-          if (contractorData.stripe_onboarding_complete) {
-            setCurrentStep(contractorData.website_published ? 3 : 2);
-          } else {
-            setCurrentStep(1);
-          }
-        }
+        setCurrentStep(1);
       }
-      // Pre-fill geographic data from contractor record
-      setGeoData(prev => ({
-        ...prev,
-        baseAddress: contractorData.business_address || "",
-        baseAddressLat: contractorData.service_center_lat || null,
-        baseAddressLng: contractorData.service_center_lng || null,
-        maxTravelDistanceKm: contractorData.service_radius_km || 15,
-      }));
     }
 
     setIsLoading(false);
   };
-
-  // ── Step Handlers ──
 
   const handleSaveProfile = async () => {
     if (!profile.business_name.trim()) { toast.error("Business name is required"); return; }
     if (!user) return;
 
     setIsSaving(true);
+
+    // Silent defaults: Mon-Fri 7am-5pm working hours
+    const defaultWorkingHours = {
+      monday: { start: "07:00", end: "17:00", enabled: true },
+      tuesday: { start: "07:00", end: "17:00", enabled: true },
+      wednesday: { start: "07:00", end: "17:00", enabled: true },
+      thursday: { start: "07:00", end: "17:00", enabled: true },
+      friday: { start: "07:00", end: "17:00", enabled: true },
+      saturday: { start: "08:00", end: "14:00", enabled: false },
+      sunday: { start: "08:00", end: "14:00", enabled: false },
+    };
+
     const { data, error } = await supabase.from("contractors").update({
       business_name: profile.business_name.trim(),
-      abn: profile.abn.replace(/\s/g, "") || null,
       phone: profile.phone.trim() || null,
-      business_address: profile.business_address.trim() || null,
-      working_hours: workingHours as any,
+      working_hours: defaultWorkingHours as any,
       is_active: true,
     }).eq("user_id", user.id).select().single();
 
@@ -179,96 +142,6 @@ const ContractorOnboarding = () => {
     setIsSaving(false);
   };
 
-  const handleStripeConnect = async () => {
-    setIsSaving(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("stripe-connect", {
-        body: { action: "create-account" },
-      });
-      if (error) throw error;
-      if (data?.url) {
-        window.open(data.url, "_blank");
-        toast.success("Complete your Stripe setup in the new tab, then click Next.");
-      }
-    } catch {
-      toast.error("Failed to start Stripe setup. You can do this later in Settings.");
-    }
-    setIsSaving(false);
-  };
-
-  const handleGenerateWebsite = async () => {
-    if (!contractor) return;
-    setIsSaving(true);
-    try {
-      const { data: copyData, error: copyError } = await supabase.functions.invoke("generate-website-copy", {
-        body: {
-          business_name: contractor.business_name,
-          location: contractor.business_address,
-          phone: contractor.phone,
-        },
-      });
-      if (copyError) throw copyError;
-
-      const slug = (contractor.business_name || "my-business")
-        .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").substring(0, 40);
-
-      const { data, error } = await supabase.from("contractors").update({
-        subdomain: slug,
-        website_copy: copyData?.copy || null,
-        website_published: true,
-      }).eq("id", contractor.id).select().single();
-
-      if (error) {
-        if (error.code === "23505") {
-          toast.error("Subdomain taken — you can change it later in Website settings.");
-        } else {
-          throw error;
-        }
-      } else if (data) {
-        setContractor(data);
-        toast.success("Website generated & published! 🎉");
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to generate website. You can do this later.");
-    }
-    setIsSaving(false);
-    setCurrentStep(3);
-  };
-
-  // ── Service Area Handler ──
-
-  const handleSaveServiceArea = async () => {
-    if (!geoData.baseAddressLat || !geoData.baseAddressLng) return;
-
-    try {
-      // Save suburbs via edge function - parse "name|postcode" format
-      const suburbPayload = geoData.servicedSuburbs.map(s => {
-        const [suburb, postcode] = s.split("|");
-        return { suburb, postcode: postcode || "" };
-      });
-      if (suburbPayload.length > 0) {
-        await supabase.functions.invoke("update-service-areas", {
-          body: { suburbs: suburbPayload },
-        });
-      }
-
-      // Update contractor with radius info
-      if (contractor) {
-        await supabase.from("contractors").update({
-          service_radius_km: geoData.maxTravelDistanceKm,
-          service_center_lat: geoData.baseAddressLat,
-          service_center_lng: geoData.baseAddressLng,
-        }).eq("id", contractor.id);
-      }
-
-      toast.success(`Saved ${geoData.servicedSuburbs.length} service suburbs!`);
-      setCurrentStep(4);
-    } catch (err) {
-      console.error("Save service area error:", err);
-      toast.error("Failed to save service areas");
-    }
-  };
-
   const handleCreateClient = async () => {
     if (!clientForm.name.trim()) { toast.error("Client name is required"); return; }
     if (!contractor) return;
@@ -279,14 +152,16 @@ const ContractorOnboarding = () => {
       name: clientForm.name.trim(),
       email: clientForm.email.trim() || null,
       phone: clientForm.phone.trim() || null,
-      address: clientForm.address ? { street: clientForm.address } : null,
     }).select("id").single();
 
     if (error) { toast.error("Failed to create client"); setIsSaving(false); return; }
 
-    if (data) setCreatedClientId(data.id);
+    if (data) {
+      setCreatedClientId(data.id);
+      setCreatedClientName(clientForm.name.trim());
+    }
     toast.success("Client added!");
-    setCurrentStep(5);
+    setCurrentStep(2);
     setIsSaving(false);
   };
 
@@ -298,18 +173,66 @@ const ContractorOnboarding = () => {
     if (!jobForm.scheduled_date) { toast.error("Please pick a date"); return; }
 
     setIsSaving(true);
-    const { error } = await supabase.from("jobs").insert({
+
+    const isRecurring = jobForm.recurrence !== "one-off";
+    const seriesId = isRecurring ? crypto.randomUUID() : null;
+    const recurrenceRule = isRecurring ? {
+      frequency: jobForm.recurrence,
+      interval: jobForm.recurrence === "fortnightly" ? 2 : 1,
+      count: 4,
+    } : null;
+
+    const payload = {
       contractor_id: contractor.id,
       client_id: createdClientId,
       title: jobForm.title.trim() || "Lawn Mowing",
       scheduled_date: jobForm.scheduled_date,
-      scheduled_time: jobForm.scheduled_time || null,
       total_price: jobForm.total_price ? parseFloat(jobForm.total_price) : null,
-      notes: jobForm.notes.trim() || null,
       status: "scheduled",
-    });
+      recurrence_rule: recurrenceRule as any,
+      recurring_job_id: seriesId,
+    };
 
+    const { error } = await supabase.from("jobs").insert(payload);
     if (error) { toast.error("Failed to create job"); setIsSaving(false); return; }
+
+    // Create recurring instances
+    if (isRecurring && seriesId) {
+      const baseDate = new Date(jobForm.scheduled_date);
+      const additionalJobs = [];
+      for (let i = 1; i < 4; i++) {
+        const nextDate = new Date(baseDate);
+        if (jobForm.recurrence === "weekly") nextDate.setDate(baseDate.getDate() + i * 7);
+        else if (jobForm.recurrence === "fortnightly") nextDate.setDate(baseDate.getDate() + i * 14);
+        else nextDate.setMonth(baseDate.getMonth() + i);
+        additionalJobs.push({ ...payload, scheduled_date: nextDate.toISOString().split("T")[0] });
+      }
+      if (additionalJobs.length > 0) {
+        await supabase.from("jobs").insert(additionalJobs as any);
+      }
+    }
+
+    // Silently auto-generate website using business name
+    try {
+      const slug = (contractor.business_name || "my-business")
+        .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").substring(0, 40);
+
+      const { data: copyData } = await supabase.functions.invoke("generate-website-copy", {
+        body: {
+          business_name: contractor.business_name,
+          location: contractor.business_address,
+          phone: contractor.phone,
+        },
+      });
+
+      await supabase.from("contractors").update({
+        subdomain: slug,
+        website_copy: copyData?.copy || null,
+        website_published: false, // Draft, not published yet - user activates in checklist
+      }).eq("id", contractor.id);
+    } catch {
+      // Silent failure - website generation is non-critical
+    }
 
     toast.success("First job scheduled! 🎉 You're all set.");
     setIsSaving(false);
@@ -348,7 +271,6 @@ const ContractorOnboarding = () => {
 
   const step = STEPS[currentStep];
   const progress = ((currentStep + 1) / STEPS.length) * 100;
-  const selectedSuburbCount = geoData.servicedSuburbs.length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -367,9 +289,9 @@ const ContractorOnboarding = () => {
         </div>
       </header>
 
-      <main className="max-w-lg md:max-w-2xl lg:max-w-3xl mx-auto px-4 py-8">
+      <main className="max-w-lg mx-auto px-4 py-6 sm:py-8">
         {/* Progress */}
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
             {STEPS.map((s, i) => {
               const done = i < currentStep;
@@ -383,7 +305,7 @@ const ContractorOnboarding = () => {
                   }`}>
                     {done ? <Check className="w-4 h-4" /> : i + 1}
                   </div>
-                  <span className={`text-[10px] mt-1 text-center hidden sm:block ${active ? "text-primary font-medium" : "text-muted-foreground"}`}>
+                  <span className={`text-[10px] mt-1 text-center ${active ? "text-primary font-medium" : "text-muted-foreground"}`}>
                     {s.title}
                   </span>
                 </div>
@@ -396,38 +318,28 @@ const ContractorOnboarding = () => {
         </div>
 
         {/* Step Header */}
-        <div className="text-center mb-6">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <step.icon className="w-7 h-7 text-primary" />
+        <div className="text-center mb-5">
+          <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <step.icon className="w-6 h-6 text-primary" />
           </div>
-          <h1 className="font-display text-2xl font-bold text-foreground">{step.title}</h1>
+          <h1 className="font-display text-xl font-bold text-foreground">{step.title}</h1>
           <p className="text-muted-foreground text-sm mt-1">{step.subtitle}</p>
+          <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground/70 mt-2">
+            <Clock className="w-3 h-3" /> Setup takes about 3 minutes
+          </p>
         </div>
 
-        {/* ── Step 1: Profile ── */}
+        {/* ── Step 1: Business Setup ── */}
         {currentStep === 0 && (
           <Card>
-            <CardContent className="pt-6 space-y-4">
+            <CardContent className="pt-5 pb-5 space-y-4">
               <div className="space-y-2">
                 <Label>Business Name *</Label>
                 <Input value={profile.business_name} onChange={(e) => setProfile({ ...profile, business_name: e.target.value })} placeholder="John's Lawn Care" />
               </div>
               <div className="space-y-2">
-                <Label>ABN <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input value={profile.abn} onChange={(e) => setProfile({ ...profile, abn: e.target.value })} placeholder="12 345 678 901" />
-              </div>
-              <div className="space-y-2">
-                <Label>Phone</Label>
+                <Label>Phone <span className="text-muted-foreground text-xs">(optional)</span></Label>
                 <Input value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} placeholder="0400 000 000" />
-              </div>
-              <div className="space-y-2">
-                <Label>Business Address</Label>
-                <Input value={profile.business_address} onChange={(e) => setProfile({ ...profile, business_address: e.target.value })} placeholder="123 Main St, Melbourne VIC 3000" />
-              </div>
-              <div className="space-y-2 pt-2">
-                <Label className="text-sm font-semibold">Working Days & Hours</Label>
-                <p className="text-xs text-muted-foreground mb-2">Set which days you work and your start/end times</p>
-                <WorkingHoursEditor value={workingHours} onChange={setWorkingHours} compact />
               </div>
               <Button onClick={handleSaveProfile} disabled={isSaving} className="w-full" size="lg">
                 {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
@@ -437,108 +349,14 @@ const ContractorOnboarding = () => {
           </Card>
         )}
 
-        {/* ── Step 2: Stripe Connect ── */}
+        {/* ── Step 2: First Client ── */}
         {currentStep === 1 && (
           <Card>
-            <CardContent className="pt-6 space-y-5">
-              <div className="bg-muted/50 rounded-xl p-4 space-y-3">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Accept payments from customers</p>
-                    <p className="text-xs text-muted-foreground">Get paid directly to your bank account via Stripe.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Automatic payouts</p>
-                    <p className="text-xs text-muted-foreground">Funds are transferred to your account automatically.</p>
-                  </div>
-                </div>
-              </div>
-              {contractor?.stripe_onboarding_complete ? (
-                <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-xl">
-                  <CheckCircle2 className="w-5 h-5 text-primary" />
-                  <span className="text-sm font-medium text-primary">Stripe is connected!</span>
-                </div>
-              ) : (
-                <Button onClick={handleStripeConnect} disabled={isSaving} className="w-full" size="lg" variant="outline">
-                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <CreditCard className="w-5 h-5 mr-2" />}
-                  Connect Stripe <ExternalLink className="w-4 h-4 ml-2" />
-                </Button>
-              )}
-              <div className="flex gap-3">
-                <Button variant="ghost" onClick={() => setCurrentStep(0)} className="flex-1">
-                  <ArrowLeft className="w-4 h-4 mr-2" /> Back
-                </Button>
-                <Button onClick={handleSkip} variant="outline" className="flex-1">
-                  {contractor?.stripe_onboarding_complete ? "Next" : "Skip for now"} <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ── Step 3: Website ── */}
-        {currentStep === 2 && (
-          <Card>
-            <CardContent className="pt-6 space-y-5">
-              <div className="bg-muted/50 rounded-xl p-4 text-center space-y-2">
-                <Sparkles className="w-8 h-8 text-primary mx-auto" />
-                <p className="text-sm font-medium text-foreground">AI-powered website generation</p>
-                <p className="text-xs text-muted-foreground">
-                  We'll create a professional website for your business using AI. It takes about 10 seconds and you can customize it later.
-                </p>
-              </div>
-              {contractor?.website_published ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-xl">
-                    <CheckCircle2 className="w-5 h-5 text-primary" />
-                    <span className="text-sm font-medium text-primary">Website is live!</span>
-                  </div>
-                  {contractor.subdomain && (
-                    <a href={`${window.location.origin}/site/${contractor.subdomain}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 text-sm text-primary hover:underline">
-                      <Globe className="w-4 h-4" /> View your website <ExternalLink className="w-3 h-3" />
-                    </a>
-                  )}
-                </div>
-              ) : (
-                <Button onClick={handleGenerateWebsite} disabled={isSaving} className="w-full" size="lg">
-                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Sparkles className="w-5 h-5 mr-2" />}
-                  Generate My Website
-                </Button>
-              )}
-              <div className="flex gap-3">
-                <Button variant="ghost" onClick={() => setCurrentStep(1)} className="flex-1">
-                  <ArrowLeft className="w-4 h-4 mr-2" /> Back
-                </Button>
-                <Button onClick={handleSkip} variant="outline" className="flex-1">
-                  {contractor?.website_published ? "Next" : "Skip for now"} <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ── Step 4: Service Area ── */}
-        {currentStep === 3 && (
-          <GeographicReachStep
-            data={geoData}
-            onChange={setGeoData}
-            onNext={handleSaveServiceArea}
-            onBack={() => setCurrentStep(2)}
-          />
-        )}
-
-        {/* ── Step 5: First Client ── */}
-        {currentStep === 4 && (
-          <Card>
-            <CardContent className="pt-6 space-y-4">
+            <CardContent className="pt-5 pb-5 space-y-4">
               {createdClientId ? (
                 <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-xl">
-                  <CheckCircle2 className="w-5 h-5 text-primary" />
-                  <span className="text-sm font-medium text-primary">Client created!</span>
+                  <Check className="w-5 h-5 text-primary" />
+                  <span className="text-sm font-medium text-primary">Client "{createdClientName}" created!</span>
                 </div>
               ) : (
                 <>
@@ -554,24 +372,20 @@ const ContractorOnboarding = () => {
                     <Label>Phone <span className="text-muted-foreground text-xs">(optional)</span></Label>
                     <Input value={clientForm.phone} onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })} placeholder="0400 000 000" />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Address <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                    <Input value={clientForm.address} onChange={(e) => setClientForm({ ...clientForm, address: e.target.value })} placeholder="123 Client St, Melbourne VIC" />
-                  </div>
                 </>
               )}
               {!createdClientId ? (
                 <Button onClick={handleCreateClient} disabled={isSaving} className="w-full" size="lg">
-                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Plus className="w-5 h-5 mr-2" />}
-                  Add Client & Continue
+                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
+                  Add Client & Continue <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               ) : (
-                <Button onClick={() => setCurrentStep(5)} className="w-full" size="lg">
+                <Button onClick={() => setCurrentStep(2)} className="w-full" size="lg">
                   Continue to First Job <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               )}
               <div className="flex gap-3">
-                <Button variant="ghost" onClick={() => setCurrentStep(3)} className="flex-1">
+                <Button variant="ghost" onClick={() => setCurrentStep(0)} className="flex-1">
                   <ArrowLeft className="w-4 h-4 mr-2" /> Back
                 </Button>
                 <Button onClick={handleSkip} variant="outline" className="flex-1">
@@ -582,32 +396,31 @@ const ContractorOnboarding = () => {
           </Card>
         )}
 
-        {/* ── Step 6: First Job ── */}
-        {currentStep === 5 && (
+        {/* ── Step 3: First Job ── */}
+        {currentStep === 2 && (
           <Card>
-            <CardContent className="pt-6 space-y-4">
+            <CardContent className="pt-5 pb-5 space-y-4">
               {!createdClientId ? (
                 <div className="text-center py-4">
                   <p className="text-sm text-muted-foreground mb-3">You need to create a client first.</p>
-                  <Button onClick={() => setCurrentStep(4)} variant="outline" size="sm">
+                  <Button onClick={() => setCurrentStep(1)} variant="outline" size="sm">
                     <ArrowLeft className="w-4 h-4 mr-2" /> Go Back to Add Client
                   </Button>
                 </div>
               ) : (
                 <>
+                  {/* Pre-selected client indicator */}
+                  <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                    <Users className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-foreground">Client: <strong>{createdClientName}</strong></span>
+                  </div>
                   <div className="space-y-2">
                     <Label>Job Title</Label>
                     <Input value={jobForm.title} onChange={(e) => setJobForm({ ...jobForm, title: e.target.value })} placeholder="Lawn Mowing" />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label>Date *</Label>
-                      <Input type="date" value={jobForm.scheduled_date} onChange={(e) => setJobForm({ ...jobForm, scheduled_date: e.target.value })} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Time</Label>
-                      <Input type="time" value={jobForm.scheduled_time} onChange={(e) => setJobForm({ ...jobForm, scheduled_time: e.target.value })} />
-                    </div>
+                  <div className="space-y-2">
+                    <Label>Date *</Label>
+                    <Input type="date" value={jobForm.scheduled_date} onChange={(e) => setJobForm({ ...jobForm, scheduled_date: e.target.value })} />
                   </div>
                   <div className="space-y-2">
                     <Label>Price <span className="text-muted-foreground text-xs">(optional)</span></Label>
@@ -617,8 +430,16 @@ const ContractorOnboarding = () => {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                    <Textarea value={jobForm.notes} onChange={(e) => setJobForm({ ...jobForm, notes: e.target.value })} placeholder="Any details about this job..." rows={2} />
+                    <Label>Recurring?</Label>
+                    <Select value={jobForm.recurrence} onValueChange={(v) => setJobForm({ ...jobForm, recurrence: v as any })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="one-off">One-off</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="fortnightly">Fortnightly</SelectItem>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <Button onClick={handleCreateJob} disabled={isSaving} className="w-full" size="lg">
                     {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Check className="w-5 h-5 mr-2" />}
@@ -627,10 +448,10 @@ const ContractorOnboarding = () => {
                 </>
               )}
               <div className="flex gap-3">
-                <Button variant="ghost" onClick={() => setCurrentStep(4)} className="flex-1">
+                <Button variant="ghost" onClick={() => setCurrentStep(1)} className="flex-1">
                   <ArrowLeft className="w-4 h-4 mr-2" /> Back
                 </Button>
-                <Button onClick={() => navigate("/contractor")} variant="outline" className="flex-1">
+                <Button onClick={() => { markOnboardingComplete(); navigate("/contractor"); }} variant="outline" className="flex-1">
                   Skip & Go to Dashboard <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
