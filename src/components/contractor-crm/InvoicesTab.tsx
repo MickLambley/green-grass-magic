@@ -93,11 +93,12 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
   const calcGst = () => gstRegistered ? calcSubtotal() * 0.1 : 0;
   const calcTotal = () => calcSubtotal() + calcGst();
 
-  const openCreateDialog = () => {
+  const openCreateDialog = (prefillClientId?: string, prefillPrice?: number | null) => {
     setEditingInvoice(null);
     const nextNum = `INV-${String(invoices.length + 1).padStart(4, "0")}`;
-    setForm({ client_id: clients[0]?.id || "", invoice_number: nextNum, due_date: "", notes: "", status: "unpaid" });
-    setLineItems([{ description: "Lawn Mowing", quantity: 1, unit_price: 0 }]);
+    setForm({ client_id: prefillClientId || clients[0]?.id || "", invoice_number: nextNum, due_date: "", notes: "", status: "unpaid" });
+    const price = prefillPrice ? Number(prefillPrice) : 0;
+    setLineItems([{ description: "Lawn Mowing", quantity: 1, unit_price: price }]);
     setDialogOpen(true);
   };
 
