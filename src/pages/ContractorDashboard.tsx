@@ -26,6 +26,8 @@ import RouteOptimizationModal from "@/components/contractor-crm/RouteOptimizatio
 import OptimizationPreviewDialog from "@/components/contractor-crm/OptimizationPreviewDialog";
 import OnboardingPrerequisitesBanner from "@/components/contractor-crm/OnboardingPrerequisitesBanner";
 import ServiceOfferingsTab from "@/components/contractor-crm/ServiceOfferingsTab";
+import GettingStartedChecklist from "@/components/contractor-crm/GettingStartedChecklist";
+import MobileFAB from "@/components/contractor-crm/MobileFAB";
 type Contractor = Tables<"contractors">;
 
 const NAV_ITEMS = [
