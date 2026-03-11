@@ -48,6 +48,7 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [nextJob, setNextJob] = useState<{ title: string; date: string; client_id: string; client_name: string; total_price: number | null } | null>(null);
 
   const [form, setForm] = useState({
     client_id: "",
