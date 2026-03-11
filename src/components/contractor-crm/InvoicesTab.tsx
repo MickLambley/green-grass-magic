@@ -65,9 +65,10 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
 
   const fetchData = async () => {
     setIsLoading(true);
-    const [invoicesRes, clientsRes] = await Promise.all([
+    const [invoicesRes, clientsRes, nextJobRes] = await Promise.all([
       supabase.from("invoices").select("*").eq("contractor_id", contractorId).order("created_at", { ascending: false }),
       supabase.from("clients").select("*").eq("contractor_id", contractorId).order("name"),
+      supabase.from("jobs").select("id, title, scheduled_date, client_id, total_price").eq("contractor_id", contractorId).eq("status", "scheduled").order("scheduled_date").limit(1),
     ]);
 
     if (clientsRes.data) setClients(clientsRes.data);
@@ -78,6 +79,12 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
         client_name: clientMap.get(inv.client_id)?.name || "Unknown",
         client_email: clientMap.get(inv.client_id)?.email || undefined,
       })));
+      // Set next job for empty state
+      if (nextJobRes.data && nextJobRes.data.length > 0) {
+        const j = nextJobRes.data[0];
+        const clientName = clientMap.get(j.client_id)?.name || "Unknown";
+        setNextJob({ title: j.title, date: j.scheduled_date, client_id: j.client_id, client_name: clientName, total_price: j.total_price });
+      }
     }
     setIsLoading(false);
   };
