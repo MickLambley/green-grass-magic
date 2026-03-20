@@ -352,7 +352,7 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
         <CardContent>
           <div className="flex items-center gap-4">
             {logoUrl ? (
-              <img src={logoUrl} alt="Business logo" className="w-16 h-16 rounded-xl object-cover border border-border" />
+              <img src={logoUrl} alt="Business logo" className="max-h-16 max-w-32 rounded-xl object-contain border border-border" />
             ) : (
               <div className="w-16 h-16 rounded-xl bg-muted flex items-center justify-center border border-dashed border-border">
                 <Globe className="w-6 h-6 text-muted-foreground" />
