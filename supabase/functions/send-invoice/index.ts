@@ -13,6 +13,8 @@ function formatAbn(abn: string): string {
   return `${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8, 11)}`;
 }
 
+const YARDLY_FOOTER = `<p style="color: #999; font-size: 11px; text-align: center; margin-top: 32px; border-top: 1px solid #eee; padding-top: 12px;">Sent via Yardly · yardly.app</p>`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -56,6 +58,16 @@ serve(async (req) => {
       throw new Error("Not authorized");
     }
 
+    // Get contractor's login email for reply-to
+    const contractorEmail = userData.user.email;
+
+    // Get contractor's full name as fallback
+    const { data: contractorProfile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("user_id", userData.user.id)
+      .single();
+
     // Get client
     const { data: client } = await supabase
       .from("clients")
@@ -77,12 +89,16 @@ serve(async (req) => {
         </tr>
       `).join("");
 
+    const senderName = contractor.business_name || contractorProfile?.full_name || "Yardly";
     const businessName = contractor.business_name || "Your Contractor";
     const isGst = contractor.gst_registered;
     const invoiceLabel = "Tax Invoice";
     const dueDate = invoice.due_date
       ? new Date(invoice.due_date).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
       : "Upon receipt";
+    const dueDateShort = invoice.due_date
+      ? new Date(invoice.due_date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+      : null;
 
     // Payment methods
     const hasStripe = contractor.stripe_account_id && contractor.stripe_onboarding_complete;
@@ -203,12 +219,26 @@ serve(async (req) => {
           
           ${invoice.notes ? `<p style="margin-top: 16px; color: #666;">${invoice.notes}</p>` : ""}
           
-          <p style="color: #666; margin-top: 30px; font-size: 12px;">
-            This ${invoiceLabel.toLowerCase()} was sent via Yardly. If you have any questions, please contact ${businessName} directly.
-          </p>
+          ${YARDLY_FOOTER}
         </div>
       </div>
     `;
+
+    // Build subject: "Invoice INV-0001 from Baker's Lawn Care — $85.00 due 3 Apr 2026"
+    let subject = `Invoice ${invoiceNumber} from ${senderName} — $${total.toFixed(2)}`;
+    if (dueDateShort) {
+      subject += ` due ${dueDateShort}`;
+    }
+
+    const emailPayload: Record<string, unknown> = {
+      from: `${senderName} <invoices@mail.yardly.app>`,
+      to: [client.email],
+      subject,
+      html: emailHtml,
+    };
+    if (contractorEmail) {
+      emailPayload.reply_to = contractorEmail;
+    }
 
     const emailRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -216,12 +246,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${resendApiKey}`,
       },
-      body: JSON.stringify({
-        from: "Yardly <onboarding@resend.dev>",
-        to: [client.email],
-        subject: `${invoiceLabel} ${invoiceNumber} from ${businessName}`,
-        html: emailHtml,
-      }),
+      body: JSON.stringify(emailPayload),
     });
 
     if (!emailRes.ok) {

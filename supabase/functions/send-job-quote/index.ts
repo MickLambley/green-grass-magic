@@ -6,6 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const YARDLY_FOOTER = `<p style="color: #999; font-size: 11px; text-align: center; margin-top: 32px; border-top: 1px solid #eee; padding-top: 12px;">Sent via Yardly · yardly.app</p>`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -44,6 +46,14 @@ serve(async (req) => {
       .single();
     if (!contractor || contractor.user_id !== userData.user.id) throw new Error("Not authorized");
 
+    // Get contractor's login email for reply-to and full name as fallback
+    const contractorEmail = userData.user.email;
+    const { data: contractorProfile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("user_id", userData.user.id)
+      .single();
+
     // Get client email
     const { data: client } = await supabase
       .from("clients")
@@ -60,6 +70,7 @@ serve(async (req) => {
       );
     }
 
+    const senderName = contractor.business_name || contractorProfile?.full_name || "Yardly";
     const businessName = contractor.business_name || "Your Contractor";
     const brandColor = contractor.primary_color || "#16a34a";
     const clientName = client?.name || "Customer";
@@ -104,9 +115,19 @@ serve(async (req) => {
           <p style="color: #666;">— ${businessName}</p>
         </div>
         <div style="padding: 16px; text-align: center; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; background: #fafafa;">
-          <p style="color: #666; margin: 0; font-size: 12px;">This quote was sent via Yardly.</p>
+          ${YARDLY_FOOTER}
         </div>
       </div>`;
+
+    const emailPayload: Record<string, unknown> = {
+      from: `${senderName} <invoices@mail.yardly.app>`,
+      to: [customerEmail],
+      subject: `Quote from ${senderName} for ${job.title}`,
+      html: emailHtml,
+    };
+    if (contractorEmail) {
+      emailPayload.reply_to = contractorEmail;
+    }
 
     const emailRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -114,12 +135,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${resendApiKey}`,
       },
-      body: JSON.stringify({
-        from: "Yardly <onboarding@resend.dev>",
-        to: [customerEmail],
-        subject: `Quote from ${businessName} — ${job.title}`,
-        html: emailHtml,
-      }),
+      body: JSON.stringify(emailPayload),
     });
 
     if (!emailRes.ok) {

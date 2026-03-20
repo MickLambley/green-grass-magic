@@ -155,7 +155,7 @@ serve(async (req) => {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
           body: JSON.stringify({
-            from: "Yardly <onboarding@resend.dev>",
+            from: "Yardly <notifications@mail.yardly.app>",
             to: [contractorEmail],
             subject: "Payment Released! 💰",
             html: `<div style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -166,7 +166,7 @@ serve(async (req) => {
                 <p><strong>Your Earnings:</strong> $${(contractorPayoutCents / 100).toFixed(2)} AUD</p>
               </div>
               <p>Funds will arrive in your bank account in 1-2 business days.</p>
-              <p style="color:#666;margin-top:30px;">Best regards,<br>The Yardly Team</p>
+              <p style="color: #999; font-size: 11px; text-align: center; margin-top: 32px; border-top: 1px solid #eee; padding-top: 12px;">Sent via Yardly · yardly.app</p>
             </div>`,
           }),
         });

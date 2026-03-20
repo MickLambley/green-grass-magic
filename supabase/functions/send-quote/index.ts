@@ -6,6 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const YARDLY_FOOTER = `<p style="color: #999; font-size: 11px; text-align: center; margin-top: 32px; border-top: 1px solid #eee; padding-top: 12px;">Sent via Yardly · yardly.app</p>`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -49,6 +51,14 @@ serve(async (req) => {
       throw new Error("Not authorized");
     }
 
+    // Get contractor's login email for reply-to and full name as fallback
+    const contractorEmail = userData.user.email;
+    const { data: contractorProfile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("user_id", userData.user.id)
+      .single();
+
     // Get client
     const { data: client } = await supabase
       .from("clients")
@@ -59,7 +69,6 @@ serve(async (req) => {
     if (!client?.email) throw new Error("Client has no email address");
 
     // Build quote response URL
-    // Determine the app origin from the Referer header or fallback
     const referer = req.headers.get("referer") || req.headers.get("origin") || "";
     const appOrigin = referer ? new URL(referer).origin : "https://green-grass-magic.lovable.app";
     const quoteUrl = `${appOrigin}/quote?token=${quote.token}`;
@@ -76,12 +85,16 @@ serve(async (req) => {
         </tr>
       `).join("");
 
+    const senderName = contractor.business_name || contractorProfile?.full_name || "Yardly";
     const businessName = contractor.business_name || "Your Contractor";
     const brandColor = contractor.primary_color || "#16a34a";
     const isGst = contractor.gst_registered;
     const validUntil = quote.valid_until
       ? new Date(quote.valid_until).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
       : null;
+
+    // Get first line item description for subject
+    const firstLineItem = lineItems.length > 0 ? (lineItems[0] as { description: string }).description : "Services";
 
     const logoHtml = contractor.business_logo_url
       ? `<img src="${contractor.business_logo_url}" alt="${businessName}" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; margin-right: 12px; vertical-align: middle;" />`
@@ -139,12 +152,20 @@ serve(async (req) => {
         </div>
         
         <div style="padding: 16px; text-align: center; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; background: #fafafa;">
-          <p style="color: #666; margin: 0; font-size: 12px;">
-            This quote was sent via Yardly. If you have questions, contact ${businessName} directly.
-          </p>
+          ${YARDLY_FOOTER}
         </div>
       </div>
     `;
+
+    const emailPayload: Record<string, unknown> = {
+      from: `${senderName} <invoices@mail.yardly.app>`,
+      to: [client.email],
+      subject: `Quote from ${senderName} for ${firstLineItem}`,
+      html: emailHtml,
+    };
+    if (contractorEmail) {
+      emailPayload.reply_to = contractorEmail;
+    }
 
     const emailRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -152,12 +173,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${resendApiKey}`,
       },
-      body: JSON.stringify({
-        from: "Yardly <onboarding@resend.dev>",
-        to: [client.email],
-        subject: `Quote from ${businessName}`,
-        html: emailHtml,
-      }),
+      body: JSON.stringify(emailPayload),
     });
 
     if (!emailRes.ok) {
