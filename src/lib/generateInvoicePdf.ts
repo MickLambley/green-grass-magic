@@ -88,7 +88,7 @@ export const generateInvoicePdf = async (data: InvoicePdfData) => {
   doc.setFontSize(24);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(22, 163, 74);
-  const label = data.gstRegistered ? "TAX INVOICE" : "INVOICE";
+  const label = "TAX INVOICE";
   doc.text(label, pageWidth - 14, y + 8, { align: "right" });
   doc.setTextColor(0, 0, 0);
 
