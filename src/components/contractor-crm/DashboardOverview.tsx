@@ -97,6 +97,8 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
       supabase.from("jobs").select("*").eq("contractor_id", contractorId).gt("scheduled_date", today).lte("scheduled_date", weekEnd).eq("status", "scheduled").order("scheduled_date").limit(5),
       // Website bookings pending
       supabase.from("jobs").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId).eq("source", "website_booking").eq("status", "pending_confirmation"),
+      // Overdue invoices: not paid, due_date < today
+      supabase.from("invoices").select("id, due_date").eq("contractor_id", contractorId).neq("status", "paid").not("due_date", "is", null),
     ]);
 
     const revenue = (paidRes.data || []).reduce((sum, inv) => sum + Number(inv.total), 0);
