@@ -122,6 +122,11 @@ const ContractorWebsite = () => {
   const copy = contractor.website_copy || DEFAULT_COPY;
   const name = contractor.business_name || "Lawn Care Pro";
 
+  const pricingMode = contractor.pricing_mode;
+  const isQuoteOnly = pricingMode === "quote_required";
+  const bookLabel = isQuoteOnly ? "Request a Free Quote" : "Book Now";
+  const ctaLabel = isQuoteOnly ? "Request a Free Quote" : "Book Online Now";
+
   return (
     <div className="min-h-screen bg-background">
       {/* Nav */}
