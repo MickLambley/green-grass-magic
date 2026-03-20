@@ -373,9 +373,13 @@ const ContractorOnboarding = () => {
                     <Label>Email <span className="text-muted-foreground text-xs">(optional)</span></Label>
                     <Input type="email" value={clientForm.email} onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })} placeholder="jane@email.com" />
                   </div>
-                  <div className="space-y-2">
+                   <div className="space-y-2">
                     <Label>Phone <span className="text-muted-foreground text-xs">(optional)</span></Label>
                     <Input value={clientForm.phone} onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })} placeholder="0400 000 000" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Address *</Label>
+                    <Input value={clientForm.address} onChange={(e) => setClientForm({ ...clientForm, address: e.target.value })} placeholder="123 Main St, Suburb VIC 3000" />
                   </div>
                 </>
               )}
