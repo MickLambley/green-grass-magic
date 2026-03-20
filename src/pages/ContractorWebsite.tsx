@@ -176,7 +176,7 @@ const ContractorWebsite = () => {
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center animate-fade-in">
               <Button size="lg" variant="heroOutline" className="border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary" onClick={handleBookNow}>
-                Get a Free Quote <ChevronRight className="w-4 h-4 ml-1" />
+                {isQuoteOnly ? "Request a Free Quote" : "Get a Free Quote"} <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
               {contractor.phone && (
                 <Button size="lg" variant="ghost" className="text-primary-foreground hover:bg-primary-foreground/10" asChild>
