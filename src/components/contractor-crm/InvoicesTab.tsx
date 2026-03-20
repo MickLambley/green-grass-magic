@@ -312,6 +312,12 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     setSendingId(null);
   };
 
+  const handleDeleteInvoice = async (invoiceId: string) => {
+    const { error } = await supabase.from("invoices").delete().eq("id", invoiceId);
+    if (error) toast.error("Failed to delete invoice");
+    else { toast.success("Invoice deleted"); fetchData(); }
+  };
+
   const handleMarkInvoicePaid = async (invoiceId: string) => {
     const { error } = await supabase.from("invoices").update({
       status: "paid",
@@ -543,6 +549,15 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>Download PDF</TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete this invoice?")) handleDeleteInvoice(inv.id); }}>
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Delete</TooltipContent>
                           </Tooltip>
 
                           {hasEmail ? (
