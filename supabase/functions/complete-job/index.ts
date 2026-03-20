@@ -182,7 +182,7 @@ serve(async (req) => {
               Authorization: `Bearer ${resendApiKey}`,
             },
             body: JSON.stringify({
-              from: "Yardly <notifications@mail.yardly.app>",
+              from: "Yardly <notifications@mail.lawnly.com.au>",
               to: ["admin@yardly.com.au"],
               subject: `⚠️ Job #${bookingId.slice(0, 8)} Completed with Issues - Review Required`,
               html: `
