@@ -79,7 +79,7 @@ serve(async (req) => {
 
     const businessName = contractor.business_name || "Your Contractor";
     const isGst = contractor.gst_registered;
-    const invoiceLabel = isGst ? "Tax Invoice" : "Invoice";
+    const invoiceLabel = "Tax Invoice";
     const dueDate = invoice.due_date
       ? new Date(invoice.due_date).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
       : "Upon receipt";
