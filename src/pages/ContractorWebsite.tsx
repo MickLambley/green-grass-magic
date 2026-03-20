@@ -108,6 +108,9 @@ const ContractorWebsite = () => {
         website_copy: data.website_copy as unknown as WebsiteCopy | null,
         pricing_mode: (qr.website_pricing_mode as PricingMode) || null,
         show_address: (qr.website_show_address as boolean) ?? true,
+        primary_color: data.primary_color,
+        secondary_color: data.secondary_color,
+        accent_color: data.accent_color,
       });
 
       // Fetch service suburbs
