@@ -103,6 +103,13 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
 
     const revenue = (paidRes.data || []).reduce((sum, inv) => sum + Number(inv.total), 0);
 
+    // Count overdue invoices client-side (due_date < today)
+    const today = startOfDay(new Date());
+    const overdueCount = (overdueRes.data || []).filter((inv) => {
+      if (!inv.due_date) return false;
+      return isBefore(new Date(inv.due_date), today);
+    }).length;
+
     // Fetch client names and addresses for today's and upcoming jobs
     const { data: clients } = await supabase.from("clients").select("id, name, address").eq("contractor_id", contractorId);
     const clientMap = new Map((clients || []).map((c) => [c.id, c]));
@@ -111,6 +118,7 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
       clientCount: clientsRes.count || 0,
       scheduledJobs: scheduledRes.count || 0,
       unpaidInvoices: unpaidRes.count || 0,
+      overdueInvoices: overdueCount,
       revenue,
     });
     setTodaysJobs((todayRes.data || []).map((j) => {
@@ -129,11 +137,21 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
   }
 
+  const unpaidLabel = stats.overdueInvoices > 0
+    ? `${stats.unpaidInvoices} unpaid`
+    : String(stats.unpaidInvoices);
+
   const summaryCards = [
-    { title: "Clients", value: stats.clientCount, icon: Users, color: "text-primary" },
-    { title: "Upcoming Jobs", value: stats.scheduledJobs, icon: Calendar, color: "text-sky" },
-    { title: "Unpaid Invoices", value: stats.unpaidInvoices, icon: FileText, color: "text-sunshine" },
-    { title: "Revenue", value: `$${stats.revenue.toFixed(0)}`, icon: DollarSign, color: "text-primary" },
+    { title: "Clients", value: stats.clientCount, icon: Users, color: "text-primary", subtitle: undefined as string | undefined },
+    { title: "Upcoming Jobs", value: stats.scheduledJobs, icon: Calendar, color: "text-sky", subtitle: undefined },
+    {
+      title: "Unpaid Invoices",
+      value: stats.unpaidInvoices,
+      icon: FileText,
+      color: stats.overdueInvoices > 0 ? "text-destructive" : "text-sunshine",
+      subtitle: stats.overdueInvoices > 0 ? `${stats.overdueInvoices} overdue` : undefined,
+    },
+    { title: "Revenue", value: `$${stats.revenue.toFixed(0)}`, icon: DollarSign, color: "text-primary", subtitle: undefined },
   ];
 
   return (
