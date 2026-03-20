@@ -136,7 +136,7 @@ const ContractorWebsite = () => {
         <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-16">
           <div className="flex items-center gap-2">
             {contractor.business_logo_url ? (
-              <img src={contractor.business_logo_url} alt={name} className="w-8 h-8 rounded-lg object-cover" />
+              <img src={contractor.business_logo_url} alt={name} className="max-h-8 max-w-24 rounded-lg object-contain" />
             ) : (
               <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center">
                 <Leaf className="w-4 h-4 text-primary-foreground" />
