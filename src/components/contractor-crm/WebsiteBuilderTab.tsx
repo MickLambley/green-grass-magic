@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Globe, Sparkles, Eye, Check, Copy, Upload, Trash2, Pencil } from "lucide-react";
+import { Loader2, Globe, Sparkles, Eye, Check, Copy, Upload, Trash2, Pencil, Palette } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import PricingModeDialog, { type PricingMode, PRICING_MODE_LABELS } from "./PricingModeDialog";
