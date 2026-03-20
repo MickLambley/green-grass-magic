@@ -73,6 +73,27 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
   const [customDays, setCustomDays] = useState<number>(savedCustomDays || 14);
   const [defaultInvoiceNotes, setDefaultInvoiceNotes] = useState(savedNotes || "");
 
+  // Auto-save debounce
+  const isInitialMount = useRef(true);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout>>();
+  const savingRef = useRef(false);
+
+  const autoSave = useCallback(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      if (!savingRef.current) handleSave();
+    }, 1000);
+  }, []);
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    autoSave();
+    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); };
+  }, [form, workingHours, paymentTerms, customDays, defaultInvoiceNotes]);
+
   const handleSave = async () => {
     setIsSaving(true);
 
