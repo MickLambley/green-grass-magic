@@ -29,12 +29,11 @@ serve(async (req) => {
     // Get contractor profile
     const { data: contractor, error: contractorError } = await supabaseClient
       .from("contractors")
-      .select("id, stripe_account_id, approval_status")
+      .select("id, stripe_account_id")
       .eq("user_id", user.id)
       .single();
 
     if (contractorError || !contractor) throw new Error("Contractor profile not found");
-    if (contractor.approval_status !== "approved") throw new Error("Contractor not approved");
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2025-08-27.basil",
