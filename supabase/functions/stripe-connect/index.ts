@@ -86,7 +86,7 @@ serve(async (req) => {
 
     const { action } = await req.json().catch(() => ({ action: "status" }));
 
-    if (action === "create_account_link") {
+    if (action === "create_account_link" || action === "create-account") {
       const origin = req.headers.get("origin") || "https://yardly.com.au";
       const accountLink = await stripe.accountLinks.create({
         account: stripeAccountId,
