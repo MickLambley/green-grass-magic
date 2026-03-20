@@ -13,6 +13,7 @@ interface PaymentDetails {
   bankAccountNumber?: string | null;
   bankAccountName?: string | null;
   hasStripe: boolean;
+  stripePaymentUrl?: string | null;
   businessName?: string | null;
   phone?: string | null;
 }
