@@ -104,7 +104,7 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
     const revenue = (paidRes.data || []).reduce((sum, inv) => sum + Number(inv.total), 0);
 
     // Count overdue invoices client-side (due_date < today)
-    const today = startOfDay(new Date());
+    const todayDate = startOfDay(new Date());
     const overdueCount = (overdueRes.data || []).filter((inv) => {
       if (!inv.due_date) return false;
       return isBefore(new Date(inv.due_date), today);
