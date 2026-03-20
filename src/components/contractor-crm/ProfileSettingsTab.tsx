@@ -193,9 +193,31 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
             <Label>Phone</Label>
             <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="0400 000 000" />
           </div>
-          <div className="flex items-center gap-3">
-            <Switch checked={form.gst_registered} onCheckedChange={(v) => setForm({ ...form, gst_registered: v })} id="gst" />
-            <Label htmlFor="gst" className="cursor-pointer">GST Registered</Label>
+          <div className="space-y-2">
+            <Label>Are you registered for GST? *</Label>
+            <div className="flex items-center gap-6">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="gst_registered"
+                  checked={form.gst_registered === true}
+                  onChange={() => setForm({ ...form, gst_registered: true })}
+                  className="w-4 h-4 accent-primary"
+                />
+                <span className="text-sm">Yes — I charge GST</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="gst_registered"
+                  checked={form.gst_registered === false && gstConfirmed}
+                  onChange={() => setForm({ ...form, gst_registered: false })}
+                  className="w-4 h-4 accent-primary"
+                />
+                <span className="text-sm">No — I don't charge GST</span>
+              </label>
+            </div>
+            <p className="text-xs text-muted-foreground">This determines whether your invoices show GST breakdowns.</p>
           </div>
         </CardContent>
       </Card>
