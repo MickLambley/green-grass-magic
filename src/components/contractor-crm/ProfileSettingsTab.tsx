@@ -73,6 +73,15 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
 
   const handleSave = async () => {
     setIsSaving(true);
+
+    // Merge invoice defaults into questionnaire_responses
+    const updatedResponses = {
+      ...responses,
+      default_payment_terms: paymentTerms || null,
+      default_payment_terms_custom_days: paymentTerms === "custom" ? customDays : null,
+      default_invoice_notes: defaultInvoiceNotes.trim() || null,
+    };
+
     const { data, error } = await supabase
       .from("contractors")
       .update({
@@ -84,6 +93,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
         bank_bsb: form.bank_bsb.trim() || null,
         bank_account_number: form.bank_account_number.trim() || null,
         working_hours: workingHours as any,
+        questionnaire_responses: updatedResponses as any,
       })
       .eq("id", contractor.id)
       .select()
