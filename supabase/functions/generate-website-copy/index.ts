@@ -51,23 +51,36 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const prompt = `Generate website copy for a lawn care / landscaping business. Return a JSON object with these keys:
-- hero_headline (short, punchy, max 8 words)
+    const serviceList = services ? String(services) : "";
+    const serviceNames = serviceList.split(",").map((s: string) => s.trim()).filter(Boolean);
+    const isMultiService = serviceNames.length > 2 && serviceNames.some(
+      (s: string) => !s.toLowerCase().includes("lawn") && !s.toLowerCase().includes("mow")
+    );
+
+    const industryLabel = isMultiService
+      ? "property maintenance and outdoor services"
+      : "lawn care and landscaping";
+
+    const prompt = `Generate website copy for a ${industryLabel} business. Return a JSON object with these keys:
+- hero_headline (short, punchy, max 8 words — should reflect the full breadth of services, not just lawn care)
 - hero_subheadline (1 sentence, max 20 words)
 - about_title (max 5 words)
-- about_text (2-3 sentences about the business)
+- about_text (2-3 sentences about the business — mention the range of services offered)
 - services_title (max 4 words)
-- services (array of 3-4 objects with "name" and "description" keys, each description max 15 words)
+- services (an array with EXACTLY one entry for EACH of these services: ${serviceList || "Lawn mowing, edging, hedge trimming, garden cleanup"}. Each entry must have "name" and "description" keys, description max 15 words. Do NOT skip any service, do NOT merge services, do NOT add services that are not listed.)
 - cta_headline (max 6 words)
 - cta_text (1 sentence, max 15 words)
 
 Business details:
-- Name: ${business_name || "Professional Lawn Care"}
+- Name: ${business_name || "Professional Services"}
 - Location: ${location || "Your local area"}
 - Phone: ${phone || ""}
-- Services offered: ${services || "Lawn mowing, edging, hedge trimming, garden cleanup"}
+- Full list of services offered: ${serviceList || "Lawn mowing, edging, hedge trimming, garden cleanup"}
 
-Make the copy professional, friendly, and locally focused. Use Australian English.`;
+IMPORTANT:
+- The services array MUST contain every single service listed above. Do not leave any out.
+- If the business offers more than just lawn care, use broader language throughout (e.g. "property maintenance", "outdoor services") rather than focusing only on lawns.
+- Make the copy professional, friendly, and locally focused. Use Australian English.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
