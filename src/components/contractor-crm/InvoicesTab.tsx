@@ -307,7 +307,11 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
       if (data?.stripePaymentUrl) {
         setStripePaymentUrls(prev => ({ ...prev, [invoiceId]: data.stripePaymentUrl }));
       }
-      await supabase.from("invoices").update({ status: "sent" }).eq("id", invoiceId).in("status", ["draft", "unpaid"]);
+      // Mark as sent and transition draft → unpaid
+      await supabase.from("invoices").update({ 
+        sent_at: new Date().toISOString(),
+        status: 'unpaid',
+      }).eq("id", invoiceId).in("status", ["draft", "sent", "unpaid"]);
       toast.success(`Invoice sent to ${clientEmail}`);
       fetchData();
     } catch {
