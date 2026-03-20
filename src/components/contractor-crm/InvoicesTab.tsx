@@ -111,6 +111,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [stripePaymentUrls, setStripePaymentUrls] = useState<Record<string, string>>({});
   const [nextJob, setNextJob] = useState<{ title: string; date: string; client_id: string; client_name: string; total_price: number | null } | null>(null);
   const [contractorInfo, setContractorInfo] = useState<ContractorInfo>({ business_name: contractor.business_name, phone: contractor.phone, business_logo_url: contractor.business_logo_url });
 
