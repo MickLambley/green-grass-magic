@@ -372,6 +372,12 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
       notes: inv.notes,
       paymentDetails: getPaymentDetails(inv.id),
     });
+
+    // Transition draft → unpaid on download
+    if (inv.status === "draft") {
+      await supabase.from("invoices").update({ status: "unpaid" }).eq("id", inv.id);
+      fetchData();
+    }
   };
 
   const handleDownloadCurrentDialog = async () => {
