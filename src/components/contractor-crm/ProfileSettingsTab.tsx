@@ -183,7 +183,11 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
           </div>
           <div className="space-y-2">
             <Label>Business Address</Label>
-            <Input value={form.business_address} onChange={(e) => setForm({ ...form, business_address: e.target.value })} placeholder="123 Main St, Melbourne VIC 3000" />
+            <GooglePlacesAutocomplete
+              value={form.business_address}
+              onChange={(v) => setForm({ ...form, business_address: v })}
+              placeholder="123 Main St, Melbourne VIC 3000"
+            />
           </div>
           <div className="space-y-2">
             <Label>Phone</Label>
