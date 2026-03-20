@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
-/// <reference path="../node_modules/@types/google.maps/index.d.ts" />
+
+// Google Maps types - re-declare from @types/google.maps
+// The package uses a dotted name which TypeScript can't resolve via "types" config
+import "@types/google.maps";
 
 declare namespace NodeJS {
   interface Timeout {}
