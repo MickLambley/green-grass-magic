@@ -253,7 +253,13 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
 
     setIsUploadingLogo(true);
     const ext = file.name.split(".").pop();
-    const path = `${contractor.id}/logo.${ext}`;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("You must be logged in to upload");
+      setIsUploadingLogo(false);
+      return;
+    }
+    const path = `${user.id}/logo.${ext}`;
 
     const { error: uploadErr } = await supabase.storage
       .from("contractor-documents")
