@@ -117,7 +117,7 @@ const GettingStartedChecklist = ({ contractor, onNavigate }: GettingStartedCheck
       description: "So clients know how to pay your invoices.",
       done: hasBankTransfer,
       actionLabel: "Add Bank Details →",
-      action: () => onNavigate("settings"),
+      action: () => onNavigate("settings", "section-bank-details"),
     },
     {
       key: "terms",
