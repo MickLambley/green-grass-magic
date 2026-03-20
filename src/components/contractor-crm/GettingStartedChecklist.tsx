@@ -189,6 +189,7 @@ const GettingStartedChecklist = ({ contractor, onNavigate }: GettingStartedCheck
         totalCount={tier1Items.length}
         items={tier1Items}
         locked={false}
+        collapsed={tier1AllDone}
         onDismiss={handleDismiss}
       />
 
