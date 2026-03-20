@@ -7,15 +7,17 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Globe, Sparkles, ExternalLink, Eye, Check, Copy, Upload, Trash2 } from "lucide-react";
+import { Loader2, Globe, Sparkles, Eye, Check, Copy, Upload, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
+import PricingModeDialog, { type PricingMode, PRICING_MODE_LABELS } from "./PricingModeDialog";
 
 type Contractor = Tables<"contractors">;
 
 interface WebsiteBuilderTabProps {
   contractor: Contractor;
   onUpdate: (updated: Contractor) => void;
+  onNavigateToPricing?: () => void;
 }
 
 interface WebsiteCopy {
@@ -29,7 +31,14 @@ interface WebsiteCopy {
   cta_text: string;
 }
 
-const WebsiteBuilderTab = ({ contractor, onUpdate }: WebsiteBuilderTabProps) => {
+interface PricingConfig {
+  base_price: number;
+  price_per_sqm: number;
+  clippings_removal_fee: number;
+  minimum_price: number;
+}
+
+const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: WebsiteBuilderTabProps) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -39,6 +48,12 @@ const WebsiteBuilderTab = ({ contractor, onUpdate }: WebsiteBuilderTabProps) => 
   const [copy, setCopy] = useState<WebsiteCopy | null>(
     (contractor.website_copy as unknown as WebsiteCopy) || null
   );
+  const [pricingModalOpen, setPricingModalOpen] = useState(false);
+  const [pricingModalIsEdit, setPricingModalIsEdit] = useState(false);
+
+  const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
+  const currentPricingMode = (responses.website_pricing_mode as PricingMode) || null;
+  const pricingConfig = (responses.pricing as PricingConfig) || null;
 
   const siteUrl = subdomain ? `${window.location.origin}/site/${subdomain}` : "";
 
@@ -97,7 +112,7 @@ const WebsiteBuilderTab = ({ contractor, onUpdate }: WebsiteBuilderTabProps) => 
     setIsSaving(false);
   };
 
-  const handlePublish = async () => {
+  const handlePublishClick = () => {
     if (!copy) {
       toast.error("Generate website copy first");
       return;
@@ -106,6 +121,70 @@ const WebsiteBuilderTab = ({ contractor, onUpdate }: WebsiteBuilderTabProps) => 
       toast.error("Set a subdomain first");
       return;
     }
+
+    // First publish requires pricing mode selection
+    if (!contractor.website_published && !currentPricingMode) {
+      setPricingModalIsEdit(false);
+      setPricingModalOpen(true);
+      return;
+    }
+
+    // Already has pricing mode — publish directly
+    doPublish();
+  };
+
+  const handlePricingModeConfirm = async (mode: PricingMode) => {
+    // Save pricing mode and publish
+    setIsPublishing(true);
+    const slug = generateSlug(subdomain);
+    const existingResponses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
+    const { data, error } = await supabase
+      .from("contractors")
+      .update({
+        subdomain: slug,
+        website_copy: copy as any,
+        website_published: true,
+        questionnaire_responses: { ...existingResponses, website_pricing_mode: mode } as any,
+      })
+      .eq("id", contractor.id)
+      .select()
+      .single();
+
+    if (error) {
+      toast.error("Failed to publish");
+    } else if (data) {
+      setSubdomain(slug);
+      toast.success("Website published! 🎉");
+      onUpdate(data);
+      setPricingModalOpen(false);
+    }
+    setIsPublishing(false);
+  };
+
+  const handlePricingModeEdit = async (mode: PricingMode) => {
+    // Just update pricing mode, website stays published
+    setIsPublishing(true);
+    const existingResponses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
+    const { data, error } = await supabase
+      .from("contractors")
+      .update({
+        questionnaire_responses: { ...existingResponses, website_pricing_mode: mode } as any,
+      })
+      .eq("id", contractor.id)
+      .select()
+      .single();
+
+    if (error) {
+      toast.error("Failed to update pricing mode");
+    } else if (data) {
+      toast.success("Pricing mode updated");
+      onUpdate(data);
+      setPricingModalOpen(false);
+    }
+    setIsPublishing(false);
+  };
+
+  const doPublish = async () => {
     setIsPublishing(true);
     const slug = generateSlug(subdomain);
     const { data, error } = await supabase
@@ -274,9 +353,29 @@ const WebsiteBuilderTab = ({ contractor, onUpdate }: WebsiteBuilderTabProps) => 
               </CardTitle>
               <CardDescription>Build a professional website in minutes</CardDescription>
             </div>
-            <Badge variant={contractor.website_published ? "default" : "secondary"}>
-              {contractor.website_published ? "Published" : "Draft"}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant={contractor.website_published ? "default" : "secondary"}>
+                {contractor.website_published ? "Published" : "Draft"}
+              </Badge>
+              {contractor.website_published && currentPricingMode && (
+                <div className="flex items-center gap-1">
+                  <Badge variant="outline" className="text-xs">
+                    {PRICING_MODE_LABELS[currentPricingMode]}
+                  </Badge>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPricingModalIsEdit(true);
+                      setPricingModalOpen(true);
+                    }}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    title="Change pricing mode"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -401,20 +500,32 @@ const WebsiteBuilderTab = ({ contractor, onUpdate }: WebsiteBuilderTabProps) => 
           </Button>
           {contractor.website_published ? (
             <>
-              <Button onClick={handlePublish} disabled={isPublishing}>
+              <Button onClick={handlePublishClick} disabled={isPublishing}>
                 {isPublishing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
                 Update & Publish
               </Button>
               <Button variant="destructive" onClick={handleUnpublish}>Unpublish</Button>
             </>
           ) : (
-            <Button onClick={handlePublish} disabled={isPublishing}>
+            <Button onClick={handlePublishClick} disabled={isPublishing}>
               {isPublishing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Globe className="w-4 h-4 mr-2" />}
               Publish Website
             </Button>
           )}
         </div>
       )}
+
+      {/* Pricing Mode Dialog */}
+      <PricingModeDialog
+        open={pricingModalOpen}
+        onOpenChange={setPricingModalOpen}
+        currentMode={currentPricingMode}
+        pricing={pricingConfig}
+        onConfirm={pricingModalIsEdit ? handlePricingModeEdit : handlePricingModeConfirm}
+        onNavigateToPricing={onNavigateToPricing || (() => {})}
+        isPublishing={isPublishing}
+        isFirstPublish={!pricingModalIsEdit}
+      />
     </div>
   );
 };

@@ -17,6 +17,8 @@ interface WebsiteCopy {
   cta_text: string;
 }
 
+type PricingMode = "fixed_prices" | "quote_required" | "prices_and_quote";
+
 interface ContractorSite {
   id: string;
   business_name: string | null;
@@ -25,6 +27,7 @@ interface ContractorSite {
   business_logo_url: string | null;
   subdomain: string | null;
   website_copy: WebsiteCopy | null;
+  pricing_mode: PricingMode | null;
 }
 
 const DEFAULT_COPY: WebsiteCopy = {
@@ -71,15 +74,17 @@ const ContractorWebsite = () => {
   const loadContractor = async () => {
     const { data, error } = await supabase
       .from("contractors")
-      .select("id, business_name, phone, business_address, business_logo_url, subdomain, website_copy, website_published")
+      .select("id, business_name, phone, business_address, business_logo_url, subdomain, website_copy, website_published, questionnaire_responses")
       .eq("subdomain", slug)
       .eq("website_published", true)
       .single();
 
     if (!error && data) {
+      const qr = (data.questionnaire_responses as Record<string, unknown>) || {};
       setContractor({
         ...data,
         website_copy: data.website_copy as unknown as WebsiteCopy | null,
+        pricing_mode: (qr.website_pricing_mode as PricingMode) || null,
       });
 
       // Fetch service suburbs
@@ -117,6 +122,11 @@ const ContractorWebsite = () => {
   const copy = contractor.website_copy || DEFAULT_COPY;
   const name = contractor.business_name || "Lawn Care Pro";
 
+  const pricingMode = contractor.pricing_mode;
+  const isQuoteOnly = pricingMode === "quote_required";
+  const bookLabel = isQuoteOnly ? "Request a Free Quote" : "Book Now";
+  const ctaLabel = isQuoteOnly ? "Request a Free Quote" : "Book Online Now";
+
   return (
     <div className="min-h-screen bg-background">
       {/* Nav */}
@@ -148,7 +158,7 @@ const ContractorWebsite = () => {
               </Button>
             )}
             <Button size="sm" onClick={handleBookNow}>
-              Book Now
+              {bookLabel}
             </Button>
           </div>
         </div>
@@ -166,7 +176,7 @@ const ContractorWebsite = () => {
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center animate-fade-in">
               <Button size="lg" variant="heroOutline" className="border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary" onClick={handleBookNow}>
-                Get a Free Quote <ChevronRight className="w-4 h-4 ml-1" />
+                {isQuoteOnly ? "Request a Free Quote" : "Get a Free Quote"} <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
               {contractor.phone && (
                 <Button size="lg" variant="ghost" className="text-primary-foreground hover:bg-primary-foreground/10" asChild>
@@ -236,7 +246,7 @@ const ContractorWebsite = () => {
           <h2 className="font-display text-3xl font-bold text-foreground mb-4">{copy.cta_headline}</h2>
           <p className="text-muted-foreground text-lg mb-8">{copy.cta_text}</p>
           <Button size="xl" onClick={handleBookNow}>
-            Book Online Now <ChevronRight className="w-5 h-5 ml-1" />
+            {ctaLabel} <ChevronRight className="w-5 h-5 ml-1" />
           </Button>
         </div>
       </section>
