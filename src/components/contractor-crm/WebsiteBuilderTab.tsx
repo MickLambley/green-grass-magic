@@ -342,6 +342,24 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
     }
   };
 
+  const handleColorChange = async (field: "primary_color" | "secondary_color" | "accent_color", value: string) => {
+    if (field === "primary_color") setPrimaryColor(value);
+    if (field === "secondary_color") setSecondaryColor(value);
+    if (field === "accent_color") setAccentColor(value);
+  };
+
+  const saveColor = async (field: "primary_color" | "secondary_color" | "accent_color", value: string) => {
+    const { data, error } = await supabase
+      .from("contractors")
+      .update({ [field]: value })
+      .eq("id", contractor.id)
+      .select()
+      .single();
+    if (!error && data) {
+      onUpdate(data);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-2xl">
       {/* Logo Upload */}
