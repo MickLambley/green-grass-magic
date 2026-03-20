@@ -325,7 +325,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
       total,
       gstRegistered,
       notes: inv.notes,
-      paymentDetails: getPaymentDetails(),
+      paymentDetails: getPaymentDetails(inv.id),
     });
   };
 
