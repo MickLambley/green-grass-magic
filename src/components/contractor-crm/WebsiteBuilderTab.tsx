@@ -360,6 +360,24 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
     }
   };
 
+  const DEFAULT_COLORS = { primary_color: "#2E8B57", secondary_color: "#F5F0E8", accent_color: "#4CAF50" };
+
+  const handleRestoreDefaults = async () => {
+    setPrimaryColor(DEFAULT_COLORS.primary_color);
+    setSecondaryColor(DEFAULT_COLORS.secondary_color);
+    setAccentColor(DEFAULT_COLORS.accent_color);
+    const { data, error } = await supabase
+      .from("contractors")
+      .update(DEFAULT_COLORS)
+      .eq("id", contractor.id)
+      .select()
+      .single();
+    if (!error && data) {
+      onUpdate(data);
+      toast.success("Colours restored to defaults");
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-2xl">
       {/* Logo Upload */}
