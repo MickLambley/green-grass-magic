@@ -268,6 +268,16 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     else { toast.success("Invoice marked as paid"); fetchData(); }
   };
 
+  const getPaymentDetails = () => ({
+    hasBankTransfer,
+    bankBsb: contractor.bank_bsb,
+    bankAccountNumber: contractor.bank_account_number,
+    bankAccountName,
+    hasStripe,
+    businessName: contractor.business_name,
+    phone: contractor.phone,
+  });
+
   const handleDownloadPdf = async (inv: EnrichedInvoice) => {
     const items = Array.isArray(inv.line_items) ? (inv.line_items as unknown as LineItem[]) : [];
     await generateInvoicePdf({
@@ -284,6 +294,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
       total: Number(inv.total),
       gstRegistered,
       notes: inv.notes,
+      paymentDetails: getPaymentDetails(),
     });
   };
 
