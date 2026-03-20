@@ -87,8 +87,19 @@ const ContractorPricingTab = ({ contractor, onUpdate }: ContractorPricingTabProp
     setIsSaving(false);
   };
 
+  const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
+  const gstStatusConfirmed = !!(responses.gst_status_confirmed);
+
   return (
     <div className="space-y-6 max-w-2xl">
+      {!gstStatusConfirmed && (
+        <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>
+            Confirm your GST status in <span className="font-medium">Settings → Business Details</span> before publishing pricing. Your prices may need to indicate whether they include GST.
+          </span>
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle className="font-display text-lg flex items-center gap-2">
