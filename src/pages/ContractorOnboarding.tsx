@@ -212,27 +212,29 @@ const ContractorOnboarding = () => {
       }
     }
 
-    // Silently auto-generate website using business name
-    try {
-      const slug = (contractor.business_name || "my-business")
-        .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").substring(0, 40);
+    // Fire-and-forget: silently auto-generate website using business name
+    const slug = (contractor.business_name || "my-business")
+      .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").substring(0, 40);
 
-      const { data: copyData } = await supabase.functions.invoke("generate-website-copy", {
+    // Set subdomain immediately, generate copy in background
+    supabase.from("contractors").update({
+      subdomain: slug,
+      website_published: false,
+    }).eq("id", contractor.id).then(() => {
+      supabase.functions.invoke("generate-website-copy", {
         body: {
           business_name: contractor.business_name,
           location: contractor.business_address,
           phone: contractor.phone,
         },
-      });
-
-      await supabase.from("contractors").update({
-        subdomain: slug,
-        website_copy: copyData?.copy || null,
-        website_published: false, // Draft, not published yet - user activates in checklist
-      }).eq("id", contractor.id);
-    } catch {
-      // Silent failure - website generation is non-critical
-    }
+      }).then(({ data: copyData }) => {
+        if (copyData?.copy) {
+          supabase.from("contractors").update({
+            website_copy: copyData.copy,
+          }).eq("id", contractor.id);
+        }
+      }).catch(() => { /* silent */ });
+    });
 
     toast.success("First job scheduled! 🎉 You're all set.");
     setIsSaving(false);
