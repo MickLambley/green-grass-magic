@@ -81,7 +81,7 @@ const LawnDrawingMap = forwardRef<LawnDrawingMapRef, LawnDrawingMapProps>(
       },
     }));
 
-    const calculatePolygonArea = useCallback((polygon: google.maps.Polygon): number => {
+    const calculatePolygonArea = useCallback((polygon: any): number => {
       const path = polygon.getPath();
       if (path.getLength() < 3) return 0;
       return google.maps.geometry.spherical.computeArea(path);

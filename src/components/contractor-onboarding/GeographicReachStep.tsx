@@ -107,7 +107,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNaviga
     });
   }, [mapLoaded, data.baseAddress]);
 
-  const updateMapView = (center: google.maps.LatLngLiteral, radiusKm: number) => {
+  const updateMapView = (center: { lat: number; lng: number }, radiusKm: number) => {
     if (!googleMapRef.current) return;
 
     // Marker
