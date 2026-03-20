@@ -63,11 +63,21 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
   const handleGenerateCopy = async () => {
     setIsGenerating(true);
     try {
+      // Fetch active services to pass to AI
+      const { data: serviceOfferings } = await supabase
+        .from("service_offerings")
+        .select("name, category, description")
+        .eq("contractor_id", contractor.id)
+        .eq("is_active", true);
+
+      const servicesList = serviceOfferings?.map(s => s.name).join(", ") || "";
+
       const { data, error } = await supabase.functions.invoke("generate-website-copy", {
         body: {
           business_name: contractor.business_name,
           location: contractor.business_address,
           phone: contractor.phone,
+          services: servicesList,
         },
       });
       if (error) throw error;
