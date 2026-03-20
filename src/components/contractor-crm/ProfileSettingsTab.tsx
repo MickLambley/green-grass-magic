@@ -7,7 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Save, CreditCard, Clock, Mail, Lock, MapPin } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Loader2, Save, CreditCard, Clock, Mail, Lock, MapPin, FileText } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "./WorkingHoursEditor";
