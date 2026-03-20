@@ -30,10 +30,10 @@ interface GeographicReachStepProps {
 
 export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNavigation, persistSelections }: GeographicReachStepProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
-  const googleMapRef = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
-  const radiusCircleRef = useRef<google.maps.Circle | null>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const googleMapRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const radiusCircleRef = useRef<any>(null);
+  const autocompleteRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dataRef = useRef(data);
   const onChangeRef = useRef(onChange);

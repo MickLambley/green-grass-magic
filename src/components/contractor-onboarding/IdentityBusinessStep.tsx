@@ -24,8 +24,8 @@ export const IdentityBusinessStep = ({ data, onChange, userId, onNext }: Identit
   dataRef.current = data;
   const businessAddressInputRef = useRef<HTMLInputElement>(null);
   const mailingAddressInputRef = useRef<HTMLInputElement>(null);
-  const businessAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const mailingAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const businessAutocompleteRef = useRef<any>(null);
+  const mailingAutocompleteRef = useRef<any>(null);
 
   // Load Google Maps script
   useEffect(() => {
