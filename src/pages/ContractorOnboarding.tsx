@@ -50,6 +50,7 @@ const ContractorOnboarding = () => {
     name: "",
     email: "",
     phone: "",
+    address: "",
   });
 
   // Job form
@@ -144,6 +145,7 @@ const ContractorOnboarding = () => {
 
   const handleCreateClient = async () => {
     if (!clientForm.name.trim()) { toast.error("Client name is required"); return; }
+    if (!clientForm.address.trim()) { toast.error("Client address is required"); return; }
     if (!contractor) return;
 
     setIsSaving(true);
@@ -152,6 +154,7 @@ const ContractorOnboarding = () => {
       name: clientForm.name.trim(),
       email: clientForm.email.trim() || null,
       phone: clientForm.phone.trim() || null,
+      address: { street: clientForm.address.trim() },
     }).select("id").single();
 
     if (error) { toast.error("Failed to create client"); setIsSaving(false); return; }
@@ -370,9 +373,13 @@ const ContractorOnboarding = () => {
                     <Label>Email <span className="text-muted-foreground text-xs">(optional)</span></Label>
                     <Input type="email" value={clientForm.email} onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })} placeholder="jane@email.com" />
                   </div>
-                  <div className="space-y-2">
+                   <div className="space-y-2">
                     <Label>Phone <span className="text-muted-foreground text-xs">(optional)</span></Label>
                     <Input value={clientForm.phone} onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })} placeholder="0400 000 000" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Address *</Label>
+                    <Input value={clientForm.address} onChange={(e) => setClientForm({ ...clientForm, address: e.target.value })} placeholder="123 Main St, Suburb VIC 3000" />
                   </div>
                 </>
               )}
