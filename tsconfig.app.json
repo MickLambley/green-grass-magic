@@ -9,7 +9,6 @@
       "DOM.Iterable"
     ],
     "module": "ESNext",
-    "moduleDetection": "force",
     "moduleResolution": "bundler",
     "noEmit": true,
     "noFallthroughCasesInSwitch": false,
@@ -27,7 +26,6 @@
     "useDefineForClassFields": true
   },
   "include": [
-    "src",
-    "node_modules/@types/google.maps/index.d.ts"
+    "src"
   ]
 }
