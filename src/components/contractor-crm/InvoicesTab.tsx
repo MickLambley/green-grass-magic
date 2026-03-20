@@ -73,16 +73,16 @@ function computeDisplayStatus(invoice: Invoice): string {
   return invoice.status || "draft";
 }
 
-function getDefaultDueDays(contractor: Contractor): number | null {
+function getDefaultDueDays(contractor: Contractor): number {
   const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
   const terms = responses.default_payment_terms as string | undefined;
-  if (!terms) return null;
+  if (!terms) return 7;
   if (terms === "custom") {
     const customDays = responses.default_payment_terms_custom_days as number | undefined;
     return customDays || 14;
   }
   const days = parseInt(terms);
-  return isNaN(days) ? null : days;
+  return isNaN(days) ? 7 : days;
 }
 
 function getDefaultInvoiceNotes(contractor: Contractor): string {
