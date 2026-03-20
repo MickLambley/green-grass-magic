@@ -103,6 +103,13 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
   const [nextJob, setNextJob] = useState<{ title: string; date: string; client_id: string; client_name: string; total_price: number | null } | null>(null);
   const [contractorInfo, setContractorInfo] = useState<ContractorInfo>({ business_name: contractor.business_name, phone: contractor.phone, business_logo_url: contractor.business_logo_url });
 
+  // Payment method checks
+  const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
+  const hasStripe = !!(contractor.stripe_account_id && contractor.stripe_onboarding_complete);
+  const hasBankTransfer = !!(contractor.bank_bsb && contractor.bank_account_number);
+  const hasAnyPaymentMethod = hasStripe || hasBankTransfer;
+  const bankAccountName = (responses.bank_account_name as string) || contractor.business_name || "";
+
   // Email edit dialog state
   const [emailEditOpen, setEmailEditOpen] = useState(false);
   const [emailEditClientId, setEmailEditClientId] = useState("");
@@ -261,6 +268,16 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     else { toast.success("Invoice marked as paid"); fetchData(); }
   };
 
+  const getPaymentDetails = () => ({
+    hasBankTransfer,
+    bankBsb: contractor.bank_bsb,
+    bankAccountNumber: contractor.bank_account_number,
+    bankAccountName,
+    hasStripe,
+    businessName: contractor.business_name,
+    phone: contractor.phone,
+  });
+
   const handleDownloadPdf = async (inv: EnrichedInvoice) => {
     const items = Array.isArray(inv.line_items) ? (inv.line_items as unknown as LineItem[]) : [];
     await generateInvoicePdf({
@@ -277,6 +294,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
       total: Number(inv.total),
       gstRegistered,
       notes: inv.notes,
+      paymentDetails: getPaymentDetails(),
     });
   };
 
@@ -301,6 +319,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
       total,
       gstRegistered,
       notes: form.notes.trim() || null,
+      paymentDetails: getPaymentDetails(),
     });
   };
 
@@ -330,6 +349,20 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
 
   return (
     <div className="space-y-4">
+      {/* Payment methods warning banner */}
+      {!hasAnyPaymentMethod && (
+        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>
+            No payment methods configured — your clients cannot pay invoices online.{" "}
+            Add bank details or connect Stripe in{" "}
+            <button type="button" className="underline font-medium" onClick={() => { /* navigate handled by parent */ }}>
+              Settings →
+            </button>
+          </span>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h3 className="font-display font-semibold text-lg text-foreground">
@@ -582,6 +615,17 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
               <Label>Notes</Label>
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Payment terms, notes..." rows={2} />
             </div>
+
+            {/* Payment method warning in dialog */}
+            {!hasAnyPaymentMethod && (
+              <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  You have no payment methods set up — clients won't know how to pay this invoice.{" "}
+                  Set up bank transfer details or connect Stripe in Settings →
+                </span>
+              </div>
+            )}
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2">
             {editingInvoice && (
