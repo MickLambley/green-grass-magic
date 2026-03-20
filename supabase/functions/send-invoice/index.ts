@@ -141,9 +141,9 @@ serve(async (req) => {
     // Rate column header
     const rateHeader = isGst ? "Rate (inc. GST)" : "Rate";
 
-    // ─── Create Stripe Payment Link if Stripe is connected ───
-    let stripePaymentUrl: string | null = null;
-    if (hasStripe && stripeSecretKey) {
+    // ─── Use existing Stripe Payment Link or create one ───
+    let stripePaymentUrl: string | null = invoice.stripe_payment_url || null;
+    if (!stripePaymentUrl && hasStripe && stripeSecretKey) {
       try {
         const stripe = new Stripe(stripeSecretKey, { apiVersion: "2025-08-27.basil" });
         const totalCents = Math.round(total * 100);
