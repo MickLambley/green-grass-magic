@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Save, CreditCard, Clock, Mail, Lock, MapPin, FileText, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, CreditCard, Clock, Mail, Lock, MapPin, FileText, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "./WorkingHoursEditor";
