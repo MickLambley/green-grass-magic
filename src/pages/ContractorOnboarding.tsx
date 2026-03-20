@@ -154,6 +154,7 @@ const ContractorOnboarding = () => {
       name: clientForm.name.trim(),
       email: clientForm.email.trim() || null,
       phone: clientForm.phone.trim() || null,
+      address: { street: clientForm.address.trim() },
     }).select("id").single();
 
     if (error) { toast.error("Failed to create client"); setIsSaving(false); return; }
