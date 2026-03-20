@@ -319,6 +319,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
       total,
       gstRegistered,
       notes: form.notes.trim() || null,
+      paymentDetails: getPaymentDetails(),
     });
   };
 
