@@ -82,6 +82,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
       default_payment_terms_custom_days: paymentTerms === "custom" ? customDays : null,
       default_invoice_notes: defaultInvoiceNotes.trim() || null,
       bank_account_name: form.bank_account_name.trim() || null,
+      settings_saved: true,
     };
 
     const { data, error } = await supabase
