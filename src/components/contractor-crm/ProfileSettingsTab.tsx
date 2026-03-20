@@ -46,7 +46,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
   const [isUpgrading, setIsUpgrading] = useState(false);
 
   const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
-
+  const gstConfirmed = !!(responses.gst_status_confirmed);
   const [form, setForm] = useState({
     business_name: contractor.business_name || "",
     abn: contractor.abn || "",
