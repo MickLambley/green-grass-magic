@@ -111,6 +111,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [stripePaymentUrls, setStripePaymentUrls] = useState<Record<string, string>>({});
   const [nextJob, setNextJob] = useState<{ title: string; date: string; client_id: string; client_name: string; total_price: number | null } | null>(null);
   const [contractorInfo, setContractorInfo] = useState<ContractorInfo>({ business_name: contractor.business_name, phone: contractor.phone, business_logo_url: contractor.business_logo_url });
 
@@ -265,8 +266,12 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     }
     setSendingId(invoiceId);
     try {
-      const { error } = await supabase.functions.invoke("send-invoice", { body: { invoiceId } });
+      const { data, error } = await supabase.functions.invoke("send-invoice", { body: { invoiceId } });
       if (error) throw error;
+      // Store stripe payment URL if returned
+      if (data?.stripePaymentUrl) {
+        setStripePaymentUrls(prev => ({ ...prev, [invoiceId]: data.stripePaymentUrl }));
+      }
       await supabase.from("invoices").update({ status: "sent" }).eq("id", invoiceId).in("status", ["draft", "unpaid"]);
       toast.success(`Invoice sent to ${clientEmail}`);
       fetchData();
@@ -285,12 +290,13 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     else { toast.success("Invoice marked as paid"); fetchData(); }
   };
 
-  const getPaymentDetails = () => ({
+  const getPaymentDetails = (invoiceId?: string) => ({
     hasBankTransfer,
     bankBsb: contractor.bank_bsb,
     bankAccountNumber: contractor.bank_account_number,
     bankAccountName,
     hasStripe,
+    stripePaymentUrl: invoiceId ? stripePaymentUrls[invoiceId] || null : null,
     businessName: contractor.business_name,
     phone: contractor.phone,
   });
@@ -319,7 +325,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
       total,
       gstRegistered,
       notes: inv.notes,
-      paymentDetails: getPaymentDetails(),
+      paymentDetails: getPaymentDetails(inv.id),
     });
   };
 
@@ -347,7 +353,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
       total,
       gstRegistered,
       notes: form.notes.trim() || null,
-      paymentDetails: getPaymentDetails(),
+      paymentDetails: getPaymentDetails(editingInvoice?.id),
     });
   };
 

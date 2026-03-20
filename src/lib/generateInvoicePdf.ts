@@ -13,6 +13,7 @@ interface PaymentDetails {
   bankAccountNumber?: string | null;
   bankAccountName?: string | null;
   hasStripe: boolean;
+  stripePaymentUrl?: string | null;
   businessName?: string | null;
   phone?: string | null;
 }
@@ -224,7 +225,18 @@ export const generateInvoicePdf = async (data: InvoicePdfData) => {
       doc.setFont("helvetica", "bold");
       doc.text("Pay by Card:", 14, y);
       doc.setFont("helvetica", "normal");
-      doc.text(`Contact ${pd.businessName || "us"} for a secure payment link.`, 50, y);
+      if (pd.stripePaymentUrl) {
+        doc.setTextColor(22, 163, 74);
+        doc.textWithLink("Pay online now →", 50, y, { url: pd.stripePaymentUrl });
+        doc.setTextColor(0, 0, 0);
+        y += 6;
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.textWithLink(pd.stripePaymentUrl, 18, y, { url: pd.stripePaymentUrl });
+        doc.setTextColor(0, 0, 0);
+      } else {
+        doc.text(`Contact ${pd.businessName || "us"} for a secure payment link.`, 50, y);
+      }
       y += 7;
     }
 
