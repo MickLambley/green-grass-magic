@@ -54,6 +54,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
     gst_registered: contractor.gst_registered,
     bank_bsb: contractor.bank_bsb || "",
     bank_account_number: contractor.bank_account_number || "",
+    bank_account_name: (responses.bank_account_name as string) || "",
   });
 
   const [workingHours, setWorkingHours] = useState<WorkingHours>(
