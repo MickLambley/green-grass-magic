@@ -174,7 +174,7 @@ const LawnDrawingMap = forwardRef<LawnDrawingMapRef, LawnDrawingMapProps>(
       drawingManagerRef.current = drawingManager;
 
       // Handle polygon completion
-      google.maps.event.addListener(drawingManager, "polygoncomplete", (polygon: google.maps.Polygon) => {
+      google.maps.event.addListener(drawingManager, "polygoncomplete", (polygon: any) => {
         polygonsRef.current.push(polygon);
         recalculateTotalArea();
 
