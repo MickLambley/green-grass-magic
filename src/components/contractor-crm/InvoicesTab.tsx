@@ -529,9 +529,18 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={STATUS_BADGES[displayStatus] || ""}>
-                        {STATUS_LABELS[displayStatus] || displayStatus}
-                      </Badge>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant="outline" className={STATUS_BADGES[displayStatus] || ""}>
+                          {STATUS_LABELS[displayStatus] || displayStatus}
+                        </Badge>
+                        <Badge variant="outline" className={
+                          (inv as any).sent_at
+                            ? "bg-sky-100 text-sky-700 border-sky-200 text-[10px]"
+                            : "bg-muted text-muted-foreground border-border text-[10px]"
+                        }>
+                          {(inv as any).sent_at ? "Sent" : "Not Sent"}
+                        </Badge>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <TooltipProvider delayDuration={300}>
