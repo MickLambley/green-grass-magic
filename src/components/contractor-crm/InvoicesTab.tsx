@@ -296,7 +296,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     bankAccountNumber: contractor.bank_account_number,
     bankAccountName,
     hasStripe,
-    stripePaymentUrl: invoiceId ? stripePaymentUrls[invoiceId] || null : null,
+    stripePaymentUrl: invoiceId ? (stripePaymentUrls[invoiceId] || invoices.find(i => i.id === invoiceId)?.stripe_payment_url || null) : null,
     businessName: contractor.business_name,
     phone: contractor.phone,
   });

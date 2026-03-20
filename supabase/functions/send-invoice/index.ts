@@ -175,6 +175,9 @@ serve(async (req) => {
         const paymentLink = await stripe.paymentLinks.create(paymentLinkParams);
         stripePaymentUrl = paymentLink.url;
         console.log("[SEND-INVOICE] Stripe payment link created:", stripePaymentUrl);
+
+        // Persist the payment URL on the invoice record
+        await supabase.from("invoices").update({ stripe_payment_url: stripePaymentUrl }).eq("id", invoiceId);
       } catch (stripeErr) {
         console.error("[SEND-INVOICE] Failed to create Stripe payment link, continuing without it:", stripeErr);
       }
