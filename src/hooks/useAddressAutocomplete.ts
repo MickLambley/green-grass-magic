@@ -13,7 +13,7 @@ interface AddressSuggestion {
 export const useAddressAutocomplete = () => {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Australian states abbreviation mapping
   const stateAbbreviations: Record<string, string> = {
