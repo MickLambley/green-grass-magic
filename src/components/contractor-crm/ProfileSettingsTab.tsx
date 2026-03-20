@@ -18,6 +18,7 @@ import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "./
 import { z } from "zod";
 import ServiceAreaSettingsCard from "./ServiceAreaSettingsCard";
 import StripeConnectSettingsCard from "./StripeConnectSettingsCard";
+import GooglePlacesAutocomplete from "@/components/GooglePlacesAutocomplete";
 
 type Contractor = Tables<"contractors">;
 
