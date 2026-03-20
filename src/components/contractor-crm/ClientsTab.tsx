@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Pencil, Trash2, Loader2, Users, MapPin, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -42,6 +43,8 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
     city: "",
     state: "",
     postcode: "",
+    business_client: false,
+    client_abn: "",
   });
 
   useEffect(() => {
@@ -66,7 +69,7 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
 
   const openCreateDialog = () => {
     setEditingClient(null);
-    setForm({ name: "", email: "", phone: "", property_notes: "", street: "", city: "", state: "", postcode: "" });
+    setForm({ name: "", email: "", phone: "", property_notes: "", street: "", city: "", state: "", postcode: "", business_client: false, client_abn: "" });
     setDialogOpen(true);
   };
 
@@ -82,6 +85,8 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
       city: addr?.city || "",
       state: addr?.state || "",
       postcode: addr?.postcode || "",
+      business_client: (client as any).business_client || false,
+      client_abn: (client as any).client_abn || "",
     });
     setDialogOpen(true);
   };
@@ -97,16 +102,20 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
       ? { street: form.street, city: form.city, state: form.state, postcode: form.postcode }
       : null;
 
+    const payload: any = {
+      name: form.name.trim(),
+      email: form.email.trim() || null,
+      phone: form.phone.trim() || null,
+      property_notes: form.property_notes.trim() || null,
+      address,
+      business_client: form.business_client,
+      client_abn: form.client_abn.trim() || null,
+    };
+
     if (editingClient) {
       const { error } = await supabase
         .from("clients")
-        .update({
-          name: form.name.trim(),
-          email: form.email.trim() || null,
-          phone: form.phone.trim() || null,
-          property_notes: form.property_notes.trim() || null,
-          address,
-        })
+        .update(payload)
         .eq("id", editingClient.id);
 
       if (error) {
@@ -121,11 +130,7 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
         .from("clients")
         .insert({
           contractor_id: contractorId,
-          name: form.name.trim(),
-          email: form.email.trim() || null,
-          phone: form.phone.trim() || null,
-          property_notes: form.property_notes.trim() || null,
-          address,
+          ...payload,
         });
 
       if (error) {
@@ -159,7 +164,6 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginatedClients = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-  // Reset page when search changes
   useEffect(() => { setPage(0); }, [searchQuery]);
 
   if (isLoading) {
@@ -230,6 +234,11 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
                           <CheckCircle2 className="w-3 h-3 mr-0.5" /> Verified
                         </Badge>
                       )}
+                      {(client as any).business_client && (
+                        <Badge variant="outline" className="ml-1 text-[10px] bg-muted text-muted-foreground border-border">
+                          Business
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="hidden md:table-cell text-muted-foreground">
                       {client.email || "—"}
@@ -260,7 +269,6 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
               })}
             </TableBody>
           </Table>
-          {/* Pagination Controls */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border">
               <p className="text-sm text-muted-foreground">
@@ -300,6 +308,30 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
                 <Input id="phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="0412 345 678" />
               </div>
             </div>
+
+            {/* Business client toggle + ABN */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="business_client"
+                  checked={form.business_client}
+                  onCheckedChange={(v) => setForm({ ...form, business_client: !!v })}
+                />
+                <Label htmlFor="business_client" className="cursor-pointer text-sm">Business client</Label>
+              </div>
+              {form.business_client && (
+                <div className="space-y-2 pl-6">
+                  <Label htmlFor="client_abn">ABN</Label>
+                  <Input
+                    id="client_abn"
+                    value={form.client_abn}
+                    onChange={(e) => setForm({ ...form, client_abn: e.target.value })}
+                    placeholder="12 345 678 901"
+                  />
+                </div>
+              )}
+            </div>
+
             <div className="space-y-2">
               <Label>Address</Label>
               <Input value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} placeholder="Street address" className="mb-2" />

@@ -65,7 +65,6 @@ const STATUS_LABELS: Record<string, string> = {
   paid: "Paid",
 };
 
-/** Compute visual status: if not paid and due date passed, show overdue */
 function computeDisplayStatus(invoice: Invoice): string {
   if (invoice.status === "paid") return "paid";
   if (invoice.due_date && isBefore(new Date(invoice.due_date), startOfDay(new Date())) && invoice.status !== "paid") {
@@ -74,7 +73,6 @@ function computeDisplayStatus(invoice: Invoice): string {
   return invoice.status || "draft";
 }
 
-/** Get default due date days from contractor settings */
 function getDefaultDueDays(contractor: Contractor): number | null {
   const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
   const terms = responses.default_payment_terms as string | undefined;
@@ -90,6 +88,19 @@ function getDefaultDueDays(contractor: Contractor): number | null {
 function getDefaultInvoiceNotes(contractor: Contractor): string {
   const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
   return (responses.default_invoice_notes as string) || "";
+}
+
+/** Validate ABN format: 11 digits, optionally with spaces */
+function isValidAbnFormat(abn: string): boolean {
+  const digits = abn.replace(/\s/g, "");
+  return /^\d{11}$/.test(digits);
+}
+
+/** Format ABN as XX XXX XXX XXX */
+function formatAbn(abn: string): string {
+  const digits = abn.replace(/\s/g, "");
+  if (digits.length !== 11) return abn;
+  return `${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8, 11)}`;
 }
 
 const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabProps) => {
@@ -109,6 +120,11 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
   const hasBankTransfer = !!(contractor.bank_bsb && contractor.bank_account_number);
   const hasAnyPaymentMethod = hasStripe || hasBankTransfer;
   const bankAccountName = (responses.bank_account_name as string) || contractor.business_name || "";
+
+  // ABN checks
+  const contractorAbn = contractor.abn || "";
+  const hasAbn = !!contractorAbn.trim();
+  const abnFormatValid = hasAbn && isValidAbnFormat(contractorAbn);
 
   // Email edit dialog state
   const [emailEditOpen, setEmailEditOpen] = useState(false);
@@ -146,7 +162,6 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
         client_email: clientMap.get(inv.client_id)?.email || undefined,
         display_status: computeDisplayStatus(inv),
       }));
-      // Sort: overdue first, then draft/sent/unpaid, then paid
       const statusOrder: Record<string, number> = { overdue: 0, unpaid: 1, sent: 2, draft: 3, paid: 4 };
       enriched.sort((a, b) => (statusOrder[a.display_status || "draft"] ?? 3) - (statusOrder[b.display_status || "draft"] ?? 3));
       setInvoices(enriched);
@@ -164,9 +179,12 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
 
   const selectedClient = form.client_id ? clientMap.get(form.client_id) : null;
 
+  // GST-inclusive calculation: prices entered are GST-inclusive
+  // GST = subtotal / 11 (Australian method)
   const calcSubtotal = () => lineItems.reduce((sum, li) => sum + li.quantity * li.unit_price, 0);
-  const calcGst = () => gstRegistered ? calcSubtotal() * 0.1 : 0;
-  const calcTotal = () => calcSubtotal() + calcGst();
+  const calcGst = () => gstRegistered ? Math.round(calcSubtotal() / 11 * 100) / 100 : 0;
+  const calcTotal = () => calcSubtotal(); // Total = subtotal (GST-inclusive), GST is a component
+  const calcSubtotalExGst = () => gstRegistered ? calcSubtotal() - calcGst() : calcSubtotal();
 
   const getDefaultDueDate = (): string => {
     const days = getDefaultDueDays(contractor);
@@ -192,7 +210,6 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
 
   const openEditDialog = (invoice: Invoice) => {
     setEditingInvoice(invoice);
-    const defaultNotes = getDefaultInvoiceNotes(contractor);
     setForm({
       client_id: invoice.client_id,
       invoice_number: invoice.invoice_number || "",
@@ -211,8 +228,9 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     setIsSaving(true);
     const validItems = lineItems.filter((li) => li.description.trim());
     const subtotal = validItems.reduce((sum, li) => sum + li.quantity * li.unit_price, 0);
-    const gstAmount = gstRegistered ? subtotal * 0.1 : 0;
-    const total = subtotal + gstAmount;
+    // GST-inclusive: GST = subtotal / 11
+    const gstAmount = gstRegistered ? Math.round(subtotal / 11 * 100) / 100 : 0;
+    const total = subtotal; // Total = GST-inclusive subtotal
 
     const payload = {
       contractor_id: contractorId,
@@ -249,7 +267,6 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     try {
       const { error } = await supabase.functions.invoke("send-invoice", { body: { invoiceId } });
       if (error) throw error;
-      // Auto-update status to "sent" on success
       await supabase.from("invoices").update({ status: "sent" }).eq("id", invoiceId).in("status", ["draft", "unpaid"]);
       toast.success(`Invoice sent to ${clientEmail}`);
       fetchData();
@@ -280,18 +297,26 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
 
   const handleDownloadPdf = async (inv: EnrichedInvoice) => {
     const items = Array.isArray(inv.line_items) ? (inv.line_items as unknown as LineItem[]) : [];
+    const client = clientMap.get(inv.client_id);
+    const subtotal = Number(inv.subtotal);
+    const gstAmount = Number(inv.gst_amount);
+    const total = Number(inv.total);
+
     await generateInvoicePdf({
       invoiceNumber: inv.invoice_number || "Invoice",
       createdAt: format(new Date(inv.created_at), "dd MMM yyyy"),
       dueDate: inv.due_date ? format(new Date(inv.due_date), "dd MMM yyyy") : null,
       clientName: inv.client_name || "Client",
+      clientAbn: (client as any)?.client_abn || null,
+      clientIsBusinessClient: (client as any)?.business_client || false,
       contractorBusinessName: contractorInfo.business_name || "Business",
+      contractorAbn: contractorAbn || null,
       contractorPhone: contractorInfo.phone,
       contractorLogoUrl: contractorInfo.business_logo_url,
       lineItems: items,
-      subtotal: Number(inv.subtotal),
-      gstAmount: Number(inv.gst_amount),
-      total: Number(inv.total),
+      subtotal,
+      gstAmount,
+      total,
       gstRegistered,
       notes: inv.notes,
       paymentDetails: getPaymentDetails(),
@@ -302,15 +327,18 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     const client = selectedClient;
     const validItems = lineItems.filter((li) => li.description.trim());
     const subtotal = validItems.reduce((sum, li) => sum + li.quantity * li.unit_price, 0);
-    const gstAmount = gstRegistered ? subtotal * 0.1 : 0;
-    const total = subtotal + gstAmount;
+    const gstAmount = gstRegistered ? Math.round(subtotal / 11 * 100) / 100 : 0;
+    const total = subtotal;
 
     await generateInvoicePdf({
       invoiceNumber: form.invoice_number || "Invoice",
       createdAt: editingInvoice ? format(new Date(editingInvoice.created_at), "dd MMM yyyy") : format(new Date(), "dd MMM yyyy"),
       dueDate: form.due_date ? format(new Date(form.due_date), "dd MMM yyyy") : null,
       clientName: client?.name || "Client",
+      clientAbn: (client as any)?.client_abn || null,
+      clientIsBusinessClient: (client as any)?.business_client || false,
       contractorBusinessName: contractorInfo.business_name || "Business",
+      contractorAbn: contractorAbn || null,
       contractorPhone: contractorInfo.phone,
       contractorLogoUrl: contractorInfo.business_logo_url,
       lineItems: validItems,
@@ -342,6 +370,10 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
   };
 
   const defaultDueDays = getDefaultDueDays(contractor);
+
+  // Check for client ABN warning on $1000+ invoices for business clients
+  const currentTotal = calcTotal();
+  const needsClientAbn = gstRegistered && currentTotal >= 1000 && selectedClient && (selectedClient as any).business_client && !(selectedClient as any).client_abn;
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
@@ -431,7 +463,14 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
                     <TableCell className={`hidden md:table-cell ${isOverdue ? "text-destructive font-medium" : "text-muted-foreground"}`}>
                       {inv.due_date ? format(new Date(inv.due_date), "dd MMM yyyy") : "—"}
                     </TableCell>
-                    <TableCell>${Number(inv.total).toFixed(2)}</TableCell>
+                    <TableCell>
+                      <div>
+                        <span>${Number(inv.total).toFixed(2)}</span>
+                        {gstRegistered && (
+                          <span className="block text-[10px] text-muted-foreground">inc. GST</span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={STATUS_BADGES[displayStatus] || ""}>
                         {STATUS_LABELS[displayStatus] || displayStatus}
@@ -518,6 +557,23 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* ABN warning */}
+            {!hasAbn && (
+              <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  Your ABN is missing — it is required on all Australian invoices.{" "}
+                  <span className="font-medium">Add your ABN in Settings →</span>
+                </span>
+              </div>
+            )}
+            {hasAbn && !abnFormatValid && (
+              <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>Your ABN format looks incorrect — please check it in Settings.</span>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Client *</Label>
@@ -527,7 +583,6 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
                     {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                {/* Email status indicator */}
                 {selectedClient && (
                   selectedClient.email ? (
                     <div className="flex items-center gap-1.5 text-xs text-primary">
@@ -586,7 +641,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
             </div>
 
             <div className="space-y-2">
-              <Label>Line Items</Label>
+              <Label>Line Items {gstRegistered && <span className="text-xs text-muted-foreground font-normal">(prices inc. GST)</span>}</Label>
               <div className="space-y-2">
                 {lineItems.map((li, i) => (
                   <div key={i} className="flex items-center gap-2">
@@ -605,9 +660,15 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
                 <Plus className="w-3 h-3 mr-1" /> Add Line
               </Button>
               <div className="text-right space-y-1">
-                <p className="text-sm text-muted-foreground">Subtotal: ${calcSubtotal().toFixed(2)}</p>
-                {gstRegistered && <p className="text-sm text-muted-foreground">GST (10%): ${calcGst().toFixed(2)}</p>}
-                <p className="font-semibold text-foreground">Total: ${calcTotal().toFixed(2)}</p>
+                {gstRegistered ? (
+                  <>
+                    <p className="text-sm text-muted-foreground">Subtotal (ex. GST): ${calcSubtotalExGst().toFixed(2)}</p>
+                    <p className="text-sm text-muted-foreground">GST (10%): ${calcGst().toFixed(2)}</p>
+                    <p className="font-semibold text-foreground">Total (inc. GST): ${calcTotal().toFixed(2)}</p>
+                  </>
+                ) : (
+                  <p className="font-semibold text-foreground">Total: ${calcTotal().toFixed(2)}</p>
+                )}
               </div>
             </div>
 
@@ -615,6 +676,28 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
               <Label>Notes</Label>
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Payment terms, notes..." rows={2} />
             </div>
+
+            {/* Client ABN warning for $1000+ business invoices */}
+            {needsClientAbn && (
+              <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  This invoice is $1,000 or more — client ABN is required for a compliant Tax Invoice.{" "}
+                  <button
+                    type="button"
+                    className="underline font-medium hover:text-amber-700"
+                    onClick={() => {
+                      if (selectedClient) {
+                        setDialogOpen(false);
+                        // The parent will need to handle navigation to edit client
+                      }
+                    }}
+                  >
+                    Add ABN →
+                  </button>
+                </span>
+              </div>
+            )}
 
             {/* Payment method warning in dialog */}
             {!hasAnyPaymentMethod && (
