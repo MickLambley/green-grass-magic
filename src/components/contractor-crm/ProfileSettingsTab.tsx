@@ -32,10 +32,19 @@ const TIER_LABELS: Record<string, { label: string; fee: string; color: string }>
   pro: { label: "Pro", fee: "1%", color: "bg-primary/20 text-primary border-primary/30" },
 };
 
+const PAYMENT_TERMS_OPTIONS = [
+  { value: "0", label: "Due on receipt" },
+  { value: "7", label: "7 days" },
+  { value: "14", label: "14 days" },
+  { value: "30", label: "30 days" },
+  { value: "custom", label: "Custom" },
+];
+
 const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isUpgrading, setIsUpgrading] = useState(false);
-  
+
+  const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
 
   const [form, setForm] = useState({
     business_name: contractor.business_name || "",
@@ -50,6 +59,17 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
   const [workingHours, setWorkingHours] = useState<WorkingHours>(
     (contractor.working_hours as unknown as WorkingHours) || DEFAULT_WORKING_HOURS
   );
+
+  // Invoice defaults
+  const savedTerms = responses.default_payment_terms as string | undefined;
+  const savedCustomDays = responses.default_payment_terms_custom_days as number | undefined;
+  const savedNotes = responses.default_invoice_notes as string | undefined;
+
+  const [paymentTerms, setPaymentTerms] = useState<string>(
+    savedTerms !== undefined ? savedTerms : ""
+  );
+  const [customDays, setCustomDays] = useState<number>(savedCustomDays || 14);
+  const [defaultInvoiceNotes, setDefaultInvoiceNotes] = useState(savedNotes || "");
 
   const handleSave = async () => {
     setIsSaving(true);
