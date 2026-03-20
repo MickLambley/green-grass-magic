@@ -615,6 +615,17 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
               <Label>Notes</Label>
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Payment terms, notes..." rows={2} />
             </div>
+
+            {/* Payment method warning in dialog */}
+            {!hasAnyPaymentMethod && (
+              <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  You have no payment methods set up — clients won't know how to pay this invoice.{" "}
+                  Set up bank transfer details or connect Stripe in Settings →
+                </span>
+              </div>
+            )}
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2">
             {editingInvoice && (
