@@ -282,7 +282,7 @@ serve(async (req) => {
     console.log(`Sending ${emailType} email to ${userEmail}`);
 
     const emailPayload: Record<string, unknown> = {
-      from: `${senderName} <invoices@mail.yardly.app>`,
+      from: `${senderName} <invoices@mail.lawnly.com.au>`,
       to: [userEmail],
       subject: emailContent.subject,
       html: emailContent.html,

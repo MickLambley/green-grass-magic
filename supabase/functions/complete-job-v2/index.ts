@@ -185,7 +185,7 @@ serve(async (req) => {
           const resendApiKey = Deno.env.get("RESEND_API_KEY");
           if (resendApiKey && client.email) {
             const emailPayload: Record<string, unknown> = {
-              from: `${senderName} <invoices@mail.yardly.app>`,
+              from: `${senderName} <invoices@mail.lawnly.com.au>`,
               to: [client.email],
               subject: `Payment received — ${senderName} Invoice ${invoiceNumber}`,
               html: `
