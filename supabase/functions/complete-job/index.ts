@@ -235,7 +235,7 @@ serve(async (req) => {
 
           if (customerEmail) {
             const customerPayload: Record<string, unknown> = {
-              from: `${senderName} <invoices@mail.yardly.app>`,
+              from: `${senderName} <invoices@mail.lawnly.com.au>`,
               to: [customerEmail],
               subject: `Booking confirmed with ${senderName} — ${dateShort}`,
               html: `
