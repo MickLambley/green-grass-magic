@@ -1,3 +1,3 @@
 // Global type declarations for Google Maps
-// Placed outside src/ to avoid moduleDetection: "force" treating it as a module
-/// <reference types="google.maps" />
+// @types/google.maps uses dotted package name which TS can't auto-resolve
+/// <reference path="node_modules/@types/google.maps/index.d.ts" />
