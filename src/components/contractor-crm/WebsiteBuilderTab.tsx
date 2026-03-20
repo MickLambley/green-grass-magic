@@ -360,7 +360,7 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
     }
   };
 
-  const DEFAULT_COLORS = { primary_color: "#2E8B57", secondary_color: "#EFF5EF", accent_color: "#80CC33" };
+  const DEFAULT_COLORS = { primary_color: "#2D7A3A", secondary_color: "#F0F7F1", accent_color: "#5CB85C" };
 
   const handleRestoreDefaults = async () => {
     setPrimaryColor(DEFAULT_COLORS.primary_color);
