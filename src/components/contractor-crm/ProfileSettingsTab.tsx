@@ -192,6 +192,56 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
         </CardContent>
       </Card>
 
+      {/* Invoice Defaults */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-display text-lg flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            Invoice Defaults
+          </CardTitle>
+          <CardDescription>Set default payment terms and notes for new invoices</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Default Payment Terms</Label>
+            <Select value={paymentTerms} onValueChange={setPaymentTerms}>
+              <SelectTrigger>
+                <SelectValue placeholder="No default set" />
+              </SelectTrigger>
+              <SelectContent>
+                {PAYMENT_TERMS_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {paymentTerms === "custom" && (
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-sm text-muted-foreground">Due</span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={customDays}
+                  onChange={(e) => setCustomDays(parseInt(e.target.value) || 14)}
+                  className="w-20"
+                />
+                <span className="text-sm text-muted-foreground">days after invoice date</span>
+              </div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>Default Invoice Notes</Label>
+            <Textarea
+              value={defaultInvoiceNotes}
+              onChange={(e) => setDefaultInvoiceNotes(e.target.value)}
+              placeholder="e.g. Please pay via bank transfer to BSB 000-000, Account 12345678. Thank you for your business."
+              rows={3}
+            />
+            <p className="text-xs text-muted-foreground">This will pre-populate the Notes field on every new invoice.</p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Working Hours */}
       <Card>
         <CardHeader>
