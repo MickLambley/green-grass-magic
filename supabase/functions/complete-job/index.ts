@@ -278,7 +278,7 @@ serve(async (req) => {
                   Authorization: `Bearer ${resendApiKey}`,
                 },
                 body: JSON.stringify({
-                  from: `${senderName} <invoices@mail.yardly.app>`,
+                  from: `${senderName} <invoices@mail.lawnly.com.au>`,
                   to: [contractorEmail],
                   subject: `Job Marked Complete — ${dateShort}`,
                   html: `
