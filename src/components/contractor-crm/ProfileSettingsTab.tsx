@@ -130,10 +130,10 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
     if (error) {
       toast.error("Failed to save settings");
     } else if (data) {
-      toast.success("Settings saved");
       onUpdate(data);
     }
     setIsSaving(false);
+    savingRef.current = false;
   };
 
   const handleSelectTier = async (tier: string) => {
