@@ -47,7 +47,7 @@ interface ContractorInfo {
   business_logo_url: string | null;
 }
 
-type EnrichedInvoice = Invoice & { client_name?: string; client_email?: string; display_status?: string };
+type EnrichedInvoice = Invoice & { client_name?: string; client_email?: string; display_status?: string; stripe_payment_url?: string };
 
 const STATUS_BADGES: Record<string, string> = {
   draft: "bg-muted text-muted-foreground border-border",
