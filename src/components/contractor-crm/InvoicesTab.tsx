@@ -263,7 +263,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
       // If total changed, clear stale payment link so a new one is generated
       const totalChanged = Number(editingInvoice.total) !== total;
       if (totalChanged) {
-        payload.stripe_payment_url = null as any;
+        (payload as any).stripe_payment_url = null;
       }
       const { error } = await supabase.from("invoices").update(payload).eq("id", editingInvoice.id);
       if (error) { toast.error("Failed to update invoice"); }
