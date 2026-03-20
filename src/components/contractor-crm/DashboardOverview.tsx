@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Users, Calendar, FileText, DollarSign, Loader2, Clock, AlertCircle, MapPin, CheckCircle2 } from "lucide-react";
-import { format, isToday, isTomorrow, parseISO } from "date-fns";
+import { format, isToday, isTomorrow, parseISO, isBefore, startOfDay } from "date-fns";
 import type { Tables } from "@/integrations/supabase/types";
 import JobCompletionDialog from "./JobCompletionDialog";
 
