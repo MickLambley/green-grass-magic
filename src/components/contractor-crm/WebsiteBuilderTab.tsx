@@ -453,6 +453,15 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
               </Button>
             )}
           </div>
+
+          {/* Show address toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Show business address on website</Label>
+              <p className="text-xs text-muted-foreground">Display your address in the About section</p>
+            </div>
+            <Switch checked={showAddress} onCheckedChange={handleToggleShowAddress} />
+          </div>
         </CardContent>
       </Card>
 

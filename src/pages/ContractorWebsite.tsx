@@ -198,7 +198,7 @@ const ContractorWebsite = () => {
           <div className="max-w-2xl mx-auto text-center">
             <h2 className="font-display text-3xl font-bold text-foreground mb-4">{copy.about_title}</h2>
             <p className="text-muted-foreground text-lg leading-relaxed">{copy.about_text}</p>
-            {contractor.business_address && (
+            {contractor.business_address && contractor.show_address && (
               <div className="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <MapPin className="w-4 h-4" /> {contractor.business_address}
               </div>
