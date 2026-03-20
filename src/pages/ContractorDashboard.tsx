@@ -165,9 +165,14 @@ const ContractorDashboard = () => {
     navigate("/");
   };
 
-  const switchTab = (key: string) => {
+  const switchTab = (key: string, scrollTo?: string) => {
     setActiveTab(key);
     setSidebarOpen(false);
+    if (scrollTo) {
+      setTimeout(() => {
+        document.getElementById(scrollTo)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
   };
 
   if (isLoading) {
