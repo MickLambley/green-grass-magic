@@ -439,8 +439,19 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
 
   return (
     <div className="space-y-4">
+      {/* GST status not confirmed banner */}
+      {!gstStatusConfirmed && (
+        <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>
+            You must confirm your GST status before creating invoices.{" "}
+            <span className="font-medium">Go to Settings → Business Details</span> and select whether you are registered for GST.
+          </span>
+        </div>
+      )}
+
       {/* Payment methods warning banner */}
-      {!hasAnyPaymentMethod && (
+      {!hasAnyPaymentMethod && gstStatusConfirmed && (
         <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>
