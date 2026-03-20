@@ -163,8 +163,8 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
         client_email: clientMap.get(inv.client_id)?.email || undefined,
         display_status: computeDisplayStatus(inv),
       }));
-      const statusOrder: Record<string, number> = { overdue: 0, unpaid: 1, sent: 2, draft: 3, paid: 4 };
-      enriched.sort((a, b) => (statusOrder[a.display_status || "draft"] ?? 3) - (statusOrder[b.display_status || "draft"] ?? 3));
+      const statusOrder: Record<string, number> = { overdue: 0, unpaid: 1, draft: 2, paid: 3 };
+      enriched.sort((a, b) => (statusOrder[a.display_status || "draft"] ?? 2) - (statusOrder[b.display_status || "draft"] ?? 2));
       setInvoices(enriched);
 
       if (nextJobRes.data && nextJobRes.data.length > 0) {
