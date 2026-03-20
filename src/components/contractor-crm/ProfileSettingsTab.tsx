@@ -84,6 +84,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
       default_invoice_notes: defaultInvoiceNotes.trim() || null,
       bank_account_name: form.bank_account_name.trim() || null,
       settings_saved: true,
+      gst_status_confirmed: true,
     };
 
     const { data, error } = await supabase
