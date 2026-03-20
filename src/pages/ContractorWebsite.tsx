@@ -17,6 +17,8 @@ interface WebsiteCopy {
   cta_text: string;
 }
 
+type PricingMode = "fixed_prices" | "quote_required" | "prices_and_quote";
+
 interface ContractorSite {
   id: string;
   business_name: string | null;
@@ -25,6 +27,7 @@ interface ContractorSite {
   business_logo_url: string | null;
   subdomain: string | null;
   website_copy: WebsiteCopy | null;
+  pricing_mode: PricingMode | null;
 }
 
 const DEFAULT_COPY: WebsiteCopy = {
