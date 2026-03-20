@@ -55,6 +55,9 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
   const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
   const currentPricingMode = (responses.website_pricing_mode as PricingMode) || null;
   const pricingConfig = (responses.pricing as PricingConfig) || null;
+  const [showAddress, setShowAddress] = useState<boolean>(
+    (responses.website_show_address as boolean) ?? true
+  );
 
   const siteUrl = subdomain ? `${window.location.origin}/site/${subdomain}` : "";
 
