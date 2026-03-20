@@ -287,6 +287,8 @@ export type Database = {
       clients: {
         Row: {
           address: Json | null
+          business_client: boolean
+          client_abn: string | null
           contractor_id: string
           created_at: string
           email: string | null
@@ -299,6 +301,8 @@ export type Database = {
         }
         Insert: {
           address?: Json | null
+          business_client?: boolean
+          client_abn?: string | null
           contractor_id: string
           created_at?: string
           email?: string | null
@@ -311,6 +315,8 @@ export type Database = {
         }
         Update: {
           address?: Json | null
+          business_client?: boolean
+          client_abn?: string | null
           contractor_id?: string
           created_at?: string
           email?: string | null
