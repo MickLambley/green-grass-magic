@@ -349,6 +349,20 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
 
   return (
     <div className="space-y-4">
+      {/* Payment methods warning banner */}
+      {!hasAnyPaymentMethod && (
+        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>
+            No payment methods configured — your clients cannot pay invoices online.{" "}
+            Add bank details or connect Stripe in{" "}
+            <button type="button" className="underline font-medium" onClick={() => { /* navigate handled by parent */ }}>
+              Settings →
+            </button>
+          </span>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h3 className="font-display font-semibold text-lg text-foreground">
