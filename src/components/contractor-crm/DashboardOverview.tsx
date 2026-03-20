@@ -86,10 +86,10 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
     const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
 
-    const [clientsRes, scheduledRes, unpaidRes, paidRes, todayRes, upcomingRes, websiteRes] = await Promise.all([
+    const [clientsRes, scheduledRes, unpaidRes, paidRes, todayRes, upcomingRes, websiteRes, overdueRes] = await Promise.all([
       supabase.from("clients").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId),
       supabase.from("jobs").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId).eq("status", "scheduled"),
-      supabase.from("invoices").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId).eq("status", "unpaid"),
+      supabase.from("invoices").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId).neq("status", "paid"),
       supabase.from("invoices").select("total").eq("contractor_id", contractorId).eq("status", "paid"),
       // Today's jobs
       supabase.from("jobs").select("*").eq("contractor_id", contractorId).eq("scheduled_date", today).in("status", ["scheduled", "in_progress"]).order("scheduled_time"),
