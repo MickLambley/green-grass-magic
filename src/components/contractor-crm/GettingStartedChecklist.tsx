@@ -228,7 +228,7 @@ function ChecklistSection({
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="font-display text-lg flex items-center gap-2">
-            {locked ? <Lock className="w-4 h-4 text-muted-foreground" /> : <Sparkles className="w-5 h-5 text-primary" />}
+            {locked ? <Lock className="w-4 h-4 text-muted-foreground" /> : collapsed ? <CheckCircle2 className="w-5 h-5 text-primary" /> : <Sparkles className="w-5 h-5 text-primary" />}
             {title}
           </CardTitle>
           <div className="flex items-center gap-2">
