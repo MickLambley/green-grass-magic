@@ -95,6 +95,8 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
   }, [form, workingHours, paymentTerms, customDays, defaultInvoiceNotes]);
 
   const handleSave = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setIsSaving(true);
 
     // Merge invoice defaults into questionnaire_responses
