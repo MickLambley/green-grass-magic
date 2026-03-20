@@ -258,24 +258,59 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
         </CardContent>
       </Card>
 
-      {/* Banking */}
+      {/* Payment Methods */}
       <Card>
         <CardHeader>
-          <CardTitle className="font-display text-lg">Banking Details</CardTitle>
-          <CardDescription>For payouts from website bookings</CardDescription>
+          <CardTitle className="font-display text-lg flex items-center gap-2">
+            <CreditCard className="w-5 h-5" />
+            Payment Methods
+          </CardTitle>
+          <CardDescription>How your clients can pay you. These details appear on every invoice you send.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>BSB</Label>
-              <Input value={form.bank_bsb} onChange={(e) => setForm({ ...form, bank_bsb: e.target.value })} placeholder="000-000" />
+        <CardContent className="space-y-6">
+          {/* A) Bank Transfer Details */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold text-foreground">Bank Transfer Details</h4>
+            <p className="text-xs text-muted-foreground">These details will appear on invoices so clients can pay by direct deposit.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>BSB</Label>
+                <Input value={form.bank_bsb} onChange={(e) => setForm({ ...form, bank_bsb: e.target.value })} placeholder="000-000" />
+              </div>
+              <div className="space-y-2">
+                <Label>Account Number</Label>
+                <Input value={form.bank_account_number} onChange={(e) => setForm({ ...form, bank_account_number: e.target.value })} placeholder="12345678" />
+              </div>
             </div>
             <div className="space-y-2">
-              <Label>Account Number</Label>
-              <Input value={form.bank_account_number} onChange={(e) => setForm({ ...form, bank_account_number: e.target.value })} placeholder="12345678" />
+              <Label>Account Name</Label>
+              <Input value={form.bank_account_name} onChange={(e) => setForm({ ...form, bank_account_name: e.target.value })} placeholder="e.g. Baker's Lawn Care" />
             </div>
           </div>
 
+          <Separator />
+
+          {/* B) Stripe (Card Payments) */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold text-foreground">Stripe (Card Payments)</h4>
+            <p className="text-xs text-muted-foreground">
+              When connected, clients can pay invoices instantly by credit or debit card. Yardly charges a platform fee on each card payment per your subscription plan.
+            </p>
+            <div className="flex items-center gap-2">
+              {contractor.stripe_account_id && contractor.stripe_onboarding_complete ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-primary">Connected</span>
+                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">Connected</Badge>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Not connected</span>
+                </>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -285,7 +320,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
         Save Settings
       </Button>
 
-      {/* Stripe Connect */}
+      {/* Stripe Connect (full card with connect/dashboard actions) */}
       <StripeConnectSettingsCard contractor={contractor} />
 
       {/* Service Area */}
