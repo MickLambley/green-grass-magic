@@ -6,6 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const YARDLY_FOOTER = `<p style="color: #999; font-size: 11px; text-align: center; margin-top: 32px; border-top: 1px solid #eee; padding-top: 12px;">Sent via Yardly · yardly.app</p>`;
+
 const logStep = (step: string, details?: Record<string, unknown>) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[COMPLETE-JOB] ${step}${detailsStr}`);
@@ -32,12 +34,13 @@ serve(async (req) => {
     if (userError || !userData.user) throw new Error("User not authenticated");
 
     const userId = userData.user.id;
+    const contractorLoginEmail = userData.user.email;
     logStep("User authenticated", { userId });
 
-    // Verify contractor
+    // Verify contractor and get business info
     const { data: contractor } = await supabase
       .from("contractors")
-      .select("id, user_id")
+      .select("id, user_id, business_name")
       .eq("user_id", userId)
       .single();
 
@@ -85,7 +88,6 @@ serve(async (req) => {
       payout_status: hasIssues ? "frozen" : "pending",
     };
 
-    // Store issue data if present
     if (hasIssues) {
       updateData.contractor_issues = issues;
       updateData.contractor_issue_notes = issueNotes ? JSON.stringify(issueNotes) : null;
@@ -115,8 +117,13 @@ serve(async (req) => {
     const customerEmail = customerAuthResult.data?.user?.email;
     const contractorEmail = userData.user.email;
 
+    const senderName = contractor.business_name || contractorName || "Yardly";
+
     const dateFormatted = new Date(booking.scheduled_date).toLocaleDateString("en-AU", {
       weekday: "long", year: "numeric", month: "long", day: "numeric",
+    });
+    const dateShort = new Date(booking.scheduled_date).toLocaleDateString("en-AU", {
+      weekday: "short", day: "numeric", month: "short", year: "numeric",
     });
 
     if (hasIssues) {
@@ -175,7 +182,7 @@ serve(async (req) => {
               Authorization: `Bearer ${resendApiKey}`,
             },
             body: JSON.stringify({
-              from: "Yardly <onboarding@resend.dev>",
+              from: "Yardly <notifications@mail.yardly.app>",
               to: ["admin@yardly.com.au"],
               subject: `⚠️ Job #${bookingId.slice(0, 8)} Completed with Issues - Review Required`,
               html: `
@@ -227,6 +234,29 @@ serve(async (req) => {
           const emailPromises = [];
 
           if (customerEmail) {
+            const customerPayload: Record<string, unknown> = {
+              from: `${senderName} <invoices@mail.yardly.app>`,
+              to: [customerEmail],
+              subject: `Booking confirmed with ${senderName} — ${dateShort}`,
+              html: `
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h1 style="color: #16a34a;">Your Lawn Has Been Mowed! 🌿</h1>
+                  <p>Hi ${customerName},</p>
+                  <p>${contractorName} has completed your lawn mowing job. Before and after photos have been uploaded for your review.</p>
+                  <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 5px 0;"><strong>Address:</strong> ${address?.street_address}, ${address?.city}, ${address?.state}</p>
+                    <p style="margin: 5px 0;"><strong>Date:</strong> ${dateFormatted}</p>
+                    <p style="margin: 5px 0;"><strong>Amount:</strong> $${Number(booking.total_price).toFixed(2)}</p>
+                  </div>
+                  <p>Please review the photos and approve the payment. If you don't respond, payment will be automatically released in 48 hours.</p>
+                  ${YARDLY_FOOTER}
+                </div>
+              `,
+            };
+            if (contractorLoginEmail) {
+              customerPayload.reply_to = contractorLoginEmail;
+            }
+
             emailPromises.push(
               fetch("https://api.resend.com/emails", {
                 method: "POST",
@@ -234,25 +264,7 @@ serve(async (req) => {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${resendApiKey}`,
                 },
-                body: JSON.stringify({
-                  from: "Yardly <onboarding@resend.dev>",
-                  to: [customerEmail],
-                  subject: "Your Lawn Has Been Mowed! 🌿 Review Photos",
-                  html: `
-                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
-                      <h1 style="color: #16a34a;">Your Lawn Has Been Mowed! 🌿</h1>
-                      <p>Hi ${customerName},</p>
-                      <p>${contractorName} has completed your lawn mowing job. Before and after photos have been uploaded for your review.</p>
-                      <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                        <p style="margin: 5px 0;"><strong>Address:</strong> ${address?.street_address}, ${address?.city}, ${address?.state}</p>
-                        <p style="margin: 5px 0;"><strong>Date:</strong> ${dateFormatted}</p>
-                        <p style="margin: 5px 0;"><strong>Amount:</strong> $${Number(booking.total_price).toFixed(2)}</p>
-                      </div>
-                      <p>Please review the photos and approve the payment. If you don't respond, payment will be automatically released in 48 hours.</p>
-                      <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
-                    </div>
-                  `,
-                }),
+                body: JSON.stringify(customerPayload),
               })
             );
           }
@@ -266,9 +278,9 @@ serve(async (req) => {
                   Authorization: `Bearer ${resendApiKey}`,
                 },
                 body: JSON.stringify({
-                  from: "Yardly <onboarding@resend.dev>",
+                  from: `${senderName} <invoices@mail.yardly.app>`,
                   to: [contractorEmail],
-                  subject: "Job Marked Complete ✓",
+                  subject: `Job Marked Complete — ${dateShort}`,
                   html: `
                     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
                       <h1 style="color: #16a34a;">Job Marked Complete ✓</h1>
@@ -280,7 +292,7 @@ serve(async (req) => {
                         <p style="margin: 5px 0;"><strong>Amount:</strong> $${Number(booking.total_price).toFixed(2)}</p>
                       </div>
                       <p>Payment will be released after customer approval or automatically in 48 hours.</p>
-                      <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
+                      ${YARDLY_FOOTER}
                     </div>
                   `,
                 }),
@@ -303,7 +315,6 @@ serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
-    // Only expose safe validation messages, not internal details
     const safeMessages = [
       "No authorization header provided", "User not authenticated", "Contractor profile not found",
       "Missing bookingId", "Booking not found", "You are not assigned to this booking",

@@ -7,6 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const YARDLY_FOOTER = `<p style="color: #999; font-size: 11px; text-align: center; margin-top: 32px; border-top: 1px solid #eee; padding-top: 12px;">Sent via Yardly · yardly.app</p>`;
+
 const log = (step: string, details?: Record<string, unknown>) => {
   console.log(`[COMPLETE-JOB-V2] ${step}${details ? ` - ${JSON.stringify(details)}` : ""}`);
 };
@@ -30,6 +32,7 @@ serve(async (req) => {
     if (userError || !userData.user) throw new Error("Not authenticated");
 
     const userId = userData.user.id;
+    const contractorLoginEmail = userData.user.email;
     log("Authenticated", { userId });
 
     // Verify contractor
@@ -40,8 +43,16 @@ serve(async (req) => {
       .single();
     if (!contractor) throw new Error("Contractor not found");
 
+    // Get contractor profile name as fallback
+    const { data: contractorProfile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("user_id", userId)
+      .single();
+
+    const senderName = contractor.business_name || contractorProfile?.full_name || "Yardly";
+
     const { jobId, action } = await req.json();
-    // action: "complete" (initial), "generate_invoice", "send_payment_link", "mark_paid"
     if (!jobId) throw new Error("Missing jobId");
 
     // Fetch job
@@ -140,7 +151,7 @@ serve(async (req) => {
           .single();
 
         // Record transaction fee
-        const stripeFee = Math.round(amountCents * 0.0175 + 30) / 100; // ~1.75% + 30c
+        const stripeFee = Math.round(amountCents * 0.0175 + 30) / 100;
         await supabase.from("transaction_fees").insert({
           contractor_id: contractor.id,
           job_id: jobId,
@@ -173,32 +184,37 @@ serve(async (req) => {
         try {
           const resendApiKey = Deno.env.get("RESEND_API_KEY");
           if (resendApiKey && client.email) {
+            const emailPayload: Record<string, unknown> = {
+              from: `${senderName} <invoices@mail.yardly.app>`,
+              to: [client.email],
+              subject: `Payment received — ${senderName} Invoice ${invoiceNumber}`,
+              html: `
+                <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h1 style="color: #16a34a;">✅ Payment Receipt</h1>
+                  ${contractor.gst_registered ? `<p style="font-size: 13px; color: #666;">Tax Invoice</p>` : ""}
+                  <p>Hi ${client.name},</p>
+                  <p>Your ${job.title} has been completed by ${contractor.business_name || "your contractor"}.</p>
+                  <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p><strong>Invoice:</strong> ${invoiceNumber}</p>
+                    ${contractor.gst_registered && contractor.abn ? `<p><strong>ABN:</strong> ${contractor.abn}</p>` : ""}
+                    <p><strong>Service:</strong> ${job.title}</p>
+                    <p><strong>Subtotal:</strong> $${subtotal.toFixed(2)}</p>
+                    ${gstAmount > 0 ? `<p><strong>GST (10%):</strong> $${gstAmount.toFixed(2)}</p>` : ""}
+                    <p style="font-size: 18px; margin-top: 8px;"><strong>Total Charged:</strong> $${total.toFixed(2)}</p>
+                  </div>
+                  ${contractor.gst_registered ? `<p style="color: #999; font-size: 12px;">All prices in AUD. GST included.</p>` : ""}
+                  ${YARDLY_FOOTER}
+                </div>
+              `,
+            };
+            if (contractorLoginEmail) {
+              emailPayload.reply_to = contractorLoginEmail;
+            }
+
             await fetch("https://api.resend.com/emails", {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
-              body: JSON.stringify({
-                from: "Yardly <onboarding@resend.dev>",
-                to: [client.email],
-                subject: `Receipt: ${job.title} - $${total.toFixed(2)}`,
-                html: `
-                  <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h1 style="color: #16a34a;">✅ Payment Receipt</h1>
-                    ${contractor.gst_registered ? `<p style="font-size: 13px; color: #666;">Tax Invoice</p>` : ""}
-                    <p>Hi ${client.name},</p>
-                    <p>Your ${job.title} has been completed by ${contractor.business_name || "your contractor"}.</p>
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                      <p><strong>Invoice:</strong> ${invoiceNumber}</p>
-                      ${contractor.gst_registered && contractor.abn ? `<p><strong>ABN:</strong> ${contractor.abn}</p>` : ""}
-                      <p><strong>Service:</strong> ${job.title}</p>
-                      <p><strong>Subtotal:</strong> $${subtotal.toFixed(2)}</p>
-                      ${gstAmount > 0 ? `<p><strong>GST (10%):</strong> $${gstAmount.toFixed(2)}</p>` : ""}
-                      <p style="font-size: 18px; margin-top: 8px;"><strong>Total Charged:</strong> $${total.toFixed(2)}</p>
-                    </div>
-                    ${contractor.gst_registered ? `<p style="color: #999; font-size: 12px;">All prices in AUD. GST included.</p>` : ""}
-                    <p style="color: #666; font-size: 14px;">Powered by Yardly</p>
-                  </div>
-                `,
-              }),
+              body: JSON.stringify(emailPayload),
             });
             log("Receipt email sent");
           }
@@ -280,7 +296,6 @@ serve(async (req) => {
       const gstAmount = contractor.gst_registered ? amount * 0.1 : 0;
       const totalCents = Math.round((amount + gstAmount) * 100);
 
-      // Create a Stripe Payment Link via price + payment link
       const price = await stripe.prices.create({
         unit_amount: totalCents,
         currency: "aud",
@@ -322,7 +337,6 @@ serve(async (req) => {
         payment_status: "paid",
       }).eq("id", jobId);
 
-      // Also update linked invoice
       await supabase.from("invoices").update({
         status: "paid",
         paid_at: new Date().toISOString(),

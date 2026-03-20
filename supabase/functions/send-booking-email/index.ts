@@ -9,12 +9,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const YARDLY_FOOTER = `<p style="color: #999; font-size: 11px; text-align: center; margin-top: 32px; border-top: 1px solid #eee; padding-top: 12px;">Sent via Yardly · yardly.app</p>`;
+
 interface BookingEmailRequest {
   bookingId: string;
   emailType: "created" | "confirmed" | "updated" | "cancelled";
 }
 
-// Helper function to validate JWT and get user claims
 async function validateAuth(req: Request): Promise<{ userId: string; error?: string }> {
   const authHeader = req.headers.get("Authorization");
   
@@ -44,7 +45,8 @@ const getEmailContent = (
   emailType: string,
   booking: any,
   address: any,
-  profile: any
+  profile: any,
+  senderName: string
 ) => {
   const customerName = profile?.full_name || "Valued Customer";
   const dateFormatted = new Date(booking.scheduled_date).toLocaleDateString("en-AU", {
@@ -52,6 +54,12 @@ const getEmailContent = (
     year: "numeric",
     month: "long",
     day: "numeric",
+  });
+  const dateShort = new Date(booking.scheduled_date).toLocaleDateString("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
   });
 
   const baseInfo = `
@@ -66,7 +74,7 @@ const getEmailContent = (
   switch (emailType) {
     case "created":
       return {
-        subject: "Your Lawn Mowing Booking Request is Pending",
+        subject: `Booking request received — ${senderName}`,
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
             <h1 style="color: #16a34a;">Booking Request Received! 🌿</h1>
@@ -76,14 +84,14 @@ const getEmailContent = (
             <p><strong>Your card has been saved but you will not be charged until a contractor accepts your job.</strong></p>
             <p>You will be charged <strong>$${booking.total_price?.toFixed(2) || "0.00"}</strong> when a contractor accepts.</p>
             <p>You'll receive another email once a contractor is assigned.</p>
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
+            ${YARDLY_FOOTER}
           </div>
         `,
       };
 
     case "confirmed":
       return {
-        subject: "Your Lawn Mowing Booking is Confirmed! ✓",
+        subject: `Booking confirmed with ${senderName} — ${dateShort}`,
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
             <h1 style="color: #16a34a;">Booking Confirmed! ✅</h1>
@@ -91,14 +99,14 @@ const getEmailContent = (
             <p>Great news! Your payment has been received and your lawn mowing booking is now confirmed.</p>
             ${baseInfo}
             <p>A contractor will arrive during your selected time slot. Please ensure access to your lawn on the scheduled date.</p>
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
+            ${YARDLY_FOOTER}
           </div>
         `,
       };
 
     case "updated":
       return {
-        subject: "Your Lawn Mowing Booking Has Been Updated",
+        subject: `Booking updated — ${senderName} — ${dateShort}`,
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
             <h1 style="color: #2563eb;">Booking Updated 📝</h1>
@@ -107,14 +115,14 @@ const getEmailContent = (
             ${baseInfo}
             <p><strong>Status:</strong> ${booking.status}</p>
             <p>If you have any questions, please don't hesitate to contact us.</p>
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
+            ${YARDLY_FOOTER}
           </div>
         `,
       };
 
     case "cancelled":
       return {
-        subject: "Your Lawn Mowing Booking Has Been Cancelled",
+        subject: `Booking cancelled — ${senderName} — ${dateShort}`,
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
             <h1 style="color: #dc2626;">Booking Cancelled ❌</h1>
@@ -122,21 +130,21 @@ const getEmailContent = (
             <p>Your lawn mowing booking has been cancelled.</p>
             ${baseInfo}
             <p>If this was a mistake or you'd like to rebook, please visit our website.</p>
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
+            ${YARDLY_FOOTER}
           </div>
         `,
       };
 
     default:
       return {
-        subject: "Lawn Mowing Booking Notification",
+        subject: `Booking notification — ${senderName}`,
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
             <h1 style="color: #16a34a;">Booking Notification</h1>
             <p>Hi ${customerName},</p>
             <p>Here's an update on your lawn mowing booking:</p>
             ${baseInfo}
-            <p style="color: #666; margin-top: 30px;">Best regards,<br>The Yardly Team</p>
+            ${YARDLY_FOOTER}
           </div>
         `,
       };
@@ -144,13 +152,11 @@ const getEmailContent = (
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Validate authentication
     const { userId, error: authError } = await validateAuth(req);
     if (authError) {
       console.error("Authentication failed:", authError);
@@ -166,7 +172,6 @@ serve(async (req) => {
 
     console.log(`Processing ${emailType} email for booking ${bookingId}`);
 
-    // Create Supabase client with service role
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -186,22 +191,19 @@ serve(async (req) => {
       );
     }
 
-    // Authorization check: verify user owns this booking, is assigned contractor, or is admin
+    // Authorization check
     const isOwner = booking.user_id === userId;
-
-    // Check if user is the assigned contractor
     let isContractor = false;
     if (booking.contractor_id) {
-      const { data: contractor } = await supabase
+      const { data: contractorCheck } = await supabase
         .from("contractors")
         .select("id")
         .eq("user_id", userId)
         .eq("id", booking.contractor_id)
         .single();
-      isContractor = !!contractor;
+      isContractor = !!contractorCheck;
     }
 
-    // Check if user is an admin
     const { data: adminRole } = await supabase
       .from("user_roles")
       .select("role")
@@ -248,16 +250,48 @@ serve(async (req) => {
       throw new Error("User email not found");
     }
 
-    const emailContent = getEmailContent(emailType, booking, address, profile);
+    // Fetch contractor info for branding (if contractor assigned)
+    let senderName = "Yardly";
+    let contractorReplyTo: string | undefined;
+
+    if (booking.contractor_id) {
+      const { data: contractorData } = await supabase
+        .from("contractors")
+        .select("business_name, user_id")
+        .eq("id", booking.contractor_id)
+        .single();
+
+      if (contractorData) {
+        // Get contractor's login email for reply-to
+        const { data: contractorAuth } = await supabase.auth.admin.getUserById(contractorData.user_id);
+        contractorReplyTo = contractorAuth?.user?.email || undefined;
+
+        // Get contractor profile name as fallback
+        const { data: contractorProfile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("user_id", contractorData.user_id)
+          .single();
+
+        senderName = contractorData.business_name || contractorProfile?.full_name || "Yardly";
+      }
+    }
+
+    const emailContent = getEmailContent(emailType, booking, address, profile, senderName);
 
     console.log(`Sending ${emailType} email to ${userEmail}`);
 
-    const emailResponse = await resend.emails.send({
-      from: "Yardly <onboarding@resend.dev>",
+    const emailPayload: Record<string, unknown> = {
+      from: `${senderName} <invoices@mail.yardly.app>`,
       to: [userEmail],
       subject: emailContent.subject,
       html: emailContent.html,
-    });
+    };
+    if (contractorReplyTo) {
+      emailPayload.reply_to = contractorReplyTo;
+    }
+
+    const emailResponse = await resend.emails.send(emailPayload as any);
 
     console.log("Email sent successfully:", emailResponse);
 
