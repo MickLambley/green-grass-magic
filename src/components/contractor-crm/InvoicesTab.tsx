@@ -51,7 +51,6 @@ type EnrichedInvoice = Invoice & { client_name?: string; client_email?: string; 
 
 const STATUS_BADGES: Record<string, string> = {
   draft: "bg-muted text-muted-foreground border-border",
-  sent: "bg-sky/20 text-sky border-sky/30",
   unpaid: "bg-sunshine/20 text-sunshine border-sunshine/30",
   overdue: "bg-destructive/20 text-destructive border-destructive/30 font-bold",
   paid: "bg-primary/20 text-primary border-primary/30",
@@ -59,7 +58,6 @@ const STATUS_BADGES: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
-  sent: "Sent",
   unpaid: "Unpaid",
   overdue: "Overdue",
   paid: "Paid",
