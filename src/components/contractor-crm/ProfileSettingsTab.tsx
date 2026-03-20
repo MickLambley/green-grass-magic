@@ -312,7 +312,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
       </Card>
 
       {/* Payment Methods */}
-      <Card>
+      <Card id="section-bank-details">
         <CardHeader>
           <CardTitle className="font-display text-lg flex items-center gap-2">
             <CreditCard className="w-5 h-5" />
