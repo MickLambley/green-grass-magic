@@ -551,6 +551,15 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
                             <TooltipContent>Download PDF</TooltipContent>
                           </Tooltip>
 
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" onClick={() => { if (confirm("Delete this invoice?")) handleDeleteInvoice(inv.id); }}>
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Delete</TooltipContent>
+                          </Tooltip>
+
                           {hasEmail ? (
                             <Tooltip>
                               <TooltipTrigger asChild>
