@@ -250,7 +250,7 @@ function ChecklistSection({
           <p className="text-xs text-muted-foreground mt-2">Complete your account setup above first.</p>
         )}
       </CardHeader>
-      {!locked && (
+      {!locked && !collapsed && (
         <CardContent className="space-y-1 pt-0">
           {items.map((item) => (
             <div
