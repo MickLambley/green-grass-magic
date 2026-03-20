@@ -10,7 +10,7 @@ type Contractor = Tables<"contractors">;
 
 interface GettingStartedChecklistProps {
   contractor: Contractor;
-  onNavigate: (tab: string) => void;
+  onNavigate: (tab: string, scrollTo?: string) => void;
 }
 
 interface ChecklistItem {
