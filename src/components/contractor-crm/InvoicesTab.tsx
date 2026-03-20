@@ -779,8 +779,11 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
               </Button>
             )}
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingInvoice ? "Save" : "Create Invoice"}
+            <Button variant="outline" onClick={() => handleSave(false)} disabled={isSaving}>
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+            </Button>
+            <Button onClick={() => handleSave(true)} disabled={isSaving}>
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4 mr-1" /> Save & Send</>}
             </Button>
           </DialogFooter>
         </DialogContent>
