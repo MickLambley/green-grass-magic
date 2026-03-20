@@ -206,12 +206,11 @@ const ContractorWebsite = () => {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div
-          className="py-24 sm:py-32"
+          className={`py-24 sm:py-32 ${!contractor.primary_color ? "gradient-hero" : ""}`}
           style={contractor.primary_color
             ? { background: `linear-gradient(135deg, ${contractor.primary_color} 0%, ${contractor.accent_color || contractor.primary_color} 100%)` }
             : undefined
           }
-          {...(!contractor.primary_color ? { className: "gradient-hero py-24 sm:py-32" } : {})}
         >
           <div className="max-w-5xl mx-auto px-4 text-center">
             <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-primary-foreground mb-4 animate-fade-in">
