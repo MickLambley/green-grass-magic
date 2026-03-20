@@ -107,7 +107,7 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
     const todayDate = startOfDay(new Date());
     const overdueCount = (overdueRes.data || []).filter((inv) => {
       if (!inv.due_date) return false;
-      return isBefore(new Date(inv.due_date), today);
+      return isBefore(new Date(inv.due_date), todayDate);
     }).length;
 
     // Fetch client names and addresses for today's and upcoming jobs
