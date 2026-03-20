@@ -68,6 +68,8 @@ function computeDisplayStatus(invoice: Invoice): string {
   if (invoice.due_date && isBefore(new Date(invoice.due_date), startOfDay(new Date())) && invoice.status !== "paid") {
     return "overdue";
   }
+  // Treat legacy "sent" status as "unpaid"
+  if (invoice.status === "sent") return "unpaid";
   return invoice.status || "draft";
 }
 
