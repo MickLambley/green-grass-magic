@@ -7,6 +7,16 @@ interface LineItem {
   unit_price: number;
 }
 
+interface PaymentDetails {
+  hasBankTransfer: boolean;
+  bankBsb?: string | null;
+  bankAccountNumber?: string | null;
+  bankAccountName?: string | null;
+  hasStripe: boolean;
+  businessName?: string | null;
+  phone?: string | null;
+}
+
 interface InvoicePdfData {
   invoiceNumber: string;
   createdAt: string;
@@ -21,6 +31,7 @@ interface InvoicePdfData {
   total: number;
   gstRegistered: boolean;
   notes: string | null;
+  paymentDetails?: PaymentDetails;
 }
 
 export const generateInvoicePdf = async (data: InvoicePdfData) => {
@@ -149,6 +160,63 @@ export const generateInvoicePdf = async (data: InvoicePdfData) => {
     doc.setFontSize(9);
     const noteLines = doc.splitTextToSize(data.notes, pageWidth - 28);
     doc.text(noteLines, 14, y + 6);
+    y += 6 + noteLines.length * 4.5;
+  }
+
+  // Payment Details section
+  const pd = data.paymentDetails;
+  if (pd) {
+    y += 14;
+    // Check we have room, else add page
+    if (y > doc.internal.pageSize.getHeight() - 60) {
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(22, 163, 74);
+    doc.text("Payment Details", 14, y);
+    doc.setTextColor(0, 0, 0);
+    y += 8;
+
+    if (pd.hasStripe) {
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text("Pay by Card:", 14, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Contact ${pd.businessName || "us"} for a secure payment link.`, 50, y);
+      y += 7;
+    }
+
+    if (pd.hasBankTransfer) {
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text("Pay by Bank Transfer:", 14, y);
+      y += 6;
+
+      doc.setFont("helvetica", "normal");
+      const bankDetails = [
+        ["BSB:", pd.bankBsb || ""],
+        ["Account:", pd.bankAccountNumber || ""],
+        ["Name:", pd.bankAccountName || pd.businessName || ""],
+        ["Reference:", data.invoiceNumber],
+      ];
+      bankDetails.forEach(([label, value]) => {
+        doc.setFont("helvetica", "bold");
+        doc.text(label, 18, y);
+        doc.setFont("helvetica", "normal");
+        doc.text(value, 50, y);
+        y += 5;
+      });
+    }
+
+    if (!pd.hasStripe && !pd.hasBankTransfer) {
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      const contactText = `Please contact ${pd.businessName || "us"}${pd.phone ? ` on ${pd.phone}` : ""} to arrange payment.`;
+      doc.text(contactText, 14, y);
+    }
   }
 
   // Footer
