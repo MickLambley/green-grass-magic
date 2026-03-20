@@ -50,6 +50,7 @@ const ContractorOnboarding = () => {
     name: "",
     email: "",
     phone: "",
+    address: "",
   });
 
   // Job form
