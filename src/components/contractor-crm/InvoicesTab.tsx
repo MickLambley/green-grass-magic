@@ -312,6 +312,12 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     setSendingId(null);
   };
 
+  const handleDeleteInvoice = async (invoiceId: string) => {
+    const { error } = await supabase.from("invoices").delete().eq("id", invoiceId);
+    if (error) toast.error("Failed to delete invoice");
+    else { toast.success("Invoice deleted"); fetchData(); }
+  };
+
   const handleMarkInvoicePaid = async (invoiceId: string) => {
     const { error } = await supabase.from("invoices").update({
       status: "paid",
