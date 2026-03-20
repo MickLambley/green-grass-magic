@@ -33,6 +33,7 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
     clientCount: 0,
     scheduledJobs: 0,
     unpaidInvoices: 0,
+    overdueInvoices: 0,
     revenue: 0,
   });
   const [todaysJobs, setTodaysJobs] = useState<(Job & { client_name?: string; client_address?: ClientAddress | null })[]>([]);
