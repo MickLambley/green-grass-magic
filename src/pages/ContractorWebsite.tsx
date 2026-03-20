@@ -28,6 +28,7 @@ interface ContractorSite {
   subdomain: string | null;
   website_copy: WebsiteCopy | null;
   pricing_mode: PricingMode | null;
+  show_address: boolean;
 }
 
 const DEFAULT_COPY: WebsiteCopy = {
