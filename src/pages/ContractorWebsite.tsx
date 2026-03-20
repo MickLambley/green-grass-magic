@@ -158,7 +158,7 @@ const ContractorWebsite = () => {
               </Button>
             )}
             <Button size="sm" onClick={handleBookNow}>
-              Book Now
+              {bookLabel}
             </Button>
           </div>
         </div>
