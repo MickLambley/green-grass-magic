@@ -155,7 +155,7 @@ serve(async (req) => {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
           body: JSON.stringify({
-            from: "Yardly <notifications@mail.yardly.app>",
+            from: "Yardly <notifications@mail.lawnly.com.au>",
             to: [contractorEmail],
             subject: "Payment Released! 💰",
             html: `<div style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto;">

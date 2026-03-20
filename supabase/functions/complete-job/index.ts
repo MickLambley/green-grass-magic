@@ -182,7 +182,7 @@ serve(async (req) => {
               Authorization: `Bearer ${resendApiKey}`,
             },
             body: JSON.stringify({
-              from: "Yardly <notifications@mail.yardly.app>",
+              from: "Yardly <notifications@mail.lawnly.com.au>",
               to: ["admin@yardly.com.au"],
               subject: `⚠️ Job #${bookingId.slice(0, 8)} Completed with Issues - Review Required`,
               html: `
@@ -235,7 +235,7 @@ serve(async (req) => {
 
           if (customerEmail) {
             const customerPayload: Record<string, unknown> = {
-              from: `${senderName} <invoices@mail.yardly.app>`,
+              from: `${senderName} <invoices@mail.lawnly.com.au>`,
               to: [customerEmail],
               subject: `Booking confirmed with ${senderName} — ${dateShort}`,
               html: `
@@ -278,7 +278,7 @@ serve(async (req) => {
                   Authorization: `Bearer ${resendApiKey}`,
                 },
                 body: JSON.stringify({
-                  from: `${senderName} <invoices@mail.yardly.app>`,
+                  from: `${senderName} <invoices@mail.lawnly.com.au>`,
                   to: [contractorEmail],
                   subject: `Job Marked Complete — ${dateShort}`,
                   html: `
