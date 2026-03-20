@@ -74,15 +74,17 @@ const ContractorWebsite = () => {
   const loadContractor = async () => {
     const { data, error } = await supabase
       .from("contractors")
-      .select("id, business_name, phone, business_address, business_logo_url, subdomain, website_copy, website_published")
+      .select("id, business_name, phone, business_address, business_logo_url, subdomain, website_copy, website_published, questionnaire_responses")
       .eq("subdomain", slug)
       .eq("website_published", true)
       .single();
 
     if (!error && data) {
+      const qr = (data.questionnaire_responses as Record<string, unknown>) || {};
       setContractor({
         ...data,
         website_copy: data.website_copy as unknown as WebsiteCopy | null,
+        pricing_mode: (qr.website_pricing_mode as PricingMode) || null,
       });
 
       // Fetch service suburbs

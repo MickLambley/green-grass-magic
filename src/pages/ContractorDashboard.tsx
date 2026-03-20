@@ -382,7 +382,7 @@ const ContractorDashboard = () => {
           {activeTab === "pricing" && <ContractorPricingTab contractor={contractor} onUpdate={setContractor} />}
           {activeTab === "scheduling" && <AlternativeTimeTab contractorId={contractor.id} />}
           {activeTab === "disputes" && <DisputeManagementTab contractorId={contractor.id} />}
-          {activeTab === "website" && <WebsiteBuilderTab contractor={contractor} onUpdate={setContractor} />}
+          {activeTab === "website" && <WebsiteBuilderTab contractor={contractor} onUpdate={setContractor} onNavigateToPricing={() => switchTab("pricing")} />}
           {activeTab === "settings" && <ProfileSettingsTab contractor={contractor} onUpdate={setContractor} />}
         </main>
 
