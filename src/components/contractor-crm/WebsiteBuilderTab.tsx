@@ -400,48 +400,7 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
         </CardContent>
       </Card>
 
-      {/* Brand Colours */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-display text-lg flex items-center gap-2">
-            <Palette className="w-5 h-5" /> Brand Colours
-          </CardTitle>
-          <CardDescription>Customise the colours used on your public website</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              { label: "Primary", field: "primary_color" as const, value: primaryColor, desc: "Buttons & hero background" },
-              { label: "Secondary", field: "secondary_color" as const, value: secondaryColor, desc: "Section backgrounds" },
-              { label: "Accent", field: "accent_color" as const, value: accentColor, desc: "Highlights & icons" },
-            ].map((c) => (
-              <div key={c.field} className="space-y-2">
-                <Label>{c.label}</Label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={c.value}
-                    onChange={(e) => handleColorChange(c.field, e.target.value)}
-                    onBlur={(e) => saveColor(c.field, e.target.value)}
-                    className="w-10 h-10 rounded-lg border border-input cursor-pointer p-0.5"
-                  />
-                  <div>
-                    <span className="text-sm font-mono text-foreground">{c.value}</span>
-                    <p className="text-xs text-muted-foreground">{c.desc}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 rounded-lg overflow-hidden border border-border">
-            <div className="h-3 flex">
-              <div className="flex-1" style={{ backgroundColor: primaryColor }} />
-              <div className="flex-1" style={{ backgroundColor: secondaryColor }} />
-              <div className="flex-1" style={{ backgroundColor: accentColor }} />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+
 
       {/* Status */}
       <Card>
@@ -594,6 +553,51 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
               <div className="space-y-2">
                 <Label>Text</Label>
                 <Input value={copy.cta_text} onChange={(e) => updateCopyField("cta_text", e.target.value)} maxLength={100} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Brand Colours */}
+      {copy && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-display text-lg flex items-center gap-2">
+              <Palette className="w-5 h-5" /> Brand Colours
+            </CardTitle>
+            <CardDescription>Customise the colours used on your public website</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[
+                { label: "Primary", field: "primary_color" as const, value: primaryColor, desc: "Buttons & hero background" },
+                { label: "Secondary", field: "secondary_color" as const, value: secondaryColor, desc: "Section backgrounds" },
+                { label: "Accent", field: "accent_color" as const, value: accentColor, desc: "Highlights & icons" },
+              ].map((c) => (
+                <div key={c.field} className="space-y-2">
+                  <Label>{c.label}</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={c.value}
+                      onChange={(e) => handleColorChange(c.field, e.target.value)}
+                      onBlur={(e) => saveColor(c.field, e.target.value)}
+                      className="w-10 h-10 rounded-lg border border-input cursor-pointer p-0.5"
+                    />
+                    <div>
+                      <span className="text-sm font-mono text-foreground">{c.value}</span>
+                      <p className="text-xs text-muted-foreground">{c.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 rounded-lg overflow-hidden border border-border">
+              <div className="h-3 flex">
+                <div className="flex-1" style={{ backgroundColor: primaryColor }} />
+                <div className="flex-1" style={{ backgroundColor: secondaryColor }} />
+                <div className="flex-1" style={{ backgroundColor: accentColor }} />
               </div>
             </div>
           </CardContent>
