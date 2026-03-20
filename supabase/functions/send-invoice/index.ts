@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import Stripe from "https://esm.sh/stripe@18.5.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,6 +25,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
 
     if (!resendApiKey) throw new Error("RESEND_API_KEY is not configured");
 
@@ -139,11 +141,58 @@ serve(async (req) => {
     // Rate column header
     const rateHeader = isGst ? "Rate (inc. GST)" : "Rate";
 
+    // ─── Create Stripe Payment Link if Stripe is connected ───
+    let stripePaymentUrl: string | null = null;
+    if (hasStripe && stripeSecretKey) {
+      try {
+        const stripe = new Stripe(stripeSecretKey, { apiVersion: "2025-08-27.basil" });
+        const totalCents = Math.round(total * 100);
+
+        const price = await stripe.prices.create({
+          unit_amount: totalCents,
+          currency: "aud",
+          product_data: {
+            name: `${invoiceLabel} ${invoiceNumber} — ${businessName}`,
+          },
+        });
+
+        const paymentLinkParams: Stripe.PaymentLinkCreateParams = {
+          line_items: [{ price: price.id, quantity: 1 }],
+          metadata: {
+            invoice_id: invoiceId,
+            contractor_id: contractor.id,
+            invoice_number: invoiceNumber,
+          },
+        };
+
+        if (contractor.stripe_account_id) {
+          paymentLinkParams.application_fee_amount = Math.round(totalCents * 0.01);
+          paymentLinkParams.transfer_data = {
+            destination: contractor.stripe_account_id,
+          };
+        }
+
+        const paymentLink = await stripe.paymentLinks.create(paymentLinkParams);
+        stripePaymentUrl = paymentLink.url;
+        console.log("[SEND-INVOICE] Stripe payment link created:", stripePaymentUrl);
+      } catch (stripeErr) {
+        console.error("[SEND-INVOICE] Failed to create Stripe payment link, continuing without it:", stripeErr);
+      }
+    }
+
     // Payment section
     let paymentSectionHtml = "";
     if (hasStripe || hasBankTransfer) {
       let stripeHtml = "";
-      if (hasStripe) {
+      if (hasStripe && stripePaymentUrl) {
+        stripeHtml = `
+          <div style="margin-bottom: 16px;">
+            <p style="margin: 0 0 12px; font-weight: bold; color: #16a34a;">💳 Pay instantly by credit or debit card</p>
+            <a href="${stripePaymentUrl}" target="_blank" style="display: inline-block; background-color: #16a34a; color: #ffffff; font-size: 16px; font-weight: bold; text-decoration: none; padding: 12px 32px; border-radius: 6px;">Pay Now — $${total.toFixed(2)}</a>
+            <p style="margin: 8px 0 0; font-size: 12px; color: #888;">Secure payment powered by Stripe.</p>
+          </div>
+        `;
+      } else if (hasStripe) {
         stripeHtml = `
           <div style="margin-bottom: 16px;">
             <p style="margin: 0 0 8px; font-weight: bold; color: #16a34a;">💳 Pay instantly by credit or debit card</p>
@@ -224,7 +273,7 @@ serve(async (req) => {
       </div>
     `;
 
-    // Build subject: "Invoice INV-0001 from Baker's Lawn Care — $85.00 due 3 Apr 2026"
+    // Build subject
     let subject = `Invoice ${invoiceNumber} from ${senderName} — $${total.toFixed(2)}`;
     if (dueDateShort) {
       subject += ` due ${dueDateShort}`;
@@ -257,7 +306,7 @@ serve(async (req) => {
     console.log("[SEND-INVOICE] Email sent to", client.email);
 
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ success: true, stripePaymentUrl }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
   } catch (error) {
