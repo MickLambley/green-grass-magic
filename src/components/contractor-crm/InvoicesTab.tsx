@@ -223,6 +223,18 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     setDialogOpen(true);
   };
 
+  const generatePaymentLink = async (invoiceId: string) => {
+    if (!hasStripe) return;
+    try {
+      const { data } = await supabase.functions.invoke("generate-invoice-payment-link", { body: { invoiceId } });
+      if (data?.stripePaymentUrl) {
+        setStripePaymentUrls(prev => ({ ...prev, [invoiceId]: data.stripePaymentUrl }));
+      }
+    } catch {
+      console.warn("Failed to generate payment link");
+    }
+  };
+
   const handleSave = async () => {
     if (!form.client_id) { toast.error("Select a client"); return; }
 
@@ -248,13 +260,32 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     };
 
     if (editingInvoice) {
+      // If total changed, clear stale payment link so a new one is generated
+      const totalChanged = Number(editingInvoice.total) !== total;
+      if (totalChanged) {
+        payload.stripe_payment_url = null as any;
+      }
       const { error } = await supabase.from("invoices").update(payload).eq("id", editingInvoice.id);
-      if (error) toast.error("Failed to update invoice");
-      else { toast.success("Invoice updated"); setDialogOpen(false); fetchData(); }
+      if (error) { toast.error("Failed to update invoice"); }
+      else {
+        toast.success("Invoice updated");
+        if (totalChanged) {
+          // Generate a fresh payment link for the new total
+          generatePaymentLink(editingInvoice.id);
+        }
+        setDialogOpen(false);
+        fetchData();
+      }
     } else {
-      const { error } = await supabase.from("invoices").insert(payload);
-      if (error) toast.error("Failed to create invoice");
-      else { toast.success("Invoice created"); setDialogOpen(false); fetchData(); }
+      const { data: inserted, error } = await supabase.from("invoices").insert(payload).select("id").single();
+      if (error) { toast.error("Failed to create invoice"); }
+      else {
+        toast.success("Invoice created");
+        // Generate payment link in background
+        if (inserted?.id) generatePaymentLink(inserted.id);
+        setDialogOpen(false);
+        fetchData();
+      }
     }
     setIsSaving(false);
   };
