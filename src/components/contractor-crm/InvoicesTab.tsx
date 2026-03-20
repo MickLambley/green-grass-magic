@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,10 +15,15 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Loader2, Receipt, Trash2, Send, DollarSign } from "lucide-react";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Plus, Pencil, Loader2, Receipt, Trash2, Send, DollarSign, Download, Mail, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import type { Tables, Json } from "@/integrations/supabase/types";
+import ClientEmailEditDialog from "./ClientEmailEditDialog";
+import { generateInvoicePdf } from "@/lib/generateInvoicePdf";
 
 type Invoice = Tables<"invoices">;
 type Client = Tables<"clients">;
@@ -34,6 +39,14 @@ interface InvoicesTabProps {
   gstRegistered: boolean;
 }
 
+interface ContractorInfo {
+  business_name: string | null;
+  phone: string | null;
+  business_logo_url: string | null;
+}
+
+type EnrichedInvoice = Invoice & { client_name?: string; client_email?: string };
+
 const statusColors: Record<string, string> = {
   unpaid: "bg-sunshine/20 text-sunshine border-sunshine/30",
   paid: "bg-primary/20 text-primary border-primary/30",
@@ -41,7 +54,7 @@ const statusColors: Record<string, string> = {
 };
 
 const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
-  const [invoices, setInvoices] = useState<(Invoice & { client_name?: string; client_email?: string })[]>([]);
+  const [invoices, setInvoices] = useState<EnrichedInvoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -49,6 +62,13 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [nextJob, setNextJob] = useState<{ title: string; date: string; client_id: string; client_name: string; total_price: number | null } | null>(null);
+  const [contractorInfo, setContractorInfo] = useState<ContractorInfo>({ business_name: null, phone: null, business_logo_url: null });
+
+  // Email edit dialog state
+  const [emailEditOpen, setEmailEditOpen] = useState(false);
+  const [emailEditClientId, setEmailEditClientId] = useState("");
+  const [emailEditClientName, setEmailEditClientName] = useState("");
+  const [emailEditCurrentEmail, setEmailEditCurrentEmail] = useState("");
 
   const [form, setForm] = useState({
     client_id: "",
@@ -65,12 +85,14 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
 
   const fetchData = async () => {
     setIsLoading(true);
-    const [invoicesRes, clientsRes, nextJobRes] = await Promise.all([
+    const [invoicesRes, clientsRes, nextJobRes, contractorRes] = await Promise.all([
       supabase.from("invoices").select("*").eq("contractor_id", contractorId).order("created_at", { ascending: false }),
       supabase.from("clients").select("*").eq("contractor_id", contractorId).order("name"),
       supabase.from("jobs").select("id, title, scheduled_date, client_id, total_price").eq("contractor_id", contractorId).eq("status", "scheduled").order("scheduled_date").limit(1),
+      supabase.from("contractors").select("business_name, phone, business_logo_url").eq("id", contractorId).single(),
     ]);
 
+    if (contractorRes.data) setContractorInfo(contractorRes.data);
     if (clientsRes.data) setClients(clientsRes.data);
     if (invoicesRes.data && clientsRes.data) {
       const clientMap = new Map(clientsRes.data.map((c) => [c.id, { name: c.name, email: c.email }]));
@@ -79,7 +101,6 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
         client_name: clientMap.get(inv.client_id)?.name || "Unknown",
         client_email: clientMap.get(inv.client_id)?.email || undefined,
       })));
-      // Set next job for empty state
       if (nextJobRes.data && nextJobRes.data.length > 0) {
         const j = nextJobRes.data[0];
         const clientName = clientMap.get(j.client_id)?.name || "Unknown";
@@ -88,6 +109,10 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
     }
     setIsLoading(false);
   };
+
+  const clientMap = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
+
+  const selectedClient = form.client_id ? clientMap.get(form.client_id) : null;
 
   const calcSubtotal = () => lineItems.reduce((sum, li) => sum + li.quantity * li.unit_price, 0);
   const calcGst = () => gstRegistered ? calcSubtotal() * 0.1 : 0;
@@ -151,21 +176,17 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
     setIsSaving(false);
   };
 
-  const handleSendInvoice = async (invoiceId: string, clientEmail?: string) => {
+  const handleSendInvoice = async (invoiceId: string, clientEmail?: string, clientName?: string) => {
     if (!clientEmail) {
-      toast.error("Client has no email address. Add an email first.");
+      toast.error(`No email address for ${clientName || "this client"}. Tap 'Add Email' to fix this.`);
       return;
     }
-
     setSendingId(invoiceId);
     try {
-      const { data, error } = await supabase.functions.invoke("send-invoice", {
-        body: { invoiceId },
-      });
-
+      const { error } = await supabase.functions.invoke("send-invoice", { body: { invoiceId } });
       if (error) throw error;
       toast.success(`Invoice sent to ${clientEmail}`);
-    } catch (err) {
+    } catch {
       toast.error("Failed to send invoice");
     }
     setSendingId(null);
@@ -178,6 +199,63 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
     }).eq("id", invoiceId);
     if (error) toast.error("Failed to update invoice");
     else { toast.success("Invoice marked as paid"); fetchData(); }
+  };
+
+  const handleDownloadPdf = async (inv: EnrichedInvoice) => {
+    const items = Array.isArray(inv.line_items) ? (inv.line_items as unknown as LineItem[]) : [];
+    await generateInvoicePdf({
+      invoiceNumber: inv.invoice_number || "Invoice",
+      createdAt: format(new Date(inv.created_at), "dd MMM yyyy"),
+      dueDate: inv.due_date ? format(new Date(inv.due_date), "dd MMM yyyy") : null,
+      clientName: inv.client_name || "Client",
+      contractorBusinessName: contractorInfo.business_name || "Business",
+      contractorPhone: contractorInfo.phone,
+      contractorLogoUrl: contractorInfo.business_logo_url,
+      lineItems: items,
+      subtotal: Number(inv.subtotal),
+      gstAmount: Number(inv.gst_amount),
+      total: Number(inv.total),
+      gstRegistered,
+      notes: inv.notes,
+    });
+  };
+
+  const handleDownloadCurrentDialog = async () => {
+    const client = selectedClient;
+    const validItems = lineItems.filter((li) => li.description.trim());
+    const subtotal = validItems.reduce((sum, li) => sum + li.quantity * li.unit_price, 0);
+    const gstAmount = gstRegistered ? subtotal * 0.1 : 0;
+    const total = subtotal + gstAmount;
+
+    await generateInvoicePdf({
+      invoiceNumber: form.invoice_number || "Invoice",
+      createdAt: editingInvoice ? format(new Date(editingInvoice.created_at), "dd MMM yyyy") : format(new Date(), "dd MMM yyyy"),
+      dueDate: form.due_date ? format(new Date(form.due_date), "dd MMM yyyy") : null,
+      clientName: client?.name || "Client",
+      contractorBusinessName: contractorInfo.business_name || "Business",
+      contractorPhone: contractorInfo.phone,
+      contractorLogoUrl: contractorInfo.business_logo_url,
+      lineItems: validItems,
+      subtotal,
+      gstAmount,
+      total,
+      gstRegistered,
+      notes: form.notes.trim() || null,
+    });
+  };
+
+  const openEmailEdit = (clientId: string, clientName: string, currentEmail: string) => {
+    setEmailEditClientId(clientId);
+    setEmailEditClientName(clientName);
+    setEmailEditCurrentEmail(currentEmail);
+    setEmailEditOpen(true);
+  };
+
+  const handleEmailSaved = (newEmail: string) => {
+    // Update clients list
+    setClients((prev) => prev.map((c) => c.id === emailEditClientId ? { ...c, email: newEmail } : c));
+    // Update invoices list
+    setInvoices((prev) => prev.map((inv) => inv.client_id === emailEditClientId ? { ...inv, client_email: newEmail } : inv));
   };
 
   const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
@@ -242,54 +320,95 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
                 <TableHead className="hidden md:table-cell">Due</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-[120px]">Actions</TableHead>
+                <TableHead className="w-[160px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {invoices.map((inv) => (
-                <TableRow key={inv.id}>
-                  <TableCell className="font-medium">{inv.invoice_number || "—"}</TableCell>
-                  <TableCell className="text-muted-foreground">{inv.client_name}</TableCell>
-                  <TableCell className="hidden md:table-cell text-muted-foreground">
-                    {format(new Date(inv.created_at), "dd MMM yyyy")}
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell text-muted-foreground">
-                    {inv.due_date ? format(new Date(inv.due_date), "dd MMM yyyy") : "—"}
-                  </TableCell>
-                  <TableCell>${Number(inv.total).toFixed(2)}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={statusColors[inv.status] || ""}>
-                      {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEditDialog(inv)}>
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      {inv.status === "unpaid" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleMarkInvoicePaid(inv.id)}
-                          title="Mark as Paid"
-                        >
-                          <DollarSign className="w-4 h-4 text-primary" />
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleSendInvoice(inv.id, inv.client_email)}
-                        disabled={sendingId === inv.id}
-                        title={inv.client_email ? `Send to ${inv.client_email}` : "No client email"}
-                      >
-                        {sendingId === inv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 text-primary" />}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {invoices.map((inv) => {
+                const hasEmail = !!inv.client_email;
+                return (
+                  <TableRow key={inv.id}>
+                    <TableCell className="font-medium">{inv.invoice_number || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{inv.client_name}</TableCell>
+                    <TableCell className="hidden md:table-cell text-muted-foreground">
+                      {format(new Date(inv.created_at), "dd MMM yyyy")}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell text-muted-foreground">
+                      {inv.due_date ? format(new Date(inv.due_date), "dd MMM yyyy") : "—"}
+                    </TableCell>
+                    <TableCell>${Number(inv.total).toFixed(2)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={statusColors[inv.status] || ""}>
+                        {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <TooltipProvider delayDuration={300}>
+                        <div className="flex items-center gap-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" onClick={() => openEditDialog(inv)}>
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Edit</TooltipContent>
+                          </Tooltip>
+
+                          {inv.status === "unpaid" && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" onClick={() => handleMarkInvoicePaid(inv.id)} title="Mark as Paid">
+                                  <DollarSign className="w-4 h-4 text-primary" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Mark as Paid</TooltipContent>
+                            </Tooltip>
+                          )}
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" onClick={() => handleDownloadPdf(inv)}>
+                                <Download className="w-4 h-4 text-muted-foreground" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Download PDF</TooltipContent>
+                          </Tooltip>
+
+                          {hasEmail ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleSendInvoice(inv.id, inv.client_email, inv.client_name)}
+                                  disabled={sendingId === inv.id}
+                                >
+                                  {sendingId === inv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 text-primary" />}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Send to {inv.client_email}</TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-amber-500 hover:text-amber-600"
+                                  onClick={() => openEmailEdit(inv.client_id, inv.client_name || "Client", "")}
+                                >
+                                  <Mail className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Client has no email — tap to add</TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
+                      </TooltipProvider>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </Card>
@@ -313,6 +432,29 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
                     {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {/* Email status indicator */}
+                {selectedClient && (
+                  selectedClient.email ? (
+                    <div className="flex items-center gap-1.5 text-xs text-primary">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>{selectedClient.email}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        {selectedClient.name} has no email address — invoice cannot be sent by email.{" "}
+                        <button
+                          type="button"
+                          className="underline font-medium hover:text-amber-700"
+                          onClick={() => openEmailEdit(selectedClient.id, selectedClient.name, "")}
+                        >
+                          Add email →
+                        </button>
+                      </span>
+                    </div>
+                  )
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Invoice #</Label>
@@ -371,7 +513,12 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Payment terms, notes..." rows={2} />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            {editingInvoice && (
+              <Button variant="outline" size="sm" onClick={handleDownloadCurrentDialog} className="mr-auto">
+                <Download className="w-4 h-4 mr-1" /> Download PDF
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={isSaving}>
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingInvoice ? "Save" : "Create Invoice"}
@@ -379,6 +526,16 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Email Edit Dialog */}
+      <ClientEmailEditDialog
+        open={emailEditOpen}
+        onOpenChange={setEmailEditOpen}
+        clientId={emailEditClientId}
+        clientName={emailEditClientName}
+        currentEmail={emailEditCurrentEmail}
+        onSaved={handleEmailSaved}
+      />
     </div>
   );
 };
