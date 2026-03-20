@@ -167,6 +167,9 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
               <div>
                 <p className="text-sm text-muted-foreground">{card.title}</p>
                 <p className="text-2xl font-display font-bold text-foreground">{card.value}</p>
+                {card.subtitle && (
+                  <p className="text-xs text-destructive font-medium">{card.subtitle}</p>
+                )}
               </div>
             </CardContent>
           </Card>
