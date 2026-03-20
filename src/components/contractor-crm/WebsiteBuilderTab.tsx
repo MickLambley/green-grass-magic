@@ -46,9 +46,9 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [logoUrl, setLogoUrl] = useState(contractor.business_logo_url || "");
   const [subdomain, setSubdomain] = useState(contractor.subdomain || "");
-  const [primaryColor, setPrimaryColor] = useState(contractor.primary_color || "#2E8B57");
-  const [secondaryColor, setSecondaryColor] = useState(contractor.secondary_color || "#EFF5EF");
-  const [accentColor, setAccentColor] = useState(contractor.accent_color || "#80CC33");
+  const [primaryColor, setPrimaryColor] = useState(contractor.primary_color || "#2D7A3A");
+  const [secondaryColor, setSecondaryColor] = useState(contractor.secondary_color || "#F0F7F1");
+  const [accentColor, setAccentColor] = useState(contractor.accent_color || "#5CB85C");
   const [copy, setCopy] = useState<WebsiteCopy | null>(
     (contractor.website_copy as unknown as WebsiteCopy) || null
   );
@@ -360,7 +360,7 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
     }
   };
 
-  const DEFAULT_COLORS = { primary_color: "#2E8B57", secondary_color: "#EFF5EF", accent_color: "#80CC33" };
+  const DEFAULT_COLORS = { primary_color: "#2D7A3A", secondary_color: "#F0F7F1", accent_color: "#5CB85C" };
 
   const handleRestoreDefaults = async () => {
     setPrimaryColor(DEFAULT_COLORS.primary_color);
