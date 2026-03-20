@@ -73,52 +73,88 @@ serve(async (req) => {
       const session = event.data.object as Stripe.Checkout.Session;
       const metadata = session.metadata || {};
       const jobId = metadata.job_id;
+      const invoiceId = metadata.invoice_id;
       const contractorId = metadata.contractor_id;
 
-      if (!jobId) {
-        log("No job_id in metadata, skipping");
-        return new Response(JSON.stringify({ received: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      // Handle invoice payments (from manual invoice payment links)
+      if (invoiceId) {
+        log("Processing invoice payment", { invoiceId, contractorId });
+
+        const { error: invErr } = await supabase
+          .from("invoices")
+          .update({
+            status: "paid",
+            paid_at: new Date().toISOString(),
+          })
+          .eq("id", invoiceId);
+
+        if (invErr) log("Failed to update invoice", { error: invErr.message });
+        else log("Invoice marked as paid", { invoiceId });
+
+        if (contractorId) {
+          const invoiceNumber = metadata.invoice_number || invoiceId.slice(0, 8);
+          const { data: contractor } = await supabase
+            .from("contractors")
+            .select("user_id")
+            .eq("id", contractorId)
+            .single();
+
+          if (contractor) {
+            await supabase.from("notifications").insert({
+              user_id: contractor.user_id,
+              title: "💰 Invoice Paid",
+              message: `Invoice ${invoiceNumber} has been paid online via card.`,
+              type: "success",
+            });
+          }
+        }
       }
 
-      log("Processing payment for job", { jobId, contractorId });
+      // Handle job payments (from job payment links)
+      if (jobId) {
+        log("Processing payment for job", { jobId, contractorId });
 
-      const { error: jobErr } = await supabase
-        .from("jobs")
-        .update({
-          payment_status: "paid",
-          payment_intent_id: session.payment_intent,
-        })
-        .eq("id", jobId);
+        const { error: jobErr } = await supabase
+          .from("jobs")
+          .update({
+            payment_status: "paid",
+            payment_intent_id: session.payment_intent,
+          })
+          .eq("id", jobId);
 
-      if (jobErr) log("Failed to update job", { error: jobErr.message });
+        if (jobErr) log("Failed to update job", { error: jobErr.message });
 
-      const { error: invErr } = await supabase
-        .from("invoices")
-        .update({
-          status: "paid",
-          paid_at: new Date().toISOString(),
-        })
-        .eq("job_id", jobId);
+        // Also mark linked invoice if exists
+        const { error: invErr } = await supabase
+          .from("invoices")
+          .update({
+            status: "paid",
+            paid_at: new Date().toISOString(),
+          })
+          .eq("job_id", jobId);
 
-      if (invErr) log("Failed to update invoice (may not exist)", { error: invErr.message });
+        if (invErr) log("Failed to update invoice for job (may not exist)", { error: invErr.message });
 
-      if (contractorId) {
-        const { data: contractor } = await supabase
-          .from("contractors")
-          .select("user_id")
-          .eq("id", contractorId)
-          .single();
+        if (contractorId) {
+          const { data: contractor } = await supabase
+            .from("contractors")
+            .select("user_id")
+            .eq("id", contractorId)
+            .single();
 
-        if (contractor) {
-          await supabase.from("notifications").insert({
-            user_id: contractor.user_id,
-            title: "💰 Payment Received",
-            message: `Payment received for job #${jobId.slice(0, 8)} via payment link.`,
-            type: "success",
-          });
+          if (contractor) {
+            await supabase.from("notifications").insert({
+              user_id: contractor.user_id,
+              title: "💰 Payment Received",
+              message: `Payment received for job #${jobId.slice(0, 8)} via payment link.`,
+              type: "success",
+            });
+          }
         }
+      }
+
+      if (!jobId && !invoiceId) {
+        log("No job_id or invoice_id in metadata, skipping");
       }
 
       log("Payment link webhook processed successfully");
