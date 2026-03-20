@@ -609,6 +609,7 @@ export type Database = {
           notes: string | null
           paid_at: string | null
           status: string
+          stripe_payment_url: string | null
           subtotal: number
           total: number
           updated_at: string
@@ -626,6 +627,7 @@ export type Database = {
           notes?: string | null
           paid_at?: string | null
           status?: string
+          stripe_payment_url?: string | null
           subtotal?: number
           total?: number
           updated_at?: string
@@ -643,6 +645,7 @@ export type Database = {
           notes?: string | null
           paid_at?: string | null
           status?: string
+          stripe_payment_url?: string | null
           subtotal?: number
           total?: number
           updated_at?: string
