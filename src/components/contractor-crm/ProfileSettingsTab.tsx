@@ -366,11 +366,13 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
         </CardContent>
       </Card>
 
-      {/* Save */}
-      <Button onClick={handleSave} disabled={isSaving} className="w-full sm:w-auto">
-        {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-        Save Settings
-      </Button>
+      {/* Auto-save indicator */}
+      {isSaving && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          <span>Saving…</span>
+        </div>
+      )}
 
       {/* Stripe Connect (full card with connect/dashboard actions) */}
       <StripeConnectSettingsCard contractor={contractor} />
