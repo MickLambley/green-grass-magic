@@ -235,15 +235,20 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (andSend = false) => {
     if (!form.client_id) { toast.error("Select a client"); return; }
+
+    const client = clientMap.get(form.client_id);
+    if (andSend && !client?.email) {
+      toast.error(`No email address for ${client?.name || "this client"}. Add an email first.`);
+      return;
+    }
 
     setIsSaving(true);
     const validItems = lineItems.filter((li) => li.description.trim());
     const subtotal = validItems.reduce((sum, li) => sum + li.quantity * li.unit_price, 0);
-    // GST-inclusive: GST = subtotal / 11
     const gstAmount = gstRegistered ? Math.round(subtotal / 11 * 100) / 100 : 0;
-    const total = subtotal; // Total = GST-inclusive subtotal
+    const total = subtotal;
 
     const payload = {
       contractor_id: contractorId,
@@ -259,34 +264,33 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
       paid_at: form.status === "paid" ? new Date().toISOString() : null,
     };
 
+    let savedId: string | null = null;
+
     if (editingInvoice) {
-      // If total changed, clear stale payment link so a new one is generated
       const totalChanged = Number(editingInvoice.total) !== total;
       if (totalChanged) {
         (payload as any).stripe_payment_url = null;
       }
       const { error } = await supabase.from("invoices").update(payload).eq("id", editingInvoice.id);
-      if (error) { toast.error("Failed to update invoice"); }
-      else {
-        toast.success("Invoice updated");
-        if (totalChanged) {
-          // Generate a fresh payment link for the new total
-          generatePaymentLink(editingInvoice.id);
-        }
-        setDialogOpen(false);
-        fetchData();
-      }
+      if (error) { toast.error("Failed to update invoice"); setIsSaving(false); return; }
+      toast.success("Invoice updated");
+      savedId = editingInvoice.id;
+      if (totalChanged) generatePaymentLink(editingInvoice.id);
     } else {
       const { data: inserted, error } = await supabase.from("invoices").insert(payload).select("id").single();
-      if (error) { toast.error("Failed to create invoice"); }
-      else {
-        toast.success("Invoice created");
-        // Generate payment link in background
-        if (inserted?.id) generatePaymentLink(inserted.id);
-        setDialogOpen(false);
-        fetchData();
-      }
+      if (error) { toast.error("Failed to create invoice"); setIsSaving(false); return; }
+      toast.success("Invoice created");
+      savedId = inserted?.id || null;
+      if (savedId) generatePaymentLink(savedId);
     }
+
+    setDialogOpen(false);
+    await fetchData();
+
+    if (andSend && savedId && client?.email) {
+      await handleSendInvoice(savedId, client.email, client.name);
+    }
+
     setIsSaving(false);
   };
 
@@ -775,8 +779,11 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
               </Button>
             )}
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingInvoice ? "Save" : "Create Invoice"}
+            <Button variant="outline" onClick={() => handleSave(false)} disabled={isSaving}>
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+            </Button>
+            <Button onClick={() => handleSave(true)} disabled={isSaving}>
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4 mr-1" /> Save & Send</>}
             </Button>
           </DialogFooter>
         </DialogContent>
