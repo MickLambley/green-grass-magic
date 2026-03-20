@@ -339,7 +339,9 @@ const ContractorDashboard = () => {
             contractorId={contractor.id}
             stripeAccountId={contractor.stripe_account_id}
             stripeOnboardingComplete={contractor.stripe_onboarding_complete}
+            websitePublished={contractor.website_published}
             onNavigateToSettings={() => switchTab("settings")}
+            onNavigateToWebsite={() => switchTab("website")}
             refreshKey={contractor.updated_at}
           />
           {activeTab === "overview" && (

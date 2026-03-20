@@ -1,4 +1,4 @@
-import { AlertTriangle, MapPin, CreditCard, Loader2, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, MapPin, CreditCard, Globe, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect } from "react";
@@ -8,7 +8,9 @@ interface OnboardingPrerequisitesBannerProps {
   contractorId: string;
   stripeAccountId: string | null;
   stripeOnboardingComplete: boolean;
+  websitePublished: boolean;
   onNavigateToSettings: () => void;
+  onNavigateToWebsite: () => void;
   /** Pass contractor.updated_at so the banner re-checks after settings saves */
   refreshKey?: string;
 }
@@ -17,7 +19,9 @@ const OnboardingPrerequisitesBanner = ({
   contractorId,
   stripeAccountId,
   stripeOnboardingComplete,
+  websitePublished,
   onNavigateToSettings,
+  onNavigateToWebsite,
   refreshKey,
 }: OnboardingPrerequisitesBannerProps) => {
   const [hasServiceArea, setHasServiceArea] = useState<boolean | null>(null);
@@ -37,9 +41,9 @@ const OnboardingPrerequisitesBanner = ({
 
   const stripeComplete = stripeAccountId && stripeOnboardingComplete;
 
-  // Don't render if both are complete
+  // Don't render if all three are complete
   if (hasServiceArea === null) return null;
-  if (hasServiceArea && stripeComplete) return null;
+  if (hasServiceArea && stripeComplete && websitePublished) return null;
 
   const handleStripeConnect = async () => {
     setIsConnectingStripe(true);
@@ -74,6 +78,15 @@ const OnboardingPrerequisitesBanner = ({
       action: handleStripeConnect,
       actionLabel: "Connect Stripe",
       loading: isConnectingStripe,
+    },
+    {
+      key: "website",
+      complete: websitePublished,
+      label: "Go live with your website",
+      description: "Publish your booking page so clients can find you",
+      icon: Globe,
+      action: onNavigateToWebsite,
+      actionLabel: "Set Up",
     },
   ];
 
