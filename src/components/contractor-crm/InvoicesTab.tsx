@@ -671,11 +671,8 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
                   type="date"
                   value={form.due_date}
                   onChange={(e) => setForm({ ...form, due_date: e.target.value })}
-                  placeholder={defaultDueDays === null ? "Set a default in Settings" : undefined}
                 />
-                {!form.due_date && defaultDueDays === null && (
-                  <p className="text-xs text-muted-foreground italic">Set a default in Settings</p>
-                )}
+                <p className="text-xs text-muted-foreground">Default: {defaultDueDays} days</p>
               </div>
               <div className="space-y-2">
                 <Label>Status</Label>
