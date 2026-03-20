@@ -189,6 +189,7 @@ const GettingStartedChecklist = ({ contractor, onNavigate }: GettingStartedCheck
         totalCount={tier1Items.length}
         items={tier1Items}
         locked={false}
+        collapsed={tier1AllDone}
         onDismiss={handleDismiss}
       />
 
@@ -210,6 +211,7 @@ function ChecklistSection({
   totalCount,
   items,
   locked,
+  collapsed,
   onDismiss,
 }: {
   title: string;
@@ -217,14 +219,16 @@ function ChecklistSection({
   totalCount: number;
   items: ChecklistItem[];
   locked: boolean;
+  collapsed?: boolean;
   onDismiss?: () => void;
 }) {
+  const isGreyed = locked || collapsed;
   return (
-    <Card className={locked ? "opacity-60" : ""}>
+    <Card className={isGreyed ? "opacity-60" : ""}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="font-display text-lg flex items-center gap-2">
-            {locked ? <Lock className="w-4 h-4 text-muted-foreground" /> : <Sparkles className="w-5 h-5 text-primary" />}
+            {locked ? <Lock className="w-4 h-4 text-muted-foreground" /> : collapsed ? <CheckCircle2 className="w-5 h-5 text-primary" /> : <Sparkles className="w-5 h-5 text-primary" />}
             {title}
           </CardTitle>
           <div className="flex items-center gap-2">
@@ -246,7 +250,7 @@ function ChecklistSection({
           <p className="text-xs text-muted-foreground mt-2">Complete your account setup above first.</p>
         )}
       </CardHeader>
-      {!locked && (
+      {!locked && !collapsed && (
         <CardContent className="space-y-1 pt-0">
           {items.map((item) => (
             <div
