@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-/// <reference types="google.maps" />
+/// <reference path="../node_modules/@types/google.maps/index.d.ts" />
 
 declare namespace NodeJS {
   interface Timeout {}
