@@ -29,6 +29,27 @@ interface ContractorSite {
   website_copy: WebsiteCopy | null;
   pricing_mode: PricingMode | null;
   show_address: boolean;
+  primary_color: string | null;
+  secondary_color: string | null;
+  accent_color: string | null;
+}
+
+function hexToHSL(hex: string): string {
+  let r = parseInt(hex.slice(1, 3), 16) / 255;
+  let g = parseInt(hex.slice(3, 5), 16) / 255;
+  let b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0, l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
 const DEFAULT_COPY: WebsiteCopy = {
@@ -75,7 +96,7 @@ const ContractorWebsite = () => {
   const loadContractor = async () => {
     const { data, error } = await supabase
       .from("contractors")
-      .select("id, business_name, phone, business_address, business_logo_url, subdomain, website_copy, website_published, questionnaire_responses")
+      .select("id, business_name, phone, business_address, business_logo_url, subdomain, website_copy, website_published, questionnaire_responses, primary_color, secondary_color, accent_color")
       .eq("subdomain", slug)
       .eq("website_published", true)
       .single();
@@ -87,6 +108,9 @@ const ContractorWebsite = () => {
         website_copy: data.website_copy as unknown as WebsiteCopy | null,
         pricing_mode: (qr.website_pricing_mode as PricingMode) || null,
         show_address: (qr.website_show_address as boolean) ?? true,
+        primary_color: data.primary_color,
+        secondary_color: data.secondary_color,
+        accent_color: data.accent_color,
       });
 
       // Fetch service suburbs
@@ -129,8 +153,21 @@ const ContractorWebsite = () => {
   const bookLabel = isQuoteOnly ? "Request a Free Quote" : "Book Now";
   const ctaLabel = isQuoteOnly ? "Request a Free Quote" : "Book Online Now";
 
+  // Build custom CSS variables from contractor colours
+  const customStyle: React.CSSProperties = {};
+  if (contractor.primary_color) {
+    (customStyle as any)["--primary"] = hexToHSL(contractor.primary_color);
+  }
+  if (contractor.accent_color) {
+    (customStyle as any)["--accent"] = hexToHSL(contractor.accent_color);
+  }
+  if (contractor.secondary_color) {
+    (customStyle as any)["--secondary"] = hexToHSL(contractor.secondary_color);
+    (customStyle as any)["--muted"] = hexToHSL(contractor.secondary_color);
+  }
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" style={customStyle}>
       {/* Nav */}
       <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-16">

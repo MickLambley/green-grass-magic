@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Globe, Sparkles, Eye, Check, Copy, Upload, Trash2, Pencil } from "lucide-react";
+import { Loader2, Globe, Sparkles, Eye, Check, Copy, Upload, Trash2, Pencil, Palette } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import PricingModeDialog, { type PricingMode, PRICING_MODE_LABELS } from "./PricingModeDialog";
@@ -46,6 +46,9 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [logoUrl, setLogoUrl] = useState(contractor.business_logo_url || "");
   const [subdomain, setSubdomain] = useState(contractor.subdomain || "");
+  const [primaryColor, setPrimaryColor] = useState(contractor.primary_color || "#2E8B57");
+  const [secondaryColor, setSecondaryColor] = useState(contractor.secondary_color || "#F5F0E8");
+  const [accentColor, setAccentColor] = useState(contractor.accent_color || "#4CAF50");
   const [copy, setCopy] = useState<WebsiteCopy | null>(
     (contractor.website_copy as unknown as WebsiteCopy) || null
   );
@@ -339,6 +342,24 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
     }
   };
 
+  const handleColorChange = async (field: "primary_color" | "secondary_color" | "accent_color", value: string) => {
+    if (field === "primary_color") setPrimaryColor(value);
+    if (field === "secondary_color") setSecondaryColor(value);
+    if (field === "accent_color") setAccentColor(value);
+  };
+
+  const saveColor = async (field: "primary_color" | "secondary_color" | "accent_color", value: string) => {
+    const { data, error } = await supabase
+      .from("contractors")
+      .update({ [field]: value })
+      .eq("id", contractor.id)
+      .select()
+      .single();
+    if (!error && data) {
+      onUpdate(data);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-2xl">
       {/* Logo Upload */}
@@ -374,6 +395,49 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
                 )}
               </div>
               <p className="text-xs text-muted-foreground">PNG, JPG or SVG. Max 2MB.</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Brand Colours */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-display text-lg flex items-center gap-2">
+            <Palette className="w-5 h-5" /> Brand Colours
+          </CardTitle>
+          <CardDescription>Customise the colours used on your public website</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[
+              { label: "Primary", field: "primary_color" as const, value: primaryColor, desc: "Buttons & hero background" },
+              { label: "Secondary", field: "secondary_color" as const, value: secondaryColor, desc: "Section backgrounds" },
+              { label: "Accent", field: "accent_color" as const, value: accentColor, desc: "Highlights & icons" },
+            ].map((c) => (
+              <div key={c.field} className="space-y-2">
+                <Label>{c.label}</Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={c.value}
+                    onChange={(e) => handleColorChange(c.field, e.target.value)}
+                    onBlur={(e) => saveColor(c.field, e.target.value)}
+                    className="w-10 h-10 rounded-lg border border-input cursor-pointer p-0.5"
+                  />
+                  <div>
+                    <span className="text-sm font-mono text-foreground">{c.value}</span>
+                    <p className="text-xs text-muted-foreground">{c.desc}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 rounded-lg overflow-hidden border border-border">
+            <div className="h-3 flex">
+              <div className="flex-1" style={{ backgroundColor: primaryColor }} />
+              <div className="flex-1" style={{ backgroundColor: secondaryColor }} />
+              <div className="flex-1" style={{ backgroundColor: accentColor }} />
             </div>
           </div>
         </CardContent>
