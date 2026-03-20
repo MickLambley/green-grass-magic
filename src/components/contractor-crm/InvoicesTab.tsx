@@ -117,6 +117,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
 
   // Payment method checks
   const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
+  const gstStatusConfirmed = !!(responses.gst_status_confirmed);
   const hasStripe = !!(contractor.stripe_account_id && contractor.stripe_onboarding_complete);
   const hasBankTransfer = !!(contractor.bank_bsb && contractor.bank_account_number);
   const hasAnyPaymentMethod = hasStripe || hasBankTransfer;
