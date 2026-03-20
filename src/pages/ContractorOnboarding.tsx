@@ -145,6 +145,7 @@ const ContractorOnboarding = () => {
 
   const handleCreateClient = async () => {
     if (!clientForm.name.trim()) { toast.error("Client name is required"); return; }
+    if (!clientForm.address.trim()) { toast.error("Client address is required"); return; }
     if (!contractor) return;
 
     setIsSaving(true);
