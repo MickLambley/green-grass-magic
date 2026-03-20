@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,7 +29,7 @@ serve(async (req) => {
     const { invoiceId } = await req.json();
     if (!invoiceId) throw new Error("Missing invoiceId");
 
-    // Fetch invoice with client
+    // Fetch invoice
     const { data: invoice, error: invError } = await supabase
       .from("invoices")
       .select("*")
@@ -41,7 +41,7 @@ serve(async (req) => {
     // Verify contractor owns this invoice
     const { data: contractor } = await supabase
       .from("contractors")
-      .select("id, business_name, gst_registered, abn")
+      .select("id, business_name, gst_registered, abn, phone, bank_bsb, bank_account_number, stripe_account_id, stripe_onboarding_complete, questionnaire_responses")
       .eq("user_id", userData.user.id)
       .single();
 
@@ -77,10 +77,55 @@ serve(async (req) => {
       ? new Date(invoice.due_date).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
       : "Upon receipt";
 
+    // Payment methods
+    const hasStripe = contractor.stripe_account_id && contractor.stripe_onboarding_complete;
+    const hasBankTransfer = !!(contractor.bank_bsb && contractor.bank_account_number);
+    const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
+    const bankAccountName = (responses.bank_account_name as string) || businessName;
+    const invoiceNumber = invoice.invoice_number || "";
+
+    let paymentSectionHtml = "";
+
+    if (hasStripe || hasBankTransfer) {
+      let stripeHtml = "";
+      if (hasStripe) {
+        stripeHtml = `
+          <div style="margin-bottom: 16px;">
+            <p style="margin: 0 0 8px; font-weight: bold; color: #16a34a;">💳 Pay instantly by credit or debit card</p>
+            <p style="margin: 0; font-size: 13px; color: #666;">Contact ${businessName} to receive a secure payment link.</p>
+          </div>
+        `;
+      }
+
+      let bankHtml = "";
+      if (hasBankTransfer) {
+        bankHtml = `
+          <div>
+            <p style="margin: 0 0 8px; font-weight: bold; color: #333;">${hasStripe ? "Or pay" : "Pay"} by Bank Transfer</p>
+            <table style="font-size: 13px; color: #555;">
+              <tr><td style="padding: 2px 12px 2px 0; font-weight: 600;">BSB:</td><td>${contractor.bank_bsb}</td></tr>
+              <tr><td style="padding: 2px 12px 2px 0; font-weight: 600;">Account:</td><td>${contractor.bank_account_number}</td></tr>
+              <tr><td style="padding: 2px 12px 2px 0; font-weight: 600;">Name:</td><td>${bankAccountName}</td></tr>
+              <tr><td style="padding: 2px 12px 2px 0; font-weight: 600;">Reference:</td><td>${invoiceNumber}</td></tr>
+            </table>
+            <p style="margin: 8px 0 0; font-size: 12px; color: #888;">Please use your invoice number as the payment reference.</p>
+          </div>
+        `;
+      }
+
+      paymentSectionHtml = `
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 16px; border-radius: 8px; margin-top: 20px;">
+          <h3 style="margin: 0 0 12px; font-size: 16px; color: #333;">💰 How to Pay</h3>
+          ${stripeHtml}
+          ${bankHtml}
+        </div>
+      `;
+    }
+
     const emailHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
         <div style="background: #16a34a; padding: 24px; border-radius: 8px 8px 0 0;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">${invoiceLabel} ${invoice.invoice_number || ""}</h1>
+          <h1 style="color: white; margin: 0; font-size: 24px;">${invoiceLabel} ${invoiceNumber}</h1>
           <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0;">From ${businessName}</p>
           ${isGst && contractor.abn ? `<p style="color: rgba(255,255,255,0.7); margin: 4px 0 0; font-size: 13px;">ABN: ${contractor.abn}</p>` : ""}
         </div>
@@ -114,6 +159,8 @@ serve(async (req) => {
             ${isGst && contractor.abn ? `<p style="margin: 4px 0 0;"><strong>ABN:</strong> ${contractor.abn}</p>` : ""}
             ${isGst ? `<p style="margin: 4px 0 0; font-size: 12px; color: #666;">All prices are in AUD. GST is included in the total.</p>` : ""}
           </div>
+
+          ${paymentSectionHtml}
           
           ${invoice.notes ? `<p style="margin-top: 16px; color: #666;">${invoice.notes}</p>` : ""}
           
@@ -133,7 +180,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: "Yardly <onboarding@resend.dev>",
         to: [client.email],
-        subject: `${isGst ? "Tax Invoice" : "Invoice"} ${invoice.invoice_number || ""} from ${businessName}`,
+        subject: `${isGst ? "Tax Invoice" : "Invoice"} ${invoiceNumber} from ${businessName}`,
         html: emailHtml,
       }),
     });
