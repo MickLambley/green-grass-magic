@@ -323,6 +323,22 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
     }
   };
 
+  const handleToggleShowAddress = async (checked: boolean) => {
+    setShowAddress(checked);
+    const existingResponses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
+    const { data, error } = await supabase
+      .from("contractors")
+      .update({
+        questionnaire_responses: { ...existingResponses, website_show_address: checked } as any,
+      })
+      .eq("id", contractor.id)
+      .select()
+      .single();
+    if (!error && data) {
+      onUpdate(data);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-2xl">
       {/* Logo Upload */}
