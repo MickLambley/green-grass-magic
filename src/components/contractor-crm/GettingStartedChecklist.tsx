@@ -211,6 +211,7 @@ function ChecklistSection({
   totalCount,
   items,
   locked,
+  collapsed,
   onDismiss,
 }: {
   title: string;
@@ -218,10 +219,12 @@ function ChecklistSection({
   totalCount: number;
   items: ChecklistItem[];
   locked: boolean;
+  collapsed?: boolean;
   onDismiss?: () => void;
 }) {
+  const isGreyed = locked || collapsed;
   return (
-    <Card className={locked ? "opacity-60" : ""}>
+    <Card className={isGreyed ? "opacity-60" : ""}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="font-display text-lg flex items-center gap-2">
