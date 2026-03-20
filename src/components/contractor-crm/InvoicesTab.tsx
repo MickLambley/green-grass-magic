@@ -694,12 +694,21 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
 
             <div className="space-y-2">
               <Label>Line Items {gstRegistered && <span className="text-xs text-muted-foreground font-normal">(prices inc. GST)</span>}</Label>
+              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground px-1">
+                <span className="flex-1">Description</span>
+                <span className="w-16 text-center">Qty</span>
+                <span className="w-24 text-right">Rate ($)</span>
+                {lineItems.length > 1 && <span className="w-9" />}
+              </div>
               <div className="space-y-2">
                 {lineItems.map((li, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <Input value={li.description} onChange={(e) => updateLineItem(i, "description", e.target.value)} placeholder="Description" className="flex-1" />
-                    <Input type="number" value={li.quantity} onChange={(e) => updateLineItem(i, "quantity", parseInt(e.target.value) || 0)} className="w-16" min={1} />
-                    <Input type="number" step="0.01" value={li.unit_price} onChange={(e) => updateLineItem(i, "unit_price", parseFloat(e.target.value) || 0)} className="w-24" placeholder="$0.00" />
+                    <Input type="number" value={li.quantity} onChange={(e) => updateLineItem(i, "quantity", parseInt(e.target.value) || 0)} className="w-16 text-center" min={1} />
+                    <div className="relative w-24">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                      <Input type="number" step="0.01" value={li.unit_price} onChange={(e) => updateLineItem(i, "unit_price", parseFloat(e.target.value) || 0)} className="pl-6" placeholder="0.00" />
+                    </div>
                     {lineItems.length > 1 && (
                       <Button variant="ghost" size="icon" onClick={() => setLineItems(lineItems.filter((_, idx) => idx !== i))}>
                         <Trash2 className="w-4 h-4 text-destructive" />
