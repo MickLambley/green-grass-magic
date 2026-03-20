@@ -608,6 +608,7 @@ export type Database = {
           line_items: Json
           notes: string | null
           paid_at: string | null
+          sent_at: string | null
           status: string
           stripe_payment_url: string | null
           subtotal: number
@@ -626,6 +627,7 @@ export type Database = {
           line_items?: Json
           notes?: string | null
           paid_at?: string | null
+          sent_at?: string | null
           status?: string
           stripe_payment_url?: string | null
           subtotal?: number
@@ -644,6 +646,7 @@ export type Database = {
           line_items?: Json
           notes?: string | null
           paid_at?: string | null
+          sent_at?: string | null
           status?: string
           stripe_payment_url?: string | null
           subtotal?: number
