@@ -47,8 +47,8 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
   const [logoUrl, setLogoUrl] = useState(contractor.business_logo_url || "");
   const [subdomain, setSubdomain] = useState(contractor.subdomain || "");
   const [primaryColor, setPrimaryColor] = useState(contractor.primary_color || "#2E8B57");
-  const [secondaryColor, setSecondaryColor] = useState(contractor.secondary_color || "#F5F0E8");
-  const [accentColor, setAccentColor] = useState(contractor.accent_color || "#4CAF50");
+  const [secondaryColor, setSecondaryColor] = useState(contractor.secondary_color || "#EFF5EF");
+  const [accentColor, setAccentColor] = useState(contractor.accent_color || "#80CC33");
   const [copy, setCopy] = useState<WebsiteCopy | null>(
     (contractor.website_copy as unknown as WebsiteCopy) || null
   );
