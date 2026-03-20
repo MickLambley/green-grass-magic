@@ -77,20 +77,21 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
   const isInitialMount = useRef(true);
   const debounceTimer = useRef<ReturnType<typeof setTimeout>>();
   const savingRef = useRef(false);
+  const handleSaveRef = useRef<() => Promise<void>>();
 
-  const autoSave = useCallback(() => {
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => {
-      if (!savingRef.current) handleSave();
-    }, 1000);
-  }, []);
+  useEffect(() => {
+    handleSaveRef.current = handleSave;
+  });
 
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
     }
-    autoSave();
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      if (!savingRef.current && handleSaveRef.current) handleSaveRef.current();
+    }, 1000);
     return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); };
   }, [form, workingHours, paymentTerms, customDays, defaultInvoiceNotes]);
 
