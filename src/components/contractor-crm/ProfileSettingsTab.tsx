@@ -7,7 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Save, CreditCard, Clock, Mail, Lock, MapPin } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Loader2, Save, CreditCard, Clock, Mail, Lock, MapPin, FileText } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "./WorkingHoursEditor";
@@ -28,10 +32,19 @@ const TIER_LABELS: Record<string, { label: string; fee: string; color: string }>
   pro: { label: "Pro", fee: "1%", color: "bg-primary/20 text-primary border-primary/30" },
 };
 
+const PAYMENT_TERMS_OPTIONS = [
+  { value: "0", label: "Due on receipt" },
+  { value: "7", label: "7 days" },
+  { value: "14", label: "14 days" },
+  { value: "30", label: "30 days" },
+  { value: "custom", label: "Custom" },
+];
+
 const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isUpgrading, setIsUpgrading] = useState(false);
-  
+
+  const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
 
   const [form, setForm] = useState({
     business_name: contractor.business_name || "",
@@ -47,8 +60,28 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
     (contractor.working_hours as unknown as WorkingHours) || DEFAULT_WORKING_HOURS
   );
 
+  // Invoice defaults
+  const savedTerms = responses.default_payment_terms as string | undefined;
+  const savedCustomDays = responses.default_payment_terms_custom_days as number | undefined;
+  const savedNotes = responses.default_invoice_notes as string | undefined;
+
+  const [paymentTerms, setPaymentTerms] = useState<string>(
+    savedTerms !== undefined ? savedTerms : ""
+  );
+  const [customDays, setCustomDays] = useState<number>(savedCustomDays || 14);
+  const [defaultInvoiceNotes, setDefaultInvoiceNotes] = useState(savedNotes || "");
+
   const handleSave = async () => {
     setIsSaving(true);
+
+    // Merge invoice defaults into questionnaire_responses
+    const updatedResponses = {
+      ...responses,
+      default_payment_terms: paymentTerms || null,
+      default_payment_terms_custom_days: paymentTerms === "custom" ? customDays : null,
+      default_invoice_notes: defaultInvoiceNotes.trim() || null,
+    };
+
     const { data, error } = await supabase
       .from("contractors")
       .update({
@@ -60,6 +93,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
         bank_bsb: form.bank_bsb.trim() || null,
         bank_account_number: form.bank_account_number.trim() || null,
         working_hours: workingHours as any,
+        questionnaire_responses: updatedResponses as any,
       })
       .eq("id", contractor.id)
       .select()
@@ -154,6 +188,56 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
           <div className="flex items-center gap-3">
             <Switch checked={form.gst_registered} onCheckedChange={(v) => setForm({ ...form, gst_registered: v })} id="gst" />
             <Label htmlFor="gst" className="cursor-pointer">GST Registered</Label>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Invoice Defaults */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-display text-lg flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            Invoice Defaults
+          </CardTitle>
+          <CardDescription>Set default payment terms and notes for new invoices</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Default Payment Terms</Label>
+            <Select value={paymentTerms} onValueChange={setPaymentTerms}>
+              <SelectTrigger>
+                <SelectValue placeholder="No default set" />
+              </SelectTrigger>
+              <SelectContent>
+                {PAYMENT_TERMS_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {paymentTerms === "custom" && (
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-sm text-muted-foreground">Due</span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={customDays}
+                  onChange={(e) => setCustomDays(parseInt(e.target.value) || 14)}
+                  className="w-20"
+                />
+                <span className="text-sm text-muted-foreground">days after invoice date</span>
+              </div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>Default Invoice Notes</Label>
+            <Textarea
+              value={defaultInvoiceNotes}
+              onChange={(e) => setDefaultInvoiceNotes(e.target.value)}
+              placeholder="e.g. Please pay via bank transfer to BSB 000-000, Account 12345678. Thank you for your business."
+              rows={3}
+            />
+            <p className="text-xs text-muted-foreground">This will pre-populate the Notes field on every new invoice.</p>
           </div>
         </CardContent>
       </Card>

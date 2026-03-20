@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Users, Calendar, FileText, DollarSign, Loader2, Clock, AlertCircle, MapPin, CheckCircle2 } from "lucide-react";
-import { format, isToday, isTomorrow, parseISO } from "date-fns";
+import { format, isToday, isTomorrow, parseISO, isBefore, startOfDay } from "date-fns";
 import type { Tables } from "@/integrations/supabase/types";
 import JobCompletionDialog from "./JobCompletionDialog";
 
@@ -33,6 +33,7 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
     clientCount: 0,
     scheduledJobs: 0,
     unpaidInvoices: 0,
+    overdueInvoices: 0,
     revenue: 0,
   });
   const [todaysJobs, setTodaysJobs] = useState<(Job & { client_name?: string; client_address?: ClientAddress | null })[]>([]);
@@ -85,10 +86,10 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
     const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
 
-    const [clientsRes, scheduledRes, unpaidRes, paidRes, todayRes, upcomingRes, websiteRes] = await Promise.all([
+    const [clientsRes, scheduledRes, unpaidRes, paidRes, todayRes, upcomingRes, websiteRes, overdueRes] = await Promise.all([
       supabase.from("clients").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId),
       supabase.from("jobs").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId).eq("status", "scheduled"),
-      supabase.from("invoices").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId).eq("status", "unpaid"),
+      supabase.from("invoices").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId).neq("status", "paid"),
       supabase.from("invoices").select("total").eq("contractor_id", contractorId).eq("status", "paid"),
       // Today's jobs
       supabase.from("jobs").select("*").eq("contractor_id", contractorId).eq("scheduled_date", today).in("status", ["scheduled", "in_progress"]).order("scheduled_time"),
@@ -96,9 +97,18 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
       supabase.from("jobs").select("*").eq("contractor_id", contractorId).gt("scheduled_date", today).lte("scheduled_date", weekEnd).eq("status", "scheduled").order("scheduled_date").limit(5),
       // Website bookings pending
       supabase.from("jobs").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId).eq("source", "website_booking").eq("status", "pending_confirmation"),
+      // Overdue invoices: not paid, due_date < today
+      supabase.from("invoices").select("id, due_date").eq("contractor_id", contractorId).neq("status", "paid").not("due_date", "is", null),
     ]);
 
     const revenue = (paidRes.data || []).reduce((sum, inv) => sum + Number(inv.total), 0);
+
+    // Count overdue invoices client-side (due_date < today)
+    const todayDate = startOfDay(new Date());
+    const overdueCount = (overdueRes.data || []).filter((inv) => {
+      if (!inv.due_date) return false;
+      return isBefore(new Date(inv.due_date), todayDate);
+    }).length;
 
     // Fetch client names and addresses for today's and upcoming jobs
     const { data: clients } = await supabase.from("clients").select("id, name, address").eq("contractor_id", contractorId);
@@ -108,6 +118,7 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
       clientCount: clientsRes.count || 0,
       scheduledJobs: scheduledRes.count || 0,
       unpaidInvoices: unpaidRes.count || 0,
+      overdueInvoices: overdueCount,
       revenue,
     });
     setTodaysJobs((todayRes.data || []).map((j) => {
@@ -126,11 +137,21 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
   }
 
+  const unpaidLabel = stats.overdueInvoices > 0
+    ? `${stats.unpaidInvoices} unpaid`
+    : String(stats.unpaidInvoices);
+
   const summaryCards = [
-    { title: "Clients", value: stats.clientCount, icon: Users, color: "text-primary" },
-    { title: "Upcoming Jobs", value: stats.scheduledJobs, icon: Calendar, color: "text-sky" },
-    { title: "Unpaid Invoices", value: stats.unpaidInvoices, icon: FileText, color: "text-sunshine" },
-    { title: "Revenue", value: `$${stats.revenue.toFixed(0)}`, icon: DollarSign, color: "text-primary" },
+    { title: "Clients", value: stats.clientCount, icon: Users, color: "text-primary", subtitle: undefined as string | undefined },
+    { title: "Upcoming Jobs", value: stats.scheduledJobs, icon: Calendar, color: "text-sky", subtitle: undefined },
+    {
+      title: "Unpaid Invoices",
+      value: stats.unpaidInvoices,
+      icon: FileText,
+      color: stats.overdueInvoices > 0 ? "text-destructive" : "text-sunshine",
+      subtitle: stats.overdueInvoices > 0 ? `${stats.overdueInvoices} overdue` : undefined,
+    },
+    { title: "Revenue", value: `$${stats.revenue.toFixed(0)}`, icon: DollarSign, color: "text-primary", subtitle: undefined },
   ];
 
   return (
@@ -146,6 +167,9 @@ const DashboardOverview = ({ contractorId, onNavigateToJob }: DashboardOverviewP
               <div>
                 <p className="text-sm text-muted-foreground">{card.title}</p>
                 <p className="text-2xl font-display font-bold text-foreground">{card.value}</p>
+                {card.subtitle && (
+                  <p className="text-xs text-destructive font-medium">{card.subtitle}</p>
+                )}
               </div>
             </CardContent>
           </Card>

@@ -20,13 +20,14 @@ import {
 } from "@/components/ui/tooltip";
 import { Plus, Pencil, Loader2, Receipt, Trash2, Send, DollarSign, Download, Mail, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, addDays, isBefore, startOfDay } from "date-fns";
 import type { Tables, Json } from "@/integrations/supabase/types";
 import ClientEmailEditDialog from "./ClientEmailEditDialog";
 import { generateInvoicePdf } from "@/lib/generateInvoicePdf";
 
 type Invoice = Tables<"invoices">;
 type Client = Tables<"clients">;
+type Contractor = Tables<"contractors">;
 
 interface LineItem {
   description: string;
@@ -37,6 +38,7 @@ interface LineItem {
 interface InvoicesTabProps {
   contractorId: string;
   gstRegistered: boolean;
+  contractor: Contractor;
 }
 
 interface ContractorInfo {
@@ -45,15 +47,52 @@ interface ContractorInfo {
   business_logo_url: string | null;
 }
 
-type EnrichedInvoice = Invoice & { client_name?: string; client_email?: string };
+type EnrichedInvoice = Invoice & { client_name?: string; client_email?: string; display_status?: string };
 
-const statusColors: Record<string, string> = {
+const STATUS_BADGES: Record<string, string> = {
+  draft: "bg-muted text-muted-foreground border-border",
+  sent: "bg-sky/20 text-sky border-sky/30",
   unpaid: "bg-sunshine/20 text-sunshine border-sunshine/30",
+  overdue: "bg-destructive/20 text-destructive border-destructive/30 font-bold",
   paid: "bg-primary/20 text-primary border-primary/30",
-  overdue: "bg-destructive/20 text-destructive border-destructive/30",
 };
 
-const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
+const STATUS_LABELS: Record<string, string> = {
+  draft: "Draft",
+  sent: "Sent",
+  unpaid: "Unpaid",
+  overdue: "Overdue",
+  paid: "Paid",
+};
+
+/** Compute visual status: if not paid and due date passed, show overdue */
+function computeDisplayStatus(invoice: Invoice): string {
+  if (invoice.status === "paid") return "paid";
+  if (invoice.due_date && isBefore(new Date(invoice.due_date), startOfDay(new Date())) && invoice.status !== "paid") {
+    return "overdue";
+  }
+  return invoice.status || "draft";
+}
+
+/** Get default due date days from contractor settings */
+function getDefaultDueDays(contractor: Contractor): number | null {
+  const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
+  const terms = responses.default_payment_terms as string | undefined;
+  if (!terms) return null;
+  if (terms === "custom") {
+    const customDays = responses.default_payment_terms_custom_days as number | undefined;
+    return customDays || 14;
+  }
+  const days = parseInt(terms);
+  return isNaN(days) ? null : days;
+}
+
+function getDefaultInvoiceNotes(contractor: Contractor): string {
+  const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
+  return (responses.default_invoice_notes as string) || "";
+}
+
+const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabProps) => {
   const [invoices, setInvoices] = useState<EnrichedInvoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -62,7 +101,7 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [nextJob, setNextJob] = useState<{ title: string; date: string; client_id: string; client_name: string; total_price: number | null } | null>(null);
-  const [contractorInfo, setContractorInfo] = useState<ContractorInfo>({ business_name: null, phone: null, business_logo_url: null });
+  const [contractorInfo, setContractorInfo] = useState<ContractorInfo>({ business_name: contractor.business_name, phone: contractor.phone, business_logo_url: contractor.business_logo_url });
 
   // Email edit dialog state
   const [emailEditOpen, setEmailEditOpen] = useState(false);
@@ -75,7 +114,7 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
     invoice_number: "",
     due_date: "",
     notes: "",
-    status: "unpaid",
+    status: "draft",
   });
   const [lineItems, setLineItems] = useState<LineItem[]>([{ description: "Lawn Mowing", quantity: 1, unit_price: 0 }]);
 
@@ -85,22 +124,26 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
 
   const fetchData = async () => {
     setIsLoading(true);
-    const [invoicesRes, clientsRes, nextJobRes, contractorRes] = await Promise.all([
+    const [invoicesRes, clientsRes, nextJobRes] = await Promise.all([
       supabase.from("invoices").select("*").eq("contractor_id", contractorId).order("created_at", { ascending: false }),
       supabase.from("clients").select("*").eq("contractor_id", contractorId).order("name"),
       supabase.from("jobs").select("id, title, scheduled_date, client_id, total_price").eq("contractor_id", contractorId).eq("status", "scheduled").order("scheduled_date").limit(1),
-      supabase.from("contractors").select("business_name, phone, business_logo_url").eq("id", contractorId).single(),
     ]);
 
-    if (contractorRes.data) setContractorInfo(contractorRes.data);
     if (clientsRes.data) setClients(clientsRes.data);
     if (invoicesRes.data && clientsRes.data) {
       const clientMap = new Map(clientsRes.data.map((c) => [c.id, { name: c.name, email: c.email }]));
-      setInvoices(invoicesRes.data.map((inv) => ({
+      const enriched = invoicesRes.data.map((inv) => ({
         ...inv,
         client_name: clientMap.get(inv.client_id)?.name || "Unknown",
         client_email: clientMap.get(inv.client_id)?.email || undefined,
-      })));
+        display_status: computeDisplayStatus(inv),
+      }));
+      // Sort: overdue first, then draft/sent/unpaid, then paid
+      const statusOrder: Record<string, number> = { overdue: 0, unpaid: 1, sent: 2, draft: 3, paid: 4 };
+      enriched.sort((a, b) => (statusOrder[a.display_status || "draft"] ?? 3) - (statusOrder[b.display_status || "draft"] ?? 3));
+      setInvoices(enriched);
+
       if (nextJobRes.data && nextJobRes.data.length > 0) {
         const j = nextJobRes.data[0];
         const clientName = clientMap.get(j.client_id)?.name || "Unknown";
@@ -118,10 +161,23 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
   const calcGst = () => gstRegistered ? calcSubtotal() * 0.1 : 0;
   const calcTotal = () => calcSubtotal() + calcGst();
 
+  const getDefaultDueDate = (): string => {
+    const days = getDefaultDueDays(contractor);
+    if (days === null) return "";
+    return format(addDays(new Date(), days), "yyyy-MM-dd");
+  };
+
   const openCreateDialog = (prefillClientId?: string, prefillPrice?: number | null) => {
     setEditingInvoice(null);
     const nextNum = `INV-${String(invoices.length + 1).padStart(4, "0")}`;
-    setForm({ client_id: prefillClientId || clients[0]?.id || "", invoice_number: nextNum, due_date: "", notes: "", status: "unpaid" });
+    const defaultNotes = getDefaultInvoiceNotes(contractor);
+    setForm({
+      client_id: prefillClientId || clients[0]?.id || "",
+      invoice_number: nextNum,
+      due_date: getDefaultDueDate(),
+      notes: defaultNotes,
+      status: "draft",
+    });
     const price = prefillPrice ? Number(prefillPrice) : 0;
     setLineItems([{ description: "Lawn Mowing", quantity: 1, unit_price: price }]);
     setDialogOpen(true);
@@ -129,10 +185,11 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
 
   const openEditDialog = (invoice: Invoice) => {
     setEditingInvoice(invoice);
+    const defaultNotes = getDefaultInvoiceNotes(contractor);
     setForm({
       client_id: invoice.client_id,
       invoice_number: invoice.invoice_number || "",
-      due_date: invoice.due_date || "",
+      due_date: invoice.due_date || (!invoice.due_date ? getDefaultDueDate() : ""),
       notes: invoice.notes || "",
       status: invoice.status,
     });
@@ -185,7 +242,10 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
     try {
       const { error } = await supabase.functions.invoke("send-invoice", { body: { invoiceId } });
       if (error) throw error;
+      // Auto-update status to "sent" on success
+      await supabase.from("invoices").update({ status: "sent" }).eq("id", invoiceId).in("status", ["draft", "unpaid"]);
       toast.success(`Invoice sent to ${clientEmail}`);
+      fetchData();
     } catch {
       toast.error("Failed to send invoice");
     }
@@ -252,9 +312,7 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
   };
 
   const handleEmailSaved = (newEmail: string) => {
-    // Update clients list
     setClients((prev) => prev.map((c) => c.id === emailEditClientId ? { ...c, email: newEmail } : c));
-    // Update invoices list
     setInvoices((prev) => prev.map((inv) => inv.client_id === emailEditClientId ? { ...inv, client_email: newEmail } : inv));
   };
 
@@ -263,6 +321,8 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
     updated[index] = { ...updated[index], [field]: value };
     setLineItems(updated);
   };
+
+  const defaultDueDays = getDefaultDueDays(contractor);
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
@@ -326,6 +386,8 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
             <TableBody>
               {invoices.map((inv) => {
                 const hasEmail = !!inv.client_email;
+                const displayStatus = inv.display_status || "draft";
+                const isOverdue = displayStatus === "overdue";
                 return (
                   <TableRow key={inv.id}>
                     <TableCell className="font-medium">{inv.invoice_number || "—"}</TableCell>
@@ -333,13 +395,13 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
                     <TableCell className="hidden md:table-cell text-muted-foreground">
                       {format(new Date(inv.created_at), "dd MMM yyyy")}
                     </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
+                    <TableCell className={`hidden md:table-cell ${isOverdue ? "text-destructive font-medium" : "text-muted-foreground"}`}>
                       {inv.due_date ? format(new Date(inv.due_date), "dd MMM yyyy") : "—"}
                     </TableCell>
                     <TableCell>${Number(inv.total).toFixed(2)}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={statusColors[inv.status] || ""}>
-                        {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
+                      <Badge variant="outline" className={STATUS_BADGES[displayStatus] || ""}>
+                        {STATUS_LABELS[displayStatus] || displayStatus}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -354,7 +416,7 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
                             <TooltipContent>Edit</TooltipContent>
                           </Tooltip>
 
-                          {inv.status === "unpaid" && (
+                          {displayStatus !== "paid" && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button variant="ghost" size="icon" onClick={() => handleMarkInvoicePaid(inv.id)} title="Mark as Paid">
@@ -465,21 +527,29 @@ const InvoicesTab = ({ contractorId, gstRegistered }: InvoicesTabProps) => {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Due Date</Label>
-                <Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+                <Input
+                  type="date"
+                  value={form.due_date}
+                  onChange={(e) => setForm({ ...form, due_date: e.target.value })}
+                  placeholder={defaultDueDays === null ? "Set a default in Settings" : undefined}
+                />
+                {!form.due_date && defaultDueDays === null && (
+                  <p className="text-xs text-muted-foreground italic">Set a default in Settings</p>
+                )}
               </div>
-              {editingInvoice && (
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unpaid">Unpaid</SelectItem>
-                      <SelectItem value="paid">Paid</SelectItem>
-                      <SelectItem value="overdue">Overdue</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="sent">Sent</SelectItem>
+                    <SelectItem value="unpaid">Unpaid</SelectItem>
+                    <SelectItem value="overdue">Overdue</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-2">
