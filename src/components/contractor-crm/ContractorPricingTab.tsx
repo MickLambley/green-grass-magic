@@ -68,7 +68,11 @@ const ContractorPricingTab = ({ contractor, onUpdate }: ContractorPricingTabProp
     const { data, error } = await supabase
       .from("contractors")
       .update({
-        questionnaire_responses: { ...existingResponses, pricing: pricing as unknown as Json } as unknown as Json,
+        questionnaire_responses: {
+          ...existingResponses,
+          pricing: pricing as unknown as Json,
+          pricing_confirmed_at: existingResponses.pricing_confirmed_at || new Date().toISOString(),
+        } as unknown as Json,
       })
       .eq("id", contractor.id)
       .select()
