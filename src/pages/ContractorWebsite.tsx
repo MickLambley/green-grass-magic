@@ -28,6 +28,7 @@ interface ContractorSite {
   subdomain: string | null;
   website_copy: WebsiteCopy | null;
   pricing_mode: PricingMode | null;
+  show_address: boolean;
 }
 
 const DEFAULT_COPY: WebsiteCopy = {
@@ -85,6 +86,7 @@ const ContractorWebsite = () => {
         ...data,
         website_copy: data.website_copy as unknown as WebsiteCopy | null,
         pricing_mode: (qr.website_pricing_mode as PricingMode) || null,
+        show_address: (qr.website_show_address as boolean) ?? true,
       });
 
       // Fetch service suburbs
@@ -196,7 +198,7 @@ const ContractorWebsite = () => {
           <div className="max-w-2xl mx-auto text-center">
             <h2 className="font-display text-3xl font-bold text-foreground mb-4">{copy.about_title}</h2>
             <p className="text-muted-foreground text-lg leading-relaxed">{copy.about_text}</p>
-            {contractor.business_address && (
+            {contractor.business_address && contractor.show_address && (
               <div className="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <MapPin className="w-4 h-4" /> {contractor.business_address}
               </div>

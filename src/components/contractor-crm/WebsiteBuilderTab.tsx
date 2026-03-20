@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Globe, Sparkles, Eye, Check, Copy, Upload, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
@@ -54,6 +55,9 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
   const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
   const currentPricingMode = (responses.website_pricing_mode as PricingMode) || null;
   const pricingConfig = (responses.pricing as PricingConfig) || null;
+  const [showAddress, setShowAddress] = useState<boolean>(
+    (responses.website_show_address as boolean) ?? true
+  );
 
   const siteUrl = subdomain ? `${window.location.origin}/site/${subdomain}` : "";
 
@@ -319,6 +323,22 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
     }
   };
 
+  const handleToggleShowAddress = async (checked: boolean) => {
+    setShowAddress(checked);
+    const existingResponses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
+    const { data, error } = await supabase
+      .from("contractors")
+      .update({
+        questionnaire_responses: { ...existingResponses, website_show_address: checked } as any,
+      })
+      .eq("id", contractor.id)
+      .select()
+      .single();
+    if (!error && data) {
+      onUpdate(data);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-2xl">
       {/* Logo Upload */}
@@ -432,6 +452,15 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
                 </a>
               </Button>
             )}
+          </div>
+
+          {/* Show address toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Show business address on website</Label>
+              <p className="text-xs text-muted-foreground">Display your address in the About section</p>
+            </div>
+            <Switch checked={showAddress} onCheckedChange={handleToggleShowAddress} />
           </div>
         </CardContent>
       </Card>
