@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+declare const google: any;
 import { useEffect, useRef, useState, useCallback, useImperativeHandle, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Trash2, PenTool, Info } from "lucide-react";
@@ -15,7 +17,7 @@ export interface LawnDrawingMapRef {
 
 declare global {
   interface Window {
-    google: typeof google;
+    google: any;
     initMap: () => void;
   }
 }
@@ -25,9 +27,9 @@ const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const LawnDrawingMap = forwardRef<LawnDrawingMapRef, LawnDrawingMapProps>(
   ({ address, onAreaCalculated }, ref) => {
     const mapRef = useRef<HTMLDivElement>(null);
-    const mapInstanceRef = useRef<google.maps.Map | null>(null);
-    const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
-    const polygonsRef = useRef<google.maps.Polygon[]>([]);
+    const mapInstanceRef = useRef<any>(null);
+    const drawingManagerRef = useRef<any>(null);
+    const polygonsRef = useRef<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [totalArea, setTotalArea] = useState(0);
     const [error, setError] = useState<string | null>(null);
@@ -79,7 +81,7 @@ const LawnDrawingMap = forwardRef<LawnDrawingMapRef, LawnDrawingMapProps>(
       },
     }));
 
-    const calculatePolygonArea = useCallback((polygon: google.maps.Polygon): number => {
+    const calculatePolygonArea = useCallback((polygon: any): number => {
       const path = polygon.getPath();
       if (path.getLength() < 3) return 0;
       return google.maps.geometry.spherical.computeArea(path);
@@ -172,7 +174,7 @@ const LawnDrawingMap = forwardRef<LawnDrawingMapRef, LawnDrawingMapProps>(
       drawingManagerRef.current = drawingManager;
 
       // Handle polygon completion
-      google.maps.event.addListener(drawingManager, "polygoncomplete", (polygon: google.maps.Polygon) => {
+      google.maps.event.addListener(drawingManager, "polygoncomplete", (polygon: any) => {
         polygonsRef.current.push(polygon);
         recalculateTotalArea();
 

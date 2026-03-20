@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+declare const google: any;
  import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -24,8 +26,8 @@ export const IdentityBusinessStep = ({ data, onChange, userId, onNext }: Identit
   dataRef.current = data;
   const businessAddressInputRef = useRef<HTMLInputElement>(null);
   const mailingAddressInputRef = useRef<HTMLInputElement>(null);
-  const businessAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const mailingAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const businessAutocompleteRef = useRef<any>(null);
+  const mailingAutocompleteRef = useRef<any>(null);
 
   // Load Google Maps script
   useEffect(() => {

@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+declare const google: any;
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -30,10 +32,10 @@ interface GeographicReachStepProps {
 
 export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNavigation, persistSelections }: GeographicReachStepProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
-  const googleMapRef = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
-  const radiusCircleRef = useRef<google.maps.Circle | null>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const googleMapRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const radiusCircleRef = useRef<any>(null);
+  const autocompleteRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dataRef = useRef(data);
   const onChangeRef = useRef(onChange);
@@ -105,7 +107,7 @@ export const GeographicReachStep = ({ data, onChange, onNext, onBack, hideNaviga
     });
   }, [mapLoaded, data.baseAddress]);
 
-  const updateMapView = (center: google.maps.LatLngLiteral, radiusKm: number) => {
+  const updateMapView = (center: { lat: number; lng: number }, radiusKm: number) => {
     if (!googleMapRef.current) return;
 
     // Marker
