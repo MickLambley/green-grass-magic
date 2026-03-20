@@ -335,21 +335,10 @@ const ContractorDashboard = () => {
         </header>
 
         <main className="flex-1 px-4 sm:px-6 py-5 space-y-4">
-          <OnboardingPrerequisitesBanner
-            contractorId={contractor.id}
-            stripeAccountId={contractor.stripe_account_id}
-            stripeOnboardingComplete={contractor.stripe_onboarding_complete}
-            websitePublished={contractor.website_published}
-            onNavigateToSettings={() => switchTab("settings")}
-            onNavigateToWebsite={() => switchTab("website")}
-            refreshKey={contractor.updated_at}
-          />
           {activeTab === "overview" && (
             <div className="space-y-6">
               <GettingStartedChecklist
-                contractorId={contractor.id}
-                stripeOnboardingComplete={contractor.stripe_onboarding_complete}
-                websitePublished={contractor.website_published}
+                contractor={contractor}
                 onNavigate={switchTab}
               />
               <RouteOptimizationBanner
