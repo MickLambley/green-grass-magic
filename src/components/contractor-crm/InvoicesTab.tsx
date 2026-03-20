@@ -47,11 +47,10 @@ interface ContractorInfo {
   business_logo_url: string | null;
 }
 
-type EnrichedInvoice = Invoice & { client_name?: string; client_email?: string; display_status?: string; stripe_payment_url?: string };
+type EnrichedInvoice = Invoice & { client_name?: string; client_email?: string; display_status?: string; stripe_payment_url?: string; sent_at?: string | null };
 
 const STATUS_BADGES: Record<string, string> = {
   draft: "bg-muted text-muted-foreground border-border",
-  sent: "bg-sky/20 text-sky border-sky/30",
   unpaid: "bg-sunshine/20 text-sunshine border-sunshine/30",
   overdue: "bg-destructive/20 text-destructive border-destructive/30 font-bold",
   paid: "bg-primary/20 text-primary border-primary/30",
@@ -59,7 +58,6 @@ const STATUS_BADGES: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
-  sent: "Sent",
   unpaid: "Unpaid",
   overdue: "Overdue",
   paid: "Paid",
@@ -70,6 +68,8 @@ function computeDisplayStatus(invoice: Invoice): string {
   if (invoice.due_date && isBefore(new Date(invoice.due_date), startOfDay(new Date())) && invoice.status !== "paid") {
     return "overdue";
   }
+  // Treat legacy "sent" status as "unpaid"
+  if (invoice.status === "sent") return "unpaid";
   return invoice.status || "draft";
 }
 
@@ -163,8 +163,8 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
         client_email: clientMap.get(inv.client_id)?.email || undefined,
         display_status: computeDisplayStatus(inv),
       }));
-      const statusOrder: Record<string, number> = { overdue: 0, unpaid: 1, sent: 2, draft: 3, paid: 4 };
-      enriched.sort((a, b) => (statusOrder[a.display_status || "draft"] ?? 3) - (statusOrder[b.display_status || "draft"] ?? 3));
+      const statusOrder: Record<string, number> = { overdue: 0, unpaid: 1, draft: 2, paid: 3 };
+      enriched.sort((a, b) => (statusOrder[a.display_status || "draft"] ?? 2) - (statusOrder[b.display_status || "draft"] ?? 2));
       setInvoices(enriched);
 
       if (nextJobRes.data && nextJobRes.data.length > 0) {
@@ -307,7 +307,11 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
       if (data?.stripePaymentUrl) {
         setStripePaymentUrls(prev => ({ ...prev, [invoiceId]: data.stripePaymentUrl }));
       }
-      await supabase.from("invoices").update({ status: "sent" }).eq("id", invoiceId).in("status", ["draft", "unpaid"]);
+      // Mark as sent and transition draft → unpaid
+      await supabase.from("invoices").update({ 
+        sent_at: new Date().toISOString(),
+        status: 'unpaid',
+      }).eq("id", invoiceId).in("status", ["draft", "sent", "unpaid"]);
       toast.success(`Invoice sent to ${clientEmail}`);
       fetchData();
     } catch {
@@ -368,6 +372,12 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
       notes: inv.notes,
       paymentDetails: getPaymentDetails(inv.id),
     });
+
+    // Transition draft → unpaid on download
+    if (inv.status === "draft") {
+      await supabase.from("invoices").update({ status: "unpaid" }).eq("id", inv.id);
+      fetchData();
+    }
   };
 
   const handleDownloadCurrentDialog = async () => {
@@ -519,9 +529,18 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={STATUS_BADGES[displayStatus] || ""}>
-                        {STATUS_LABELS[displayStatus] || displayStatus}
-                      </Badge>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant="outline" className={STATUS_BADGES[displayStatus] || ""}>
+                          {STATUS_LABELS[displayStatus] || displayStatus}
+                        </Badge>
+                        <Badge variant="outline" className={
+                          (inv as any).sent_at
+                            ? "bg-sky-100 text-sky-700 border-sky-200 text-[10px]"
+                            : "bg-muted text-muted-foreground border-border text-[10px]"
+                        }>
+                          {(inv as any).sent_at ? "Sent" : "Not Sent"}
+                        </Badge>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <TooltipProvider delayDuration={300}>
@@ -684,9 +703,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="sent">Sent</SelectItem>
                     <SelectItem value="unpaid">Unpaid</SelectItem>
-                    <SelectItem value="overdue">Overdue</SelectItem>
                     <SelectItem value="paid">Paid</SelectItem>
                   </SelectContent>
                 </Select>

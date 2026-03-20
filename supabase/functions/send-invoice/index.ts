@@ -308,6 +308,12 @@ serve(async (req) => {
 
     console.log("[SEND-INVOICE] Email sent to", client.email);
 
+    // Mark invoice as sent and transition draft → unpaid
+    await supabase.from("invoices").update({ 
+      sent_at: new Date().toISOString(),
+      status: "unpaid",
+    }).eq("id", invoiceId).in("status", ["draft", "sent"]);
+
     return new Response(
       JSON.stringify({ success: true, stripePaymentUrl }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
