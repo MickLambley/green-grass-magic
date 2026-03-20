@@ -153,8 +153,21 @@ const ContractorWebsite = () => {
   const bookLabel = isQuoteOnly ? "Request a Free Quote" : "Book Now";
   const ctaLabel = isQuoteOnly ? "Request a Free Quote" : "Book Online Now";
 
+  // Build custom CSS variables from contractor colours
+  const customStyle: React.CSSProperties = {};
+  if (contractor.primary_color) {
+    (customStyle as any)["--primary"] = hexToHSL(contractor.primary_color);
+  }
+  if (contractor.accent_color) {
+    (customStyle as any)["--accent"] = hexToHSL(contractor.accent_color);
+  }
+  if (contractor.secondary_color) {
+    (customStyle as any)["--secondary"] = hexToHSL(contractor.secondary_color);
+    (customStyle as any)["--muted"] = hexToHSL(contractor.secondary_color);
+  }
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" style={customStyle}>
       {/* Nav */}
       <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-16">
