@@ -265,8 +265,12 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     }
     setSendingId(invoiceId);
     try {
-      const { error } = await supabase.functions.invoke("send-invoice", { body: { invoiceId } });
+      const { data, error } = await supabase.functions.invoke("send-invoice", { body: { invoiceId } });
       if (error) throw error;
+      // Store stripe payment URL if returned
+      if (data?.stripePaymentUrl) {
+        setStripePaymentUrls(prev => ({ ...prev, [invoiceId]: data.stripePaymentUrl }));
+      }
       await supabase.from("invoices").update({ status: "sent" }).eq("id", invoiceId).in("status", ["draft", "unpaid"]);
       toast.success(`Invoice sent to ${clientEmail}`);
       fetchData();
@@ -285,12 +289,13 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
     else { toast.success("Invoice marked as paid"); fetchData(); }
   };
 
-  const getPaymentDetails = () => ({
+  const getPaymentDetails = (invoiceId?: string) => ({
     hasBankTransfer,
     bankBsb: contractor.bank_bsb,
     bankAccountNumber: contractor.bank_account_number,
     bankAccountName,
     hasStripe,
+    stripePaymentUrl: invoiceId ? stripePaymentUrls[invoiceId] || null : null,
     businessName: contractor.business_name,
     phone: contractor.phone,
   });
