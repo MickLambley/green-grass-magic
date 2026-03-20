@@ -91,7 +91,7 @@ const GettingStartedChecklist = ({ contractor, onNavigate }: GettingStartedCheck
       key: "gst",
       label: "Confirm your GST status",
       description: "Determines whether you issue a Tax Invoice or standard invoice.",
-      done: !!settingsSaved,
+      done: !!(responses.gst_status_confirmed),
       actionLabel: "Review in Settings →",
       action: () => onNavigate("settings"),
     },

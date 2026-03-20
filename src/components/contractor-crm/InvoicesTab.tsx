@@ -117,6 +117,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
 
   // Payment method checks
   const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
+  const gstStatusConfirmed = !!(responses.gst_status_confirmed);
   const hasStripe = !!(contractor.stripe_account_id && contractor.stripe_onboarding_complete);
   const hasBankTransfer = !!(contractor.bank_bsb && contractor.bank_account_number);
   const hasAnyPaymentMethod = hasStripe || hasBankTransfer;
@@ -438,8 +439,19 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
 
   return (
     <div className="space-y-4">
+      {/* GST status not confirmed banner */}
+      {!gstStatusConfirmed && (
+        <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>
+            You must confirm your GST status before creating invoices.{" "}
+            <span className="font-medium">Go to Settings → Business Details</span> and select whether you are registered for GST.
+          </span>
+        </div>
+      )}
+
       {/* Payment methods warning banner */}
-      {!hasAnyPaymentMethod && (
+      {!hasAnyPaymentMethod && gstStatusConfirmed && (
         <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>
@@ -463,7 +475,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
             </Badge>
           )}
         </div>
-        <Button onClick={() => openCreateDialog()} disabled={clients.length === 0}>
+        <Button onClick={() => openCreateDialog()} disabled={clients.length === 0 || !gstStatusConfirmed}>
           <Plus className="w-4 h-4 mr-2" /> New {gstRegistered ? "Tax Invoice" : "Invoice"}
         </Button>
       </div>

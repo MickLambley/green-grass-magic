@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,7 +46,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
   const [isUpgrading, setIsUpgrading] = useState(false);
 
   const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
-
+  const gstConfirmed = !!(responses.gst_status_confirmed);
   const [form, setForm] = useState({
     business_name: contractor.business_name || "",
     abn: contractor.abn || "",
@@ -84,6 +84,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
       default_invoice_notes: defaultInvoiceNotes.trim() || null,
       bank_account_name: form.bank_account_name.trim() || null,
       settings_saved: true,
+      gst_status_confirmed: true,
     };
 
     const { data, error } = await supabase
@@ -193,9 +194,31 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
             <Label>Phone</Label>
             <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="0400 000 000" />
           </div>
-          <div className="flex items-center gap-3">
-            <Switch checked={form.gst_registered} onCheckedChange={(v) => setForm({ ...form, gst_registered: v })} id="gst" />
-            <Label htmlFor="gst" className="cursor-pointer">GST Registered</Label>
+          <div className="space-y-2">
+            <Label>Are you registered for GST? *</Label>
+            <div className="flex items-center gap-6">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="gst_registered"
+                  checked={form.gst_registered === true}
+                  onChange={() => setForm({ ...form, gst_registered: true })}
+                  className="w-4 h-4 accent-primary"
+                />
+                <span className="text-sm">Yes — I charge GST</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="gst_registered"
+                  checked={form.gst_registered === false && gstConfirmed}
+                  onChange={() => setForm({ ...form, gst_registered: false })}
+                  className="w-4 h-4 accent-primary"
+                />
+                <span className="text-sm">No — I don't charge GST</span>
+              </label>
+            </div>
+            <p className="text-xs text-muted-foreground">This determines whether your invoices show GST breakdowns.</p>
           </div>
         </CardContent>
       </Card>
