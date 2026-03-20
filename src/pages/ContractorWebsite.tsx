@@ -96,7 +96,7 @@ const ContractorWebsite = () => {
   const loadContractor = async () => {
     const { data, error } = await supabase
       .from("contractors")
-      .select("id, business_name, phone, business_address, business_logo_url, subdomain, website_copy, website_published, questionnaire_responses")
+      .select("id, business_name, phone, business_address, business_logo_url, subdomain, website_copy, website_published, questionnaire_responses, primary_color, secondary_color, accent_color")
       .eq("subdomain", slug)
       .eq("website_published", true)
       .single();
