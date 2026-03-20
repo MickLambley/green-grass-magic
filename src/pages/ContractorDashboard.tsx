@@ -377,7 +377,7 @@ const ContractorDashboard = () => {
             </div>
           )}
           {activeTab === "quotes" && <QuotesTab contractorId={contractor.id} />}
-          {activeTab === "invoices" && <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} />}
+          {activeTab === "invoices" && <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} contractor={contractor} />}
           {activeTab === "services" && <ServiceOfferingsTab contractorId={contractor.id} />}
           {activeTab === "pricing" && <ContractorPricingTab contractor={contractor} onUpdate={setContractor} />}
           {activeTab === "scheduling" && <AlternativeTimeTab contractorId={contractor.id} />}
