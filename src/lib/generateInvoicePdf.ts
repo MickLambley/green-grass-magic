@@ -22,7 +22,10 @@ interface InvoicePdfData {
   createdAt: string;
   dueDate: string | null;
   clientName: string;
+  clientAbn?: string | null;
+  clientIsBusinessClient?: boolean;
   contractorBusinessName: string;
+  contractorAbn?: string | null;
   contractorPhone: string | null;
   contractorLogoUrl: string | null;
   lineItems: LineItem[];
@@ -32,6 +35,13 @@ interface InvoicePdfData {
   gstRegistered: boolean;
   notes: string | null;
   paymentDetails?: PaymentDetails;
+}
+
+/** Format ABN as XX XXX XXX XXX */
+function formatAbn(abn: string): string {
+  const digits = abn.replace(/\s/g, "");
+  if (digits.length !== 11) return abn;
+  return `${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8, 11)}`;
 }
 
 export const generateInvoicePdf = async (data: InvoicePdfData) => {
@@ -55,16 +65,29 @@ export const generateInvoicePdf = async (data: InvoicePdfData) => {
   doc.setFont("helvetica", "bold");
   doc.text(data.contractorBusinessName || "Invoice", headerX, y + 8);
 
+  // ABN under business name
+  if (data.contractorAbn) {
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(`ABN: ${formatAbn(data.contractorAbn)}`, headerX, y + 15);
+  } else {
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(220, 50, 50);
+    doc.text("ABN: Not provided", headerX, y + 15);
+    doc.setTextColor(0, 0, 0);
+  }
+
   if (data.contractorPhone) {
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    doc.text(data.contractorPhone, headerX, y + 15);
+    doc.text(data.contractorPhone, headerX, y + 21);
   }
 
   // Invoice title right-aligned
   doc.setFontSize(24);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(22, 163, 74); // primary green
+  doc.setTextColor(22, 163, 74);
   const label = data.gstRegistered ? "TAX INVOICE" : "INVOICE";
   doc.text(label, pageWidth - 14, y + 8, { align: "right" });
   doc.setTextColor(0, 0, 0);
@@ -96,9 +119,20 @@ export const generateInvoicePdf = async (data: InvoicePdfData) => {
   doc.setFont("helvetica", "normal");
   doc.text(data.clientName, pageWidth / 2 + 10, y + 7);
 
-  y = data.dueDate ? y + 28 : y + 22;
+  // Show client ABN for business clients on $1000+ invoices
+  let billToExtra = 0;
+  if (data.gstRegistered && data.clientIsBusinessClient && data.total >= 1000) {
+    if (data.clientAbn) {
+      doc.setFontSize(9);
+      doc.text(`ABN: ${formatAbn(data.clientAbn)}`, pageWidth / 2 + 10, y + 14);
+      billToExtra = 7;
+    }
+  }
+
+  y = data.dueDate ? y + 28 + billToExtra : y + 22 + billToExtra;
 
   // Line items table
+  const rateLabel = data.gstRegistered ? "Unit Price (inc.)" : "Unit Price";
   const tableBody = data.lineItems.map((li) => [
     li.description,
     String(li.quantity),
@@ -108,7 +142,7 @@ export const generateInvoicePdf = async (data: InvoicePdfData) => {
 
   autoTable(doc, {
     startY: y,
-    head: [["Description", "Qty", "Unit Price", "Total"]],
+    head: [["Description", "Qty", rateLabel, "Total"]],
     body: tableBody,
     theme: "grid",
     headStyles: {
@@ -121,7 +155,7 @@ export const generateInvoicePdf = async (data: InvoicePdfData) => {
     columnStyles: {
       0: { cellWidth: "auto" },
       1: { cellWidth: 20, halign: "center" },
-      2: { cellWidth: 30, halign: "right" },
+      2: { cellWidth: 35, halign: "right" },
       3: { cellWidth: 30, halign: "right" },
     },
     margin: { left: 14, right: 14 },
@@ -134,21 +168,27 @@ export const generateInvoicePdf = async (data: InvoicePdfData) => {
   const totalsX = pageWidth - 70;
   doc.setFontSize(10);
 
-  doc.setFont("helvetica", "normal");
-  doc.text("Subtotal:", totalsX, y);
-  doc.text(`$${data.subtotal.toFixed(2)}`, pageWidth - 14, y, { align: "right" });
-
   if (data.gstRegistered) {
-    y += 7;
-    doc.text("GST (10%):", totalsX, y);
-    doc.text(`$${data.gstAmount.toFixed(2)}`, pageWidth - 14, y, { align: "right" });
-  }
+    const subtotalExGst = data.subtotal - data.gstAmount;
+    doc.setFont("helvetica", "normal");
+    doc.text("Subtotal (ex. GST):", totalsX - 10, y);
+    doc.text(`$${subtotalExGst.toFixed(2)}`, pageWidth - 14, y, { align: "right" });
 
-  y += 7;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text("Total:", totalsX, y);
-  doc.text(`$${data.total.toFixed(2)}`, pageWidth - 14, y, { align: "right" });
+    y += 7;
+    doc.text("GST (10%):", totalsX - 10, y);
+    doc.text(`$${data.gstAmount.toFixed(2)}`, pageWidth - 14, y, { align: "right" });
+
+    y += 7;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("Total (inc. GST):", totalsX - 10, y);
+    doc.text(`$${data.total.toFixed(2)}`, pageWidth - 14, y, { align: "right" });
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("Total:", totalsX, y);
+    doc.text(`$${data.total.toFixed(2)}`, pageWidth - 14, y, { align: "right" });
+  }
 
   // Notes
   if (data.notes) {
@@ -167,7 +207,6 @@ export const generateInvoicePdf = async (data: InvoicePdfData) => {
   const pd = data.paymentDetails;
   if (pd) {
     y += 14;
-    // Check we have room, else add page
     if (y > doc.internal.pageSize.getHeight() - 60) {
       doc.addPage();
       y = 20;
@@ -202,9 +241,9 @@ export const generateInvoicePdf = async (data: InvoicePdfData) => {
         ["Name:", pd.bankAccountName || pd.businessName || ""],
         ["Reference:", data.invoiceNumber],
       ];
-      bankDetails.forEach(([label, value]) => {
+      bankDetails.forEach(([lbl, value]) => {
         doc.setFont("helvetica", "bold");
-        doc.text(label, 18, y);
+        doc.text(lbl, 18, y);
         doc.setFont("helvetica", "normal");
         doc.text(value, 50, y);
         y += 5;

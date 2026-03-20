@@ -6,6 +6,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/** Format ABN as XX XXX XXX XXX */
+function formatAbn(abn: string): string {
+  const digits = abn.replace(/\s/g, "");
+  if (digits.length !== 11) return abn;
+  return `${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8, 11)}`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -52,7 +59,7 @@ serve(async (req) => {
     // Get client
     const { data: client } = await supabase
       .from("clients")
-      .select("name, email")
+      .select("name, email, business_client, client_abn")
       .eq("id", invoice.client_id)
       .single();
 
@@ -84,8 +91,40 @@ serve(async (req) => {
     const bankAccountName = (responses.bank_account_name as string) || businessName;
     const invoiceNumber = invoice.invoice_number || "";
 
-    let paymentSectionHtml = "";
+    // Totals
+    const subtotal = Number(invoice.subtotal);
+    const gstAmount = Number(invoice.gst_amount);
+    const total = Number(invoice.total);
+    const subtotalExGst = subtotal - gstAmount;
 
+    // ABN
+    const contractorAbn = contractor.abn ? formatAbn(contractor.abn) : null;
+
+    // Client ABN for business clients on $1000+ invoices
+    let clientAbnHtml = "";
+    if (isGst && client.business_client && total >= 1000 && client.client_abn) {
+      clientAbnHtml = `<p style="margin: 2px 0 0; font-size: 13px; color: #666;">ABN: ${formatAbn(client.client_abn)}</p>`;
+    }
+
+    // Totals section
+    let totalsHtml = "";
+    if (isGst) {
+      totalsHtml = `
+        <p style="margin: 4px 0;">Subtotal (ex. GST): <strong>$${subtotalExGst.toFixed(2)}</strong></p>
+        <p style="margin: 4px 0;">GST (10%): <strong>$${gstAmount.toFixed(2)}</strong></p>
+        <p style="margin: 8px 0 0; font-size: 20px; font-weight: bold;">Total (inc. GST): $${total.toFixed(2)}</p>
+      `;
+    } else {
+      totalsHtml = `
+        <p style="margin: 8px 0 0; font-size: 20px; font-weight: bold;">Total: $${total.toFixed(2)}</p>
+      `;
+    }
+
+    // Rate column header
+    const rateHeader = isGst ? "Rate (inc. GST)" : "Rate";
+
+    // Payment section
+    let paymentSectionHtml = "";
     if (hasStripe || hasBankTransfer) {
       let stripeHtml = "";
       if (hasStripe) {
@@ -127,19 +166,21 @@ serve(async (req) => {
         <div style="background: #16a34a; padding: 24px; border-radius: 8px 8px 0 0;">
           <h1 style="color: white; margin: 0; font-size: 24px;">${invoiceLabel} ${invoiceNumber}</h1>
           <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0;">From ${businessName}</p>
-          ${isGst && contractor.abn ? `<p style="color: rgba(255,255,255,0.7); margin: 4px 0 0; font-size: 13px;">ABN: ${contractor.abn}</p>` : ""}
+          ${contractorAbn ? `<p style="color: rgba(255,255,255,0.7); margin: 4px 0 0; font-size: 13px;">ABN: ${contractorAbn}</p>` : ""}
         </div>
         
         <div style="padding: 24px; background: #fff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
           <p>Hi ${client.name},</p>
           <p>Please find your ${invoiceLabel.toLowerCase()} below.</p>
+
+          ${clientAbnHtml ? `<div style="margin-bottom: 12px;">${clientAbnHtml}</div>` : ""}
           
           <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
             <thead>
               <tr style="background: #f8f9fa;">
                 <th style="padding: 8px; text-align: left;">Description</th>
                 <th style="padding: 8px; text-align: center;">Qty</th>
-                <th style="padding: 8px; text-align: right;">Rate${isGst ? " (ex GST)" : ""}</th>
+                <th style="padding: 8px; text-align: right;">${rateHeader}</th>
                 <th style="padding: 8px; text-align: right;">Amount</th>
               </tr>
             </thead>
@@ -149,14 +190,12 @@ serve(async (req) => {
           </table>
           
           <div style="text-align: right; margin-top: 16px; border-top: 2px solid #e5e7eb; padding-top: 12px;">
-            <p style="margin: 4px 0;">Subtotal: <strong>$${Number(invoice.subtotal).toFixed(2)}</strong></p>
-            ${isGst ? `<p style="margin: 4px 0;">GST (10%): <strong>$${Number(invoice.gst_amount).toFixed(2)}</strong></p>` : ""}
-            <p style="margin: 8px 0 0; font-size: 20px; font-weight: bold;">Total: $${Number(invoice.total).toFixed(2)}</p>
+            ${totalsHtml}
           </div>
           
           <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-top: 20px;">
             <p style="margin: 0;"><strong>Due Date:</strong> ${dueDate}</p>
-            ${isGst && contractor.abn ? `<p style="margin: 4px 0 0;"><strong>ABN:</strong> ${contractor.abn}</p>` : ""}
+            ${contractorAbn ? `<p style="margin: 4px 0 0;"><strong>ABN:</strong> ${contractorAbn}</p>` : ""}
             ${isGst ? `<p style="margin: 4px 0 0; font-size: 12px; color: #666;">All prices are in AUD. GST is included in the total.</p>` : ""}
           </div>
 
@@ -180,7 +219,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: "Yardly <onboarding@resend.dev>",
         to: [client.email],
-        subject: `${isGst ? "Tax Invoice" : "Invoice"} ${invoiceNumber} from ${businessName}`,
+        subject: `${invoiceLabel} ${invoiceNumber} from ${businessName}`,
         html: emailHtml,
       }),
     });
