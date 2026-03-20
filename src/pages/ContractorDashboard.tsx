@@ -24,7 +24,7 @@ import AlternativeTimeTab from "@/components/contractor-crm/AlternativeTimeTab";
 import RouteOptimizationBanner from "@/components/contractor-crm/RouteOptimizationBanner";
 import RouteOptimizationModal from "@/components/contractor-crm/RouteOptimizationModal";
 import OptimizationPreviewDialog from "@/components/contractor-crm/OptimizationPreviewDialog";
-import OnboardingPrerequisitesBanner from "@/components/contractor-crm/OnboardingPrerequisitesBanner";
+// OnboardingPrerequisitesBanner removed — consolidated into GettingStartedChecklist
 import ServiceOfferingsTab from "@/components/contractor-crm/ServiceOfferingsTab";
 import GettingStartedChecklist from "@/components/contractor-crm/GettingStartedChecklist";
 import MobileFAB from "@/components/contractor-crm/MobileFAB";
