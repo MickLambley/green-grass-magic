@@ -103,6 +103,13 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
   const [nextJob, setNextJob] = useState<{ title: string; date: string; client_id: string; client_name: string; total_price: number | null } | null>(null);
   const [contractorInfo, setContractorInfo] = useState<ContractorInfo>({ business_name: contractor.business_name, phone: contractor.phone, business_logo_url: contractor.business_logo_url });
 
+  // Payment method checks
+  const responses = (contractor.questionnaire_responses as Record<string, unknown>) || {};
+  const hasStripe = !!(contractor.stripe_account_id && contractor.stripe_onboarding_complete);
+  const hasBankTransfer = !!(contractor.bank_bsb && contractor.bank_account_number);
+  const hasAnyPaymentMethod = hasStripe || hasBankTransfer;
+  const bankAccountName = (responses.bank_account_name as string) || contractor.business_name || "";
+
   // Email edit dialog state
   const [emailEditOpen, setEmailEditOpen] = useState(false);
   const [emailEditClientId, setEmailEditClientId] = useState("");
