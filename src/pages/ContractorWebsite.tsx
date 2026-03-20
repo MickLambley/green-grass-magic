@@ -246,7 +246,7 @@ const ContractorWebsite = () => {
           <h2 className="font-display text-3xl font-bold text-foreground mb-4">{copy.cta_headline}</h2>
           <p className="text-muted-foreground text-lg mb-8">{copy.cta_text}</p>
           <Button size="xl" onClick={handleBookNow}>
-            Book Online Now <ChevronRight className="w-5 h-5 ml-1" />
+            {ctaLabel} <ChevronRight className="w-5 h-5 ml-1" />
           </Button>
         </div>
       </section>
