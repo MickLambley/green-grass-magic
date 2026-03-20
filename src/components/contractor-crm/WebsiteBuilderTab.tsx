@@ -611,12 +611,17 @@ const WebsiteBuilderTab = ({ contractor, onUpdate, onNavigateToPricing }: Websit
                 </div>
               ))}
             </div>
-            <div className="mt-4 rounded-lg overflow-hidden border border-border">
-              <div className="h-3 flex">
-                <div className="flex-1" style={{ backgroundColor: primaryColor }} />
-                <div className="flex-1" style={{ backgroundColor: secondaryColor }} />
-                <div className="flex-1" style={{ backgroundColor: accentColor }} />
+            <div className="mt-4 flex items-center justify-between">
+              <div className="rounded-lg overflow-hidden border border-border flex-1 mr-3">
+                <div className="h-3 flex">
+                  <div className="flex-1" style={{ backgroundColor: primaryColor }} />
+                  <div className="flex-1" style={{ backgroundColor: secondaryColor }} />
+                  <div className="flex-1" style={{ backgroundColor: accentColor }} />
+                </div>
               </div>
+              <Button variant="ghost" size="sm" onClick={handleRestoreDefaults}>
+                Restore defaults
+              </Button>
             </div>
           </CardContent>
         </Card>
