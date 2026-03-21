@@ -101,6 +101,7 @@ interface UnifiedJob {
 const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorkingHours, onOpenRouteOptimization }: JobsTabProps) => {
   const [jobs, setJobs] = useState<UnifiedJob[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [serviceOfferings, setServiceOfferings] = useState<ServiceOffering[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -141,6 +142,8 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [quoteResponseJob, setQuoteResponseJob] = useState<{
     id: string; title: string; client_name: string; description: string | null; customer_email?: string | null;
   } | null>(null);
+  const [useCustomTitle, setUseCustomTitle] = useState(false);
+  const [priceHelperText, setPriceHelperText] = useState<string | null>(null);
 
   const handleRunOptimization = async () => {
     setIsOptimizing(true);
