@@ -229,6 +229,14 @@ serve(async (req) => {
       `;
     }
 
+    // Prominent Pay Now CTA (above line items, only when Stripe payment URL exists)
+    const payNowCtaHtml = (hasStripe && stripePaymentUrl)
+      ? `<div style="text-align: center; margin: 16px 0 24px; padding: 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+           <a href="${stripePaymentUrl}" target="_blank" style="display: inline-block; background-color: #16a34a; color: #ffffff; font-size: 16px; font-weight: bold; text-decoration: none; padding: 14px 36px; border-radius: 8px;">Pay Now — $${total.toFixed(2)} by card</a>
+           <p style="margin: 8px 0 0; font-size: 12px; color: #888;">Secure payment powered by Stripe</p>
+         </div>`
+      : "";
+
     const emailHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
         <div style="background: #16a34a; padding: 24px; border-radius: 8px 8px 0 0;">
@@ -240,6 +248,8 @@ serve(async (req) => {
         <div style="padding: 24px; background: #fff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
           <p>Hi ${client.name},</p>
           <p>Please find your ${invoiceLabel.toLowerCase()} below.</p>
+
+          ${payNowCtaHtml}
 
           ${clientAbnHtml ? `<div style="margin-bottom: 12px;">${clientAbnHtml}</div>` : ""}
           
