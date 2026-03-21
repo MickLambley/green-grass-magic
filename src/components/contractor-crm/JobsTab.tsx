@@ -1339,7 +1339,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
         onQuoteSent={fetchData}
       />
 
-      {/* Delete Confirmation */}
+      {/* Delete Confirmation — Single Job */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1356,13 +1356,57 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Recurring Edit Dialog */}
-      <RecurringEditDialog
-        open={recurringEditOpen}
-        onOpenChange={setRecurringEditOpen}
-        onThisOnly={handleRecurringThisOnly}
-        onAllFuture={handleRecurringAllFuture}
-      />
+      {/* Delete Confirmation — Recurring Series */}
+      <AlertDialog open={deleteSeriesOpen} onOpenChange={setDeleteSeriesOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <RefreshCw className="w-5 h-5 text-destructive" />
+              Delete Recurring Job
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This job is part of a recurring series. How would you like to proceed?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteJob}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Trash2 className="w-4 h-4 mr-1.5" />}
+              Delete this job only
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={handleDeleteAllFuture}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Trash2 className="w-4 h-4 mr-1.5" />}
+              Delete all future jobs
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Frequency Change Confirmation */}
+      <AlertDialog open={frequencyChangeConfirmOpen} onOpenChange={setFrequencyChangeConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change Series Frequency?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Changing the frequency will delete and recreate upcoming scheduled jobs in this series. This cannot be undone. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => executeSave("future")}>
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
