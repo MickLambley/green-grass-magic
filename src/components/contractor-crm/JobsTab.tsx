@@ -27,7 +27,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock, Trash2, MessageSquare, Send, RefreshCw } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock, Trash2, MessageSquare, Send, RefreshCw, PencilLine } from "lucide-react";
 import DayTimeline from "./DayTimeline";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, endOfWeek, isToday } from "date-fns";
@@ -35,6 +35,7 @@ import type { Tables, Json } from "@/integrations/supabase/types";
 
 type Job = Tables<"jobs">;
 type Client = Tables<"clients">;
+type ServiceOffering = Tables<"service_offerings">;
 
 interface ClientAddress {
   street?: string;
@@ -100,6 +101,7 @@ interface UnifiedJob {
 const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorkingHours, onOpenRouteOptimization }: JobsTabProps) => {
   const [jobs, setJobs] = useState<UnifiedJob[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [serviceOfferings, setServiceOfferings] = useState<ServiceOffering[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -140,6 +142,8 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [quoteResponseJob, setQuoteResponseJob] = useState<{
     id: string; title: string; client_name: string; description: string | null; customer_email?: string | null;
   } | null>(null);
+  const [useCustomTitle, setUseCustomTitle] = useState(false);
+  const [priceHelperText, setPriceHelperText] = useState<string | null>(null);
 
   const handleRunOptimization = async () => {
     setIsOptimizing(true);
@@ -183,7 +187,70 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   useEffect(() => {
     fetchData();
     fetchPendingSuggestions();
+    fetchServiceOfferings();
   }, [contractorId]);
+
+  const fetchServiceOfferings = async () => {
+    const { data } = await supabase
+      .from("service_offerings")
+      .select("*")
+      .eq("contractor_id", contractorId)
+      .eq("is_active", true)
+      .order("created_at");
+    if (data) setServiceOfferings(data);
+  };
+
+  const getContractorBasePrice = async (): Promise<number | null> => {
+    const { data } = await supabase
+      .from("contractors")
+      .select("questionnaire_responses")
+      .eq("id", contractorId)
+      .single();
+    const pricing = (data?.questionnaire_responses as any)?.pricing;
+    return pricing?.base_price ?? null;
+  };
+
+  const enabledServices = useMemo(() => {
+    if (serviceOfferings.length === 0) return [];
+    const CATEGORY_ORDER: Record<string, number> = { lawn: 0, garden: 1, removal: 2, other: 3 };
+    return [...serviceOfferings].sort((a, b) => (CATEGORY_ORDER[a.category] ?? 99) - (CATEGORY_ORDER[b.category] ?? 99));
+  }, [serviceOfferings]);
+
+  const isLawnService = (name: string) => {
+    const lawnNames = ["lawn mowing", "edging & trimming", "edging and trimming"];
+    return lawnNames.includes(name.toLowerCase());
+  };
+
+  const handleServiceSelect = async (value: string) => {
+    if (value === "__custom__") {
+      setUseCustomTitle(true);
+      setForm(f => ({ ...f, title: "" }));
+      setPriceHelperText(null);
+      return;
+    }
+    setUseCustomTitle(false);
+    setForm(f => ({ ...f, title: value }));
+
+    const service = enabledServices.find(s => s.name === value);
+    if (service) {
+      if (isLawnService(service.name)) {
+        const basePrice = await getContractorBasePrice();
+        if (basePrice) {
+          setForm(f => ({ ...f, title: value, total_price: basePrice.toString() }));
+        }
+        setPriceHelperText(null);
+      } else if (service.requires_quote) {
+        setPriceHelperText("Quote required — enter the agreed price for this job.");
+        if (service.default_rate) {
+          setForm(f => ({ ...f, title: value, total_price: service.default_rate!.toString() }));
+        } else {
+          setForm(f => ({ ...f, title: value, total_price: "" }));
+        }
+      } else {
+        setPriceHelperText(null);
+      }
+    }
+  };
 
   const fetchPendingSuggestions = async () => {
     // Fetch alternative_suggestions with status='pending' for this contractor
@@ -287,8 +354,11 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
 
   const openCreateDialog = (dateOverride?: string) => {
     setEditingJob(null);
+    const defaultTitle = enabledServices.length > 0 ? enabledServices[0].name : "Lawn Mowing";
+    setUseCustomTitle(enabledServices.length === 0);
+    setPriceHelperText(null);
     setForm({
-      title: "Lawn Mowing",
+      title: defaultTitle,
       client_id: clients.length > 0 ? clients[0].id : "",
       description: "",
       scheduled_date: dateOverride || new Date().toISOString().split("T")[0],
@@ -302,6 +372,12 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       recurrence_count: "4",
     });
     setDialogOpen(true);
+    // Auto-populate price for first service if it's a lawn service
+    if (enabledServices.length > 0 && isLawnService(defaultTitle)) {
+      getContractorBasePrice().then(bp => {
+        if (bp) setForm(f => ({ ...f, total_price: bp.toString() }));
+      });
+    }
   };
 
   const openEditDialog = async (job: Job) => {
@@ -327,6 +403,10 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const proceedToEditDialog = (job: Job) => {
     setEditingJob(job);
     const recurrence = job.recurrence_rule as unknown as RecurrenceRule | null;
+    // Check if title matches an enabled service
+    const matchesService = enabledServices.some(s => s.name === job.title);
+    setUseCustomTitle(!matchesService);
+    setPriceHelperText(null);
     const formValues = {
       title: job.title,
       client_id: job.client_id,
@@ -1139,7 +1219,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       )}
 
       {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setSaveScope(null); setSeriesInfo(null); setOriginalFormValues(null); } }}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setSaveScope(null); setSeriesInfo(null); setOriginalFormValues(null); setUseCustomTitle(false); setPriceHelperText(null); } }}>
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingJob ? "Edit Job" : "New Job"}</DialogTitle>
@@ -1156,8 +1236,56 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Job Title</Label>
-              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Lawn Mowing" />
+              <Label>Service / Job Title</Label>
+              {enabledServices.length > 0 && !useCustomTitle ? (
+                <Select value={form.title} onValueChange={handleServiceSelect}>
+                  <SelectTrigger><SelectValue placeholder="Select a service" /></SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      const grouped = enabledServices.reduce<Record<string, ServiceOffering[]>>((acc, s) => {
+                        (acc[s.category] = acc[s.category] || []).push(s);
+                        return acc;
+                      }, {});
+                      const categoryLabels: Record<string, string> = { lawn: "Lawn Care", garden: "Garden & Landscaping", removal: "Removal", other: "Other Services" };
+                      const showGroups = enabledServices.length > 5;
+                      const items: React.ReactNode[] = [];
+                      Object.entries(grouped).forEach(([cat, svcs]) => {
+                        if (showGroups) {
+                          items.push(
+                            <div key={`label-${cat}`} className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                              {categoryLabels[cat] || cat}
+                            </div>
+                          );
+                        }
+                        svcs.forEach(s => {
+                          items.push(<SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>);
+                        });
+                      });
+                      items.push(<SelectItem key="__custom__" value="__custom__"><span className="flex items-center gap-1.5"><PencilLine className="w-3.5 h-3.5" /> Other / Custom...</span></SelectItem>);
+                      return items;
+                    })()}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex gap-2">
+                    <Input
+                      value={form.title}
+                      onChange={(e) => setForm({ ...form, title: e.target.value })}
+                      placeholder="Enter custom job title"
+                      className="flex-1"
+                    />
+                    {enabledServices.length > 0 && (
+                      <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => { setUseCustomTitle(false); setForm(f => ({ ...f, title: enabledServices[0].name })); setPriceHelperText(null); }}>
+                        Pick service
+                      </Button>
+                    )}
+                  </div>
+                  {enabledServices.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No services enabled — go to Services to add some, or type a custom title.</p>
+                  )}
+                </div>
+              )}
             </div>
             {/* Recurring series indicator */}
             {editingJob && seriesInfo && (
@@ -1180,6 +1308,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               <div className="space-y-2">
                 <Label>Price ($)</Label>
                 <Input type="number" step="0.01" value={form.total_price} onChange={(e) => setForm({ ...form, total_price: e.target.value })} placeholder="0.00" />
+                {priceHelperText && <p className="text-xs text-amber-600">{priceHelperText}</p>}
               </div>
               <div className="space-y-2">
                 <Label>Duration (min)</Label>
