@@ -371,6 +371,69 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
         </CardContent>
       </Card>
 
+      {/* Online Booking Payments */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-display text-lg flex items-center gap-2">
+            <Globe className="w-5 h-5" />
+            Online Booking Payments
+          </CardTitle>
+          <CardDescription>How to collect payment for jobs booked through your website</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-3">
+            {[
+              {
+                value: "charge_immediate",
+                label: "Charge card immediately on job completion",
+                description: "When you mark a job as complete, the client's saved card is charged automatically and a receipt is sent.",
+              },
+              {
+                value: "charge_delayed",
+                label: "Charge card 2 days after job completion",
+                description: "The client is notified that their card will be charged in 2 days, giving them time to raise any concerns.",
+                recommended: true,
+              },
+              {
+                value: "invoice_only",
+                label: "Send invoice on completion — client pays manually",
+                description: "No automatic charge. An invoice with a payment link is sent to the client after job completion.",
+              },
+            ].map((option) => (
+              <label
+                key={option.value}
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                  onlineBookingPaymentMode === option.value
+                    ? "border-primary/40 bg-primary/5"
+                    : "border-border hover:bg-muted/50"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="online_booking_payment_mode"
+                  value={option.value}
+                  checked={onlineBookingPaymentMode === option.value}
+                  onChange={() => setOnlineBookingPaymentMode(option.value)}
+                  className="mt-0.5 w-4 h-4 accent-primary"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-foreground">{option.label}</span>
+                    {option.recommended && (
+                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px]">Recommended</Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{option.description}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground border-t border-border pt-3">
+            This setting only applies to jobs booked online where the client has saved a card. For manually created jobs, payment is always handled via invoice.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Auto-save indicator */}
       {isSaving && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
