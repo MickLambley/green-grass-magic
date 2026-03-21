@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Clock, Car, ChevronLeft, ChevronRight, GripVertical, ChevronDown, ChevronUp, ArrowRight, AlertTriangle } from "lucide-react";
+import { MapPin, Clock, Car, ChevronLeft, ChevronRight, GripVertical, ChevronDown, ChevronUp, ArrowRight, AlertTriangle, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format, addDays, subDays, isToday, isTomorrow, isYesterday } from "date-fns";
 
@@ -86,11 +86,17 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
   const [dropPreviewMinutes, setDropPreviewMinutes] = useState<number | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
+  const untimedJobs = useMemo(() => {
+    return jobs.filter((j) => !j.scheduled_time && j.status !== "cancelled");
+  }, [jobs]);
+
   const sortedJobs = useMemo(() => {
     return [...jobs]
       .filter((j) => j.scheduled_time && j.status !== "cancelled")
       .sort((a, b) => timeToMinutes(a.scheduled_time!) - timeToMinutes(b.scheduled_time!));
   }, [jobs]);
+
+  const hasAnyJobs = sortedJobs.length > 0 || untimedJobs.length > 0;
 
   const entries = useMemo(() => {
     const result: {
@@ -260,19 +266,71 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
         </div>
       </CardHeader>
       <CardContent className="px-3 pb-4">
-        {workingHours === null && sortedJobs.length === 0 && (
+        {workingHours === null && !hasAnyJobs && (
           <div className="text-center py-12 text-muted-foreground text-sm">
             <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
             Day off — not a working day
           </div>
         )}
 
-        {workingHours !== null && sortedJobs.length === 0 ? (
+        {workingHours !== null && !hasAnyJobs ? (
           <div className="text-center py-12 text-muted-foreground text-sm">
             <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
             No scheduled jobs for this day
           </div>
-        ) : sortedJobs.length > 0 ? (
+        ) : hasAnyJobs ? (
+          <>
+          {/* Untimed jobs section */}
+          {untimedJobs.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <CalendarClock className="w-3.5 h-3.5 text-sunshine" />
+                <span className="text-xs font-semibold text-sunshine">No time set</span>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-sunshine/40 text-sunshine bg-sunshine/10">
+                  {untimedJobs.length}
+                </Badge>
+              </div>
+              <div className="space-y-2">
+                {untimedJobs.map((job) => {
+                  const colors = statusColors[job.status] || statusColors.scheduled;
+                  return (
+                    <div
+                      key={job.id}
+                      className="rounded-lg border-l-4 border-sunshine/60 bg-sunshine/10 cursor-pointer hover:shadow-md transition-all px-3 py-2"
+                      onClick={() => onJobClick?.(job)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-foreground truncate">{job.title}</span>
+                            {job.source === "platform" && (
+                              <Badge variant="outline" className="text-[8px] px-1 py-0 shrink-0">🌐</Badge>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground truncate">{job.client_name}</p>
+                        </div>
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-sunshine/40 text-sunshine bg-sunshine/10 shrink-0">
+                          <CalendarClock className="w-2.5 h-2.5 mr-0.5" />
+                          Unscheduled
+                        </Badge>
+                      </div>
+                      {(job.client_address?.street || job.client_address?.city || job.client_address?.postcode) && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <MapPin className="w-2.5 h-2.5 text-muted-foreground shrink-0" />
+                          <span className="text-[10px] text-muted-foreground truncate">
+                            {[job.client_address.street, job.client_address.city, job.client_address.postcode].filter(Boolean).join(", ")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {sortedJobs.length > 0 && <div className="border-b border-border/50 mt-4" />}
+            </div>
+          )}
+
+          {sortedJobs.length > 0 && (
           <div className="relative" style={{ height: `${totalPx}px` }}>
             {/* Working hours shaded background */}
             {workingHours && (() => {
@@ -470,7 +528,8 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
             {/* Summary */}
             <div className="mt-4 ml-14 flex items-center gap-4 pt-3 border-t border-border">
               <span className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">{sortedJobs.length}</span> job{sortedJobs.length !== 1 ? "s" : ""}
+                <span className="font-semibold text-foreground">{sortedJobs.length + untimedJobs.length}</span> job{(sortedJobs.length + untimedJobs.length) !== 1 ? "s" : ""}
+                {untimedJobs.length > 0 && <span className="text-sunshine ml-1">({untimedJobs.length} unscheduled)</span>}
               </span>
               {entries.filter(e => e.type === "travel").length > 0 && (
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -496,6 +555,8 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
               </p>
             )}
           </div>
+          )}
+          </>
         ) : null}
 
         {cancelledJobs.length > 0 && (
