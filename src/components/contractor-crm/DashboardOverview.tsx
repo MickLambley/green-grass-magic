@@ -101,7 +101,7 @@ const DashboardOverview = ({ contractorId, onNavigateToTab, onNavigateToJob }: D
 
     const [
       clientsRes, scheduledRes, unpaidRes, paidRes, todayRes, upcomingRes,
-      websiteRes, overdueRes, quotesRes, weekCompletedRes,
+      websiteRes, overdueRes, quotesRes, weekCompletedRes, failedRes,
     ] = await Promise.all([
       supabase.from("clients").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId),
       supabase.from("jobs").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId).eq("status", "scheduled"),
@@ -112,15 +112,14 @@ const DashboardOverview = ({ contractorId, onNavigateToTab, onNavigateToJob }: D
       supabase.from("jobs").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId).eq("source", "website_booking").eq("status", "pending_confirmation"),
       supabase.from("invoices").select("id, due_date").eq("contractor_id", contractorId).neq("status", "paid").not("due_date", "is", null),
       supabase.from("quotes").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId).in("status", ["draft", "sent", "pending"]),
-      // This week's completed jobs
       supabase.from("jobs").select("id, total_price").eq("contractor_id", contractorId).eq("status", "completed").gte("scheduled_date", weekStart).lte("scheduled_date", weekEndDate),
+      supabase.from("invoices").select("id", { count: "exact", head: true }).eq("contractor_id", contractorId).eq("status", "payment_failed"),
     ]);
 
     const revenue = (paidRes.data || []).reduce((sum, inv) => sum + Number(inv.total), 0);
     const todayDate = startOfDay(new Date());
     const overdueCount = (overdueRes.data || []).filter((inv) => inv.due_date && isBefore(new Date(inv.due_date), todayDate)).length;
 
-    // Week summary
     const weekCompleted = weekCompletedRes.data || [];
     const weekEarned = weekCompleted.reduce((sum, j) => sum + Number(j.total_price || 0), 0);
 
@@ -132,6 +131,7 @@ const DashboardOverview = ({ contractorId, onNavigateToTab, onNavigateToJob }: D
       scheduledJobs: scheduledRes.count || 0,
       unpaidInvoices: unpaidRes.count || 0,
       overdueInvoices: overdueCount,
+      failedInvoices: failedRes.count || 0,
       revenue,
       openQuotes: quotesRes.count || 0,
     });
