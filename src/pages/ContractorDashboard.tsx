@@ -353,7 +353,16 @@ const ContractorDashboard = () => {
                 onRunOptimization={handleRunOptimization}
                 isOptimizing={isOptimizing}
               />
-              <DashboardOverview contractorId={contractor.id} onNavigateToJob={() => switchTab("jobs")} />
+              <DashboardOverview
+                contractorId={contractor.id}
+                onNavigateToTab={(tab, filter) => {
+                  if (filter) {
+                    setSearchParams({ tab, filter }, { replace: true });
+                  }
+                  switchTab(tab);
+                }}
+                onNavigateToJob={(jobId) => switchTab("jobs")}
+              />
               <MobileFAB onNavigate={switchTab} />
             </div>
           )}
