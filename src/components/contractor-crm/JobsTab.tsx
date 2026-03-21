@@ -354,8 +354,11 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
 
   const openCreateDialog = (dateOverride?: string) => {
     setEditingJob(null);
+    const defaultTitle = enabledServices.length > 0 ? enabledServices[0].name : "Lawn Mowing";
+    setUseCustomTitle(enabledServices.length === 0);
+    setPriceHelperText(null);
     setForm({
-      title: "Lawn Mowing",
+      title: defaultTitle,
       client_id: clients.length > 0 ? clients[0].id : "",
       description: "",
       scheduled_date: dateOverride || new Date().toISOString().split("T")[0],
@@ -369,6 +372,12 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       recurrence_count: "4",
     });
     setDialogOpen(true);
+    // Auto-populate price for first service if it's a lawn service
+    if (enabledServices.length > 0 && isLawnService(defaultTitle)) {
+      getContractorBasePrice().then(bp => {
+        if (bp) setForm(f => ({ ...f, total_price: bp.toString() }));
+      });
+    }
   };
 
   const openEditDialog = async (job: Job) => {
