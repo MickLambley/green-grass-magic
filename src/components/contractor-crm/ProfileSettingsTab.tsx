@@ -96,7 +96,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
       if (!savingRef.current && handleSaveRef.current) handleSaveRef.current();
     }, 1000);
     return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); };
-  }, [form, workingHours, paymentTerms, customDays, defaultInvoiceNotes]);
+  }, [form, workingHours, paymentTerms, customDays, defaultInvoiceNotes, onlineBookingPaymentMode]);
 
   const handleSave = async () => {
     if (savingRef.current) return;
