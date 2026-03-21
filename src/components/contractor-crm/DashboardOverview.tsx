@@ -51,6 +51,7 @@ const DashboardOverview = ({ contractorId, onNavigateToTab, onNavigateToJob }: D
     scheduledJobs: 0,
     unpaidInvoices: 0,
     overdueInvoices: 0,
+    failedInvoices: 0,
     revenue: 0,
     openQuotes: 0,
   });
