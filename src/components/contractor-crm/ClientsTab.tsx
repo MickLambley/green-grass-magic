@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,90 @@ import { Plus, Search, Pencil, Trash2, Loader2, Users, MapPin, CheckCircle2, Che
 import { toast } from "sonner";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
+declare const google: any;
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string;
+
 type Client = Tables<"clients">;
+
+type FormState = {
+  name: string; email: string; phone: string; property_notes: string;
+  street: string; city: string; state: string; postcode: string;
+  business_client: boolean; client_abn: string;
+};
+
+const ClientAddressAutocomplete = ({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<any>(null);
+  const formRef = useRef(form);
+  formRef.current = form;
+
+  useEffect(() => {
+    if (!GOOGLE_MAPS_API_KEY || !inputRef.current) return;
+
+    const init = () => {
+      if (autocompleteRef.current) return;
+      const ac = new google.maps.places.Autocomplete(inputRef.current!, {
+        componentRestrictions: { country: "au" },
+        types: ["address"],
+        fields: ["address_components", "formatted_address"],
+      });
+      ac.addListener("place_changed", () => {
+        const place = ac.getPlace();
+        if (!place?.address_components) return;
+        let street_number = "", route = "", city = "", state = "", postcode = "";
+        for (const c of place.address_components) {
+          const t = c.types[0];
+          if (t === "street_number") street_number = c.long_name;
+          else if (t === "route") route = c.long_name;
+          else if (t === "locality" || t === "sublocality_level_1") city = c.long_name;
+          else if (t === "administrative_area_level_1") state = c.short_name;
+          else if (t === "postal_code") postcode = c.long_name;
+        }
+        setForm({
+          ...formRef.current,
+          street: `${street_number} ${route}`.trim(),
+          city, state, postcode,
+        });
+      });
+      autocompleteRef.current = ac;
+    };
+
+    if ((window as any).google?.maps?.places) { init(); return; }
+    if (document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]')) {
+      const iv = setInterval(() => { if ((window as any).google?.maps?.places) { clearInterval(iv); init(); } }, 100);
+      return () => clearInterval(iv);
+    }
+    const s = document.createElement("script");
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+    s.async = true;
+    s.onload = init;
+    document.head.appendChild(s);
+
+    return () => { if (autocompleteRef.current) { google.maps.event.clearInstanceListeners(autocompleteRef.current); autocompleteRef.current = null; } };
+  }, []);
+
+  return (
+    <div className="space-y-2">
+      <Label>Address</Label>
+      <div className="relative">
+        <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <Input
+          ref={inputRef}
+          value={form.street}
+          onChange={(e) => setForm({ ...form, street: e.target.value })}
+          placeholder="Start typing an address..."
+          className="pl-8 mb-2"
+          autoComplete="off"
+        />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="City" />
+        <Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} placeholder="State" />
+        <Input value={form.postcode} onChange={(e) => setForm({ ...form, postcode: e.target.value })} placeholder="Postcode" />
+      </div>
+    </div>
+  );
+};
 
 interface ClientsTabProps {
   contractorId: string;
