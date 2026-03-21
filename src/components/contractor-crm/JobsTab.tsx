@@ -35,6 +35,7 @@ import type { Tables, Json } from "@/integrations/supabase/types";
 
 type Job = Tables<"jobs">;
 type Client = Tables<"clients">;
+type ServiceOffering = Tables<"service_offerings">;
 
 interface ClientAddress {
   street?: string;
