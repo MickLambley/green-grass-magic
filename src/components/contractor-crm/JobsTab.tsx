@@ -1139,10 +1139,11 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       )}
 
       {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setSaveScope(null); setSeriesInfo(null); setOriginalFormValues(null); } }}>
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingJob ? "Edit Job" : "New Job"}</DialogTitle>
+            {editingJob && <DialogDescription>Update the job details below.</DialogDescription>}
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -1158,6 +1159,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               <Label>Job Title</Label>
               <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Lawn Mowing" />
             </div>
+            {/* Recurring series indicator */}
+            {editingJob && seriesInfo && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">
+                <RefreshCw className="w-4 h-4 text-primary shrink-0" />
+                <span>Recurring job · {seriesInfo.frequency.charAt(0).toUpperCase() + seriesInfo.frequency.slice(1)} · {seriesInfo.count} jobs in series</span>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Date *</Label>
@@ -1179,7 +1187,22 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               </div>
             </div>
 
-            {/* Recurrence */}
+            {/* Frequency dropdown for recurring series */}
+            {editingJob && seriesInfo && (
+              <div className="space-y-2">
+                <Label>Frequency</Label>
+                <Select value={form.recurrence_frequency} onValueChange={(v: "weekly" | "fortnightly" | "monthly") => setForm({ ...form, recurrence_frequency: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="fortnightly">Fortnightly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Recurrence for new jobs */}
             {!editingJob && (
               <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
                 <div className="flex items-center gap-2">
@@ -1236,17 +1259,38 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               <Button
                 variant="destructive"
                 size="sm"
-                onClick={() => { setDeletingJobId(editingJob.id); setDeleteConfirmOpen(true); }}
+                onClick={() => {
+                  setDeletingJobId(editingJob.id);
+                  if (seriesInfo) {
+                    setDeleteSeriesOpen(true);
+                  } else {
+                    setDeleteConfirmOpen(true);
+                  }
+                }}
               >
                 <Trash2 className="w-4 h-4 mr-1" /> Delete
               </Button>
             )}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleSave} disabled={isSaving}>
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingJob ? "Save Changes" : form.is_recurring ? `Create ${form.recurrence_count} Jobs` : "Create Job"}
-              </Button>
-            </div>
+            {saveScope === "pending" ? (
+              <div className="flex gap-2 items-center">
+                <Button variant="ghost" size="sm" onClick={() => setSaveScope(null)}>Cancel</Button>
+                <Button variant="outline" size="sm" onClick={handleSaveThisOnly} disabled={isSaving}>
+                  {isSaving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+                  Save this job only
+                </Button>
+                <Button size="sm" onClick={handleSaveAllFuture} disabled={isSaving}>
+                  {isSaving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+                  Save all future jobs
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => { setDialogOpen(false); setSaveScope(null); setSeriesInfo(null); }}>Cancel</Button>
+                <Button onClick={handleSave} disabled={isSaving}>
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingJob ? "Save Changes" : form.is_recurring ? `Create ${form.recurrence_count} Jobs` : "Create Job"}
+                </Button>
+              </div>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
