@@ -67,6 +67,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 function computeDisplayStatus(invoice: Invoice): string {
   if (invoice.status === "paid") return "paid";
+  if (invoice.status === "payment_failed") return "payment_failed";
   if (invoice.due_date && isBefore(new Date(invoice.due_date), startOfDay(new Date())) && invoice.status !== "paid") {
     return "overdue";
   }
