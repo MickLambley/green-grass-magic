@@ -168,8 +168,10 @@ const DashboardOverview = ({ contractorId, onNavigateToTab, onNavigateToJob }: D
     },
     {
       title: "Unpaid Invoices", value: stats.unpaidInvoices, icon: FileText,
-      color: stats.overdueInvoices > 0 ? "text-destructive" : "text-sunshine",
-      subtitle: stats.overdueInvoices > 0 ? `${stats.overdueInvoices} overdue` : undefined,
+      color: stats.overdueInvoices > 0 || stats.failedInvoices > 0 ? "text-destructive" : "text-sunshine",
+      subtitle: stats.failedInvoices > 0
+        ? `${stats.overdueInvoices > 0 ? `${stats.overdueInvoices} overdue · ` : ""}${stats.failedInvoices} failed`
+        : stats.overdueInvoices > 0 ? `${stats.overdueInvoices} overdue` : undefined,
       subtitleColor: "text-destructive", tab: "invoices", filter: "unpaid",
     },
     {
