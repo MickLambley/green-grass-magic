@@ -554,6 +554,8 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
               </p>
             )}
           </div>
+          )}
+          </>
         ) : null}
 
         {cancelledJobs.length > 0 && (
