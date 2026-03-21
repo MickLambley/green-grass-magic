@@ -125,13 +125,15 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [markPaidJob, setMarkPaidJob] = useState<{
     id: string; title: string; client_name: string; total_price: number | null;
   } | null>(null);
-   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [pendingSuggestionJobIds, setPendingSuggestionJobIds] = useState<Set<string>>(new Set());
-  const [recurringEditOpen, setRecurringEditOpen] = useState(false);
-  const [recurringEditScope, setRecurringEditScope] = useState<"this" | "future" | null>(null);
-  const [pendingEditJob, setPendingEditJob] = useState<Job | null>(null);
+  const [seriesInfo, setSeriesInfo] = useState<{ id: string; frequency: string; count: number } | null>(null);
+  const [saveScope, setSaveScope] = useState<null | "pending">(null);
+  const [originalFormValues, setOriginalFormValues] = useState<Record<string, any> | null>(null);
+  const [deleteSeriesOpen, setDeleteSeriesOpen] = useState(false);
+  const [frequencyChangeConfirmOpen, setFrequencyChangeConfirmOpen] = useState(false);
   const [listPage, setListPage] = useState(0);
   const PAGE_SIZE = 25;
   const [quoteResponseOpen, setQuoteResponseOpen] = useState(false);
