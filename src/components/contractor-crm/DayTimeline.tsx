@@ -260,7 +260,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
         </div>
       </CardHeader>
       <CardContent className="px-3 pb-4">
-        {workingHours === null && (
+        {workingHours === null && sortedJobs.length === 0 && (
           <div className="text-center py-12 text-muted-foreground text-sm">
             <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
             Day off — not a working day
@@ -272,7 +272,7 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
             <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
             No scheduled jobs for this day
           </div>
-        ) : workingHours !== null ? (
+        ) : sortedJobs.length > 0 ? (
           <div className="relative" style={{ height: `${totalPx}px` }}>
             {/* Working hours shaded background */}
             {workingHours && (() => {
