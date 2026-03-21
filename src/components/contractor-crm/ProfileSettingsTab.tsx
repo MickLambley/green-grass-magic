@@ -72,6 +72,9 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
   );
   const [customDays, setCustomDays] = useState<number>(savedCustomDays || 14);
   const [defaultInvoiceNotes, setDefaultInvoiceNotes] = useState(savedNotes || "");
+  const [onlineBookingPaymentMode, setOnlineBookingPaymentMode] = useState<string>(
+    (responses.online_booking_payment_mode as string) || "charge_delayed"
+  );
 
   // Auto-save debounce
   const isInitialMount = useRef(true);
