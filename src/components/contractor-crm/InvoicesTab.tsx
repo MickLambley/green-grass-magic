@@ -54,6 +54,7 @@ const STATUS_BADGES: Record<string, string> = {
   unpaid: "bg-sunshine/20 text-sunshine border-sunshine/30",
   overdue: "bg-destructive/20 text-destructive border-destructive/30 font-bold",
   paid: "bg-primary/20 text-primary border-primary/30",
+  payment_failed: "bg-destructive/20 text-destructive border-destructive/30",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -61,10 +62,12 @@ const STATUS_LABELS: Record<string, string> = {
   unpaid: "Unpaid",
   overdue: "Overdue",
   paid: "Paid",
+  payment_failed: "Failed",
 };
 
 function computeDisplayStatus(invoice: Invoice): string {
   if (invoice.status === "paid") return "paid";
+  if (invoice.status === "payment_failed") return "payment_failed";
   if (invoice.due_date && isBefore(new Date(invoice.due_date), startOfDay(new Date())) && invoice.status !== "paid") {
     return "overdue";
   }
@@ -164,7 +167,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
         client_email: clientMap.get(inv.client_id)?.email || undefined,
         display_status: computeDisplayStatus(inv),
       }));
-      const statusOrder: Record<string, number> = { overdue: 0, unpaid: 1, draft: 2, paid: 3 };
+      const statusOrder: Record<string, number> = { payment_failed: -1, overdue: 0, unpaid: 1, draft: 2, paid: 3 };
       enriched.sort((a, b) => (statusOrder[a.display_status || "draft"] ?? 2) - (statusOrder[b.display_status || "draft"] ?? 2));
       setInvoices(enriched);
 

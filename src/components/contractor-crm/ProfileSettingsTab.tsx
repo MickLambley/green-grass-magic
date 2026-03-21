@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, CreditCard, Clock, Mail, Lock, MapPin, FileText, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, CreditCard, Clock, Mail, Lock, MapPin, FileText, CheckCircle2, AlertTriangle, Globe } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import WorkingHoursEditor, { DEFAULT_WORKING_HOURS, type WorkingHours } from "./WorkingHoursEditor";
@@ -72,6 +72,9 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
   );
   const [customDays, setCustomDays] = useState<number>(savedCustomDays || 14);
   const [defaultInvoiceNotes, setDefaultInvoiceNotes] = useState(savedNotes || "");
+  const [onlineBookingPaymentMode, setOnlineBookingPaymentMode] = useState<string>(
+    (responses.online_booking_payment_mode as string) || "charge_delayed"
+  );
 
   // Auto-save debounce
   const isInitialMount = useRef(true);
@@ -93,7 +96,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
       if (!savingRef.current && handleSaveRef.current) handleSaveRef.current();
     }, 1000);
     return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); };
-  }, [form, workingHours, paymentTerms, customDays, defaultInvoiceNotes]);
+  }, [form, workingHours, paymentTerms, customDays, defaultInvoiceNotes, onlineBookingPaymentMode]);
 
   const handleSave = async () => {
     if (savingRef.current) return;
@@ -107,6 +110,7 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
       default_payment_terms_custom_days: paymentTerms === "custom" ? customDays : null,
       default_invoice_notes: defaultInvoiceNotes.trim() || null,
       bank_account_name: form.bank_account_name.trim() || null,
+      online_booking_payment_mode: onlineBookingPaymentMode,
       settings_saved: true,
       gst_status_confirmed: true,
     };
@@ -364,6 +368,69 @@ const ProfileSettingsTab = ({ contractor, onUpdate }: ProfileSettingsTabProps) =
               )}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Online Booking Payments */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-display text-lg flex items-center gap-2">
+            <Globe className="w-5 h-5" />
+            Online Booking Payments
+          </CardTitle>
+          <CardDescription>How to collect payment for jobs booked through your website</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-3">
+            {[
+              {
+                value: "charge_immediate",
+                label: "Charge card immediately on job completion",
+                description: "When you mark a job as complete, the client's saved card is charged automatically and a receipt is sent.",
+              },
+              {
+                value: "charge_delayed",
+                label: "Charge card 2 days after job completion",
+                description: "The client is notified that their card will be charged in 2 days, giving them time to raise any concerns.",
+                recommended: true,
+              },
+              {
+                value: "invoice_only",
+                label: "Send invoice on completion — client pays manually",
+                description: "No automatic charge. An invoice with a payment link is sent to the client after job completion.",
+              },
+            ].map((option) => (
+              <label
+                key={option.value}
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                  onlineBookingPaymentMode === option.value
+                    ? "border-primary/40 bg-primary/5"
+                    : "border-border hover:bg-muted/50"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="online_booking_payment_mode"
+                  value={option.value}
+                  checked={onlineBookingPaymentMode === option.value}
+                  onChange={() => setOnlineBookingPaymentMode(option.value)}
+                  className="mt-0.5 w-4 h-4 accent-primary"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-foreground">{option.label}</span>
+                    {option.recommended && (
+                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px]">Recommended</Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{option.description}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground border-t border-border pt-3">
+            This setting only applies to jobs booked online where the client has saved a card. For manually created jobs, payment is always handled via invoice.
+          </p>
         </CardContent>
       </Card>
 
