@@ -403,6 +403,10 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const proceedToEditDialog = (job: Job) => {
     setEditingJob(job);
     const recurrence = job.recurrence_rule as unknown as RecurrenceRule | null;
+    // Check if title matches an enabled service
+    const matchesService = enabledServices.some(s => s.name === job.title);
+    setUseCustomTitle(!matchesService);
+    setPriceHelperText(null);
     const formValues = {
       title: job.title,
       client_id: job.client_id,
