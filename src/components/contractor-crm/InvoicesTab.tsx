@@ -54,6 +54,7 @@ const STATUS_BADGES: Record<string, string> = {
   unpaid: "bg-sunshine/20 text-sunshine border-sunshine/30",
   overdue: "bg-destructive/20 text-destructive border-destructive/30 font-bold",
   paid: "bg-primary/20 text-primary border-primary/30",
+  payment_failed: "bg-destructive/20 text-destructive border-destructive/30",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -61,6 +62,7 @@ const STATUS_LABELS: Record<string, string> = {
   unpaid: "Unpaid",
   overdue: "Overdue",
   paid: "Paid",
+  payment_failed: "Failed",
 };
 
 function computeDisplayStatus(invoice: Invoice): string {
