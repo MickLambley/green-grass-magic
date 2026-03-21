@@ -38,7 +38,7 @@ serve(async (req) => {
     // Verify contractor
     const { data: contractor } = await supabase
       .from("contractors")
-      .select("id, user_id, business_name, stripe_account_id, gst_registered, subscription_tier, abn")
+      .select("id, user_id, business_name, stripe_account_id, gst_registered, subscription_tier, abn, questionnaire_responses")
       .eq("user_id", userId)
       .single();
     if (!contractor) throw new Error("Contractor not found");
