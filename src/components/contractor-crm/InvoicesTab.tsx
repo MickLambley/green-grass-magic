@@ -167,7 +167,7 @@ const InvoicesTab = ({ contractorId, gstRegistered, contractor }: InvoicesTabPro
         client_email: clientMap.get(inv.client_id)?.email || undefined,
         display_status: computeDisplayStatus(inv),
       }));
-      const statusOrder: Record<string, number> = { overdue: 0, unpaid: 1, draft: 2, paid: 3 };
+      const statusOrder: Record<string, number> = { payment_failed: -1, overdue: 0, unpaid: 1, draft: 2, paid: 3 };
       enriched.sort((a, b) => (statusOrder[a.display_status || "draft"] ?? 2) - (statusOrder[b.display_status || "draft"] ?? 2));
       setInvoices(enriched);
 
