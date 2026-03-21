@@ -415,15 +415,7 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label>Address</Label>
-              <Input value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} placeholder="Street address" className="mb-2" />
-              <div className="grid grid-cols-3 gap-2">
-                <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="City" />
-                <Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} placeholder="State" />
-                <Input value={form.postcode} onChange={(e) => setForm({ ...form, postcode: e.target.value })} placeholder="Postcode" />
-              </div>
-            </div>
+            <ClientAddressAutocomplete form={form} setForm={setForm} />
             <div className="space-y-2">
               <Label htmlFor="notes">Property Notes</Label>
               <Textarea id="notes" value={form.property_notes} onChange={(e) => setForm({ ...form, property_notes: e.target.value })} placeholder="Gate code, dog in backyard, etc." rows={3} />
