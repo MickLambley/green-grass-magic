@@ -1023,6 +1023,47 @@ export type Database = {
           },
         ]
       }
+      recurring_series: {
+        Row: {
+          contractor_id: string
+          created_at: string
+          frequency: string
+          id: string
+          series_anchor_day: number
+          series_start_date: string
+          series_time: string | null
+          total_count: number | null
+        }
+        Insert: {
+          contractor_id: string
+          created_at?: string
+          frequency?: string
+          id?: string
+          series_anchor_day?: number
+          series_start_date: string
+          series_time?: string | null
+          total_count?: number | null
+        }
+        Update: {
+          contractor_id?: string
+          created_at?: string
+          frequency?: string
+          id?: string
+          series_anchor_day?: number
+          series_start_date?: string
+          series_time?: string | null
+          total_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_series_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       route_optimization_suggestions: {
         Row: {
           current_date_val: string
