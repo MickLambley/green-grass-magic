@@ -1308,6 +1308,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               <div className="space-y-2">
                 <Label>Price ($)</Label>
                 <Input type="number" step="0.01" value={form.total_price} onChange={(e) => setForm({ ...form, total_price: e.target.value })} placeholder="0.00" />
+                {priceHelperText && <p className="text-xs text-amber-600">{priceHelperText}</p>}
               </div>
               <div className="space-y-2">
                 <Label>Duration (min)</Label>
