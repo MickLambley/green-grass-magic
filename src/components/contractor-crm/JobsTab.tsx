@@ -1219,7 +1219,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       )}
 
       {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setSaveScope(null); setSeriesInfo(null); setOriginalFormValues(null); } }}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setSaveScope(null); setSeriesInfo(null); setOriginalFormValues(null); setUseCustomTitle(false); setPriceHelperText(null); } }}>
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingJob ? "Edit Job" : "New Job"}</DialogTitle>
