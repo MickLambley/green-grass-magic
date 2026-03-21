@@ -304,22 +304,30 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     setDialogOpen(true);
   };
 
-  const openEditDialog = (job: Job) => {
-    // Check if this job belongs to a recurring series
+  const openEditDialog = async (job: Job) => {
     const recurringId = job.recurring_job_id;
     if (recurringId) {
-      setPendingEditJob(job);
-      setRecurringEditScope(null);
-      setRecurringEditOpen(true);
-      return;
+      const { count } = await supabase
+        .from("jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("recurring_job_id", recurringId);
+      const recRule = job.recurrence_rule as unknown as RecurrenceRule | null;
+      setSeriesInfo({
+        id: recurringId,
+        frequency: recRule?.frequency || "weekly",
+        count: count || 1,
+      });
+    } else {
+      setSeriesInfo(null);
     }
+    setSaveScope(null);
     proceedToEditDialog(job);
   };
 
   const proceedToEditDialog = (job: Job) => {
     setEditingJob(job);
     const recurrence = job.recurrence_rule as unknown as RecurrenceRule | null;
-    setForm({
+    const formValues = {
       title: job.title,
       client_id: job.client_id,
       description: job.description || "",
@@ -332,20 +340,10 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       is_recurring: !!recurrence,
       recurrence_frequency: recurrence?.frequency || "weekly",
       recurrence_count: recurrence?.count?.toString() || "4",
-    });
+    };
+    setForm(formValues);
+    setOriginalFormValues({ ...formValues });
     setDialogOpen(true);
-  };
-
-  const handleRecurringThisOnly = () => {
-    setRecurringEditScope("this");
-    setRecurringEditOpen(false);
-    if (pendingEditJob) proceedToEditDialog(pendingEditJob);
-  };
-
-  const handleRecurringAllFuture = () => {
-    setRecurringEditScope("future");
-    setRecurringEditOpen(false);
-    if (pendingEditJob) proceedToEditDialog(pendingEditJob);
   };
 
   // Helper: get existing job slots for a given date (for conflict detection)
