@@ -38,7 +38,7 @@ serve(async (req) => {
     // Verify contractor
     const { data: contractor } = await supabase
       .from("contractors")
-      .select("id, user_id, business_name, stripe_account_id, gst_registered, subscription_tier, abn")
+      .select("id, user_id, business_name, stripe_account_id, gst_registered, subscription_tier, abn, questionnaire_responses")
       .eq("user_id", userId)
       .single();
     if (!contractor) throw new Error("Contractor not found");
@@ -83,151 +83,259 @@ serve(async (req) => {
       const now = new Date().toISOString();
 
       if (job.source === "website_booking") {
-        // PATH A: Auto-charge saved payment method
-        log("Path A: Website booking auto-charge", { jobId });
+        // Determine payment mode from contractor settings
+        const qr = contractor.questionnaire_responses as Record<string, unknown> | null;
+        const paymentMode = (qr?.online_booking_payment_mode as string) || "charge_immediate";
+        log("Website booking completion", { jobId, paymentMode });
 
-        if (!stripeSecretKey) throw new Error("Stripe not configured");
-        if (!job.payment_method_id || !job.stripe_customer_id) {
-          throw new Error("No saved payment method for this website booking");
-        }
-        if (!job.total_price || job.total_price <= 0) {
-          throw new Error("Job has no valid price to charge");
-        }
+        if (paymentMode === "invoice_only") {
+          // ─── INVOICE ONLY: create invoice + payment link, no auto-charge ───
+          log("Path A-invoice: Send invoice with payment link", { jobId });
 
-        const stripe = new Stripe(stripeSecretKey, { apiVersion: "2025-08-27.basil" });
+          const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}`;
+          const subtotal = Number(job.total_price) || 0;
+          const gstAmount = contractor.gst_registered ? subtotal * 0.1 : 0;
+          const total = subtotal + gstAmount;
 
-        // Calculate application fee based on subscription tier
-        const feePercentages: Record<string, number> = {
-          free: 0.05,
-          starter: 0.025,
-          pro: 0.01,
-        };
-        const feePercent = feePercentages[contractor.subscription_tier] || 0.05;
-        const amountCents = Math.round(Number(job.total_price) * 100);
-        const applicationFee = Math.round(amountCents * feePercent);
+          // Create Stripe payment link if Stripe connected
+          let stripePaymentUrl: string | null = null;
+          if (stripeSecretKey && contractor.stripe_account_id && total > 0) {
+            const stripe = new Stripe(stripeSecretKey, { apiVersion: "2025-08-27.basil" });
+            const totalCents = Math.round(total * 100);
+            const feePercentages: Record<string, number> = { free: 0.05, starter: 0.025, pro: 0.01 };
+            const feePercent = feePercentages[contractor.subscription_tier] || 0.05;
 
-        // Create payment intent and charge immediately
-        const paymentIntent = await stripe.paymentIntents.create({
-          amount: amountCents,
-          currency: "aud",
-          customer: job.stripe_customer_id,
-          payment_method: job.payment_method_id,
-          off_session: true,
-          confirm: true,
-          application_fee_amount: contractor.stripe_account_id ? applicationFee : undefined,
-          transfer_data: contractor.stripe_account_id ? {
-            destination: contractor.stripe_account_id,
-          } : undefined,
-          metadata: {
-            job_id: jobId,
-            contractor_id: contractor.id,
-            source: "website_booking",
-          },
-        });
-
-        log("Payment captured", { paymentIntentId: paymentIntent.id, amount: amountCents });
-
-        // Auto-generate invoice
-        const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}`;
-        const subtotal = Number(job.total_price);
-        const gstAmount = contractor.gst_registered ? subtotal * 0.1 : 0;
-        const total = subtotal + gstAmount;
-
-        const { data: invoice } = await supabase
-          .from("invoices")
-          .insert({
-            contractor_id: contractor.id,
-            client_id: job.client_id,
-            job_id: jobId,
-            invoice_number: invoiceNumber,
-            line_items: [{ description: job.title, quantity: 1, unit_price: subtotal }],
-            subtotal,
-            gst_amount: gstAmount,
-            total,
-            status: "paid",
-            paid_at: now,
-          })
-          .select("id")
-          .single();
-
-        // Record transaction fee
-        const stripeFee = Math.round(amountCents * 0.0175 + 30) / 100;
-        await supabase.from("transaction_fees").insert({
-          contractor_id: contractor.id,
-          job_id: jobId,
-          payment_amount: subtotal,
-          stripe_fee: stripeFee,
-          yardly_fee: applicationFee / 100,
-          yardly_fee_percentage: feePercent * 100,
-          contractor_payout: subtotal - stripeFee - applicationFee / 100,
-        });
-
-        // Update job
-        await supabase.from("jobs").update({
-          status: "completed",
-          completed_at: now,
-          payment_status: "paid",
-          payment_intent_id: paymentIntent.id,
-        }).eq("id", jobId);
-
-        // Notify customer
-        if (client.user_id) {
-          await supabase.from("notifications").insert({
-            user_id: client.user_id,
-            title: "✅ Job Complete & Paid",
-            message: `Your ${job.title} by ${contractor.business_name || "your contractor"} is complete. Payment of $${total.toFixed(2)} has been processed.`,
-            type: "success",
-          });
-        }
-
-        // Send receipt email
-        try {
-          const resendApiKey = Deno.env.get("RESEND_API_KEY");
-          if (resendApiKey && client.email) {
-            const emailPayload: Record<string, unknown> = {
-              from: `${senderName} <invoices@mail.lawnly.com.au>`,
-              to: [client.email],
-              subject: `Payment received — ${senderName} Invoice ${invoiceNumber}`,
-              html: `
-                <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto;">
-                  <h1 style="color: #16a34a;">✅ Payment Receipt</h1>
-                  ${contractor.gst_registered ? `<p style="font-size: 13px; color: #666;">Tax Invoice</p>` : ""}
-                  <p>Hi ${client.name},</p>
-                  <p>Your ${job.title} has been completed by ${contractor.business_name || "your contractor"}.</p>
-                  <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                    <p><strong>Invoice:</strong> ${invoiceNumber}</p>
-                    ${contractor.gst_registered && contractor.abn ? `<p><strong>ABN:</strong> ${contractor.abn}</p>` : ""}
-                    <p><strong>Service:</strong> ${job.title}</p>
-                    <p><strong>Subtotal:</strong> $${subtotal.toFixed(2)}</p>
-                    ${gstAmount > 0 ? `<p><strong>GST (10%):</strong> $${gstAmount.toFixed(2)}</p>` : ""}
-                    <p style="font-size: 18px; margin-top: 8px;"><strong>Total Charged:</strong> $${total.toFixed(2)}</p>
-                  </div>
-                  ${contractor.gst_registered ? `<p style="color: #999; font-size: 12px;">All prices in AUD. GST included.</p>` : ""}
-                  ${YARDLY_FOOTER}
-                </div>
-              `,
-            };
-            if (contractorLoginEmail) {
-              emailPayload.reply_to = contractorLoginEmail;
-            }
-
-            await fetch("https://api.resend.com/emails", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
-              body: JSON.stringify(emailPayload),
+            const price = await stripe.prices.create({
+              unit_amount: totalCents,
+              currency: "aud",
+              product_data: { name: `${job.title} - ${contractor.business_name || "Service"}` },
             });
-            log("Receipt email sent");
+            const paymentLink = await stripe.paymentLinks.create({
+              line_items: [{ price: price.id, quantity: 1 }],
+              metadata: { job_id: jobId, contractor_id: contractor.id },
+              application_fee_amount: Math.round(totalCents * feePercent),
+              transfer_data: { destination: contractor.stripe_account_id },
+            });
+            stripePaymentUrl = paymentLink.url;
+            log("Payment link created for invoice", { url: stripePaymentUrl });
           }
-        } catch (e) {
-          log("Receipt email failed (non-blocking)", { error: String(e) });
-        }
 
-        return new Response(JSON.stringify({
-          success: true,
-          path: "website_booking",
-          payment_status: "paid",
-          invoice_id: invoice?.id,
-        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          const { data: invoice } = await supabase
+            .from("invoices")
+            .insert({
+              contractor_id: contractor.id,
+              client_id: job.client_id,
+              job_id: jobId,
+              invoice_number: invoiceNumber,
+              line_items: [{ description: job.title, quantity: 1, unit_price: subtotal }],
+              subtotal,
+              gst_amount: gstAmount,
+              total,
+              status: "unpaid",
+              stripe_payment_url: stripePaymentUrl,
+            })
+            .select("id")
+            .single();
+
+          // Update job
+          await supabase.from("jobs").update({
+            status: "completed",
+            completed_at: now,
+            payment_status: "invoiced",
+            stripe_payment_link_url: stripePaymentUrl,
+          }).eq("id", jobId);
+
+          // Send invoice email
+          try {
+            const resendApiKey = Deno.env.get("RESEND_API_KEY");
+            if (resendApiKey && client.email) {
+              const payNowHtml = stripePaymentUrl
+                ? `<div style="text-align: center; margin: 16px 0 24px; padding: 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+                     <a href="${stripePaymentUrl}" target="_blank" style="display: inline-block; background-color: #16a34a; color: #ffffff; font-size: 16px; font-weight: bold; text-decoration: none; padding: 14px 36px; border-radius: 8px;">Pay Now — $${total.toFixed(2)} by card</a>
+                     <p style="margin: 8px 0 0; font-size: 12px; color: #888;">Secure payment powered by Stripe</p>
+                   </div>`
+                : "";
+              const emailPayload: Record<string, unknown> = {
+                from: `${senderName} <invoices@mail.lawnly.com.au>`,
+                to: [client.email],
+                subject: `Invoice ${invoiceNumber} — $${total.toFixed(2)} from ${senderName}`,
+                html: `
+                  <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h1 style="color: #16a34a;">Job Complete — Invoice</h1>
+                    <p>Hi ${client.name},</p>
+                    <p>Your ${job.title} has been completed by ${contractor.business_name || "your contractor"}.</p>
+                    ${payNowHtml}
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                      <p><strong>Invoice:</strong> ${invoiceNumber}</p>
+                      <p><strong>Service:</strong> ${job.title}</p>
+                      <p><strong>Subtotal:</strong> $${subtotal.toFixed(2)}</p>
+                      ${gstAmount > 0 ? `<p><strong>GST (10%):</strong> $${gstAmount.toFixed(2)}</p>` : ""}
+                      <p style="font-size: 18px; margin-top: 8px;"><strong>Total:</strong> $${total.toFixed(2)}</p>
+                    </div>
+                    ${YARDLY_FOOTER}
+                  </div>
+                `,
+              };
+              if (contractorLoginEmail) emailPayload.reply_to = contractorLoginEmail;
+              await fetch("https://api.resend.com/emails", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
+                body: JSON.stringify(emailPayload),
+              });
+              log("Invoice email sent");
+
+              // Mark invoice as sent
+              await supabase.from("invoices").update({ sent_at: now }).eq("id", invoice?.id);
+            }
+          } catch (e) {
+            log("Invoice email failed (non-blocking)", { error: String(e) });
+          }
+
+          // Notify customer
+          if (client.user_id) {
+            await supabase.from("notifications").insert({
+              user_id: client.user_id,
+              title: "✅ Job Complete",
+              message: `Your ${job.title} by ${contractor.business_name || "your contractor"} is complete. An invoice for $${total.toFixed(2)} has been sent.`,
+              type: "success",
+            });
+          }
+
+          return new Response(JSON.stringify({
+            success: true,
+            path: "website_booking_invoice",
+            payment_status: "invoiced",
+            invoice_id: invoice?.id,
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+        } else {
+          // ─── CHARGE IMMEDIATE (default, also handles charge_delayed as immediate for now) ───
+          log("Path A-charge: Auto-charge saved card", { jobId, paymentMode });
+
+          if (!stripeSecretKey) throw new Error("Stripe not configured");
+          if (!job.payment_method_id || !job.stripe_customer_id) {
+            throw new Error("No saved payment method for this website booking");
+          }
+          if (!job.total_price || job.total_price <= 0) {
+            throw new Error("Job has no valid price to charge");
+          }
+
+          const stripe = new Stripe(stripeSecretKey, { apiVersion: "2025-08-27.basil" });
+
+          const feePercentages: Record<string, number> = { free: 0.05, starter: 0.025, pro: 0.01 };
+          const feePercent = feePercentages[contractor.subscription_tier] || 0.05;
+          const amountCents = Math.round(Number(job.total_price) * 100);
+          const applicationFee = Math.round(amountCents * feePercent);
+
+          const paymentIntent = await stripe.paymentIntents.create({
+            amount: amountCents,
+            currency: "aud",
+            customer: job.stripe_customer_id,
+            payment_method: job.payment_method_id,
+            off_session: true,
+            confirm: true,
+            application_fee_amount: contractor.stripe_account_id ? applicationFee : undefined,
+            transfer_data: contractor.stripe_account_id ? { destination: contractor.stripe_account_id } : undefined,
+            metadata: { job_id: jobId, contractor_id: contractor.id, source: "website_booking" },
+          });
+
+          log("Payment captured", { paymentIntentId: paymentIntent.id, amount: amountCents });
+
+          const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}`;
+          const subtotal = Number(job.total_price);
+          const gstAmount = contractor.gst_registered ? subtotal * 0.1 : 0;
+          const total = subtotal + gstAmount;
+
+          const { data: invoice } = await supabase
+            .from("invoices")
+            .insert({
+              contractor_id: contractor.id,
+              client_id: job.client_id,
+              job_id: jobId,
+              invoice_number: invoiceNumber,
+              line_items: [{ description: job.title, quantity: 1, unit_price: subtotal }],
+              subtotal,
+              gst_amount: gstAmount,
+              total,
+              status: "paid",
+              paid_at: now,
+            })
+            .select("id")
+            .single();
+
+          const stripeFee = Math.round(amountCents * 0.0175 + 30) / 100;
+          await supabase.from("transaction_fees").insert({
+            contractor_id: contractor.id,
+            job_id: jobId,
+            payment_amount: subtotal,
+            stripe_fee: stripeFee,
+            yardly_fee: applicationFee / 100,
+            yardly_fee_percentage: feePercent * 100,
+            contractor_payout: subtotal - stripeFee - applicationFee / 100,
+          });
+
+          await supabase.from("jobs").update({
+            status: "completed",
+            completed_at: now,
+            payment_status: "paid",
+            payment_intent_id: paymentIntent.id,
+          }).eq("id", jobId);
+
+          if (client.user_id) {
+            await supabase.from("notifications").insert({
+              user_id: client.user_id,
+              title: "✅ Job Complete & Paid",
+              message: `Your ${job.title} by ${contractor.business_name || "your contractor"} is complete. Payment of $${total.toFixed(2)} has been processed.`,
+              type: "success",
+            });
+          }
+
+          // Send receipt email
+          try {
+            const resendApiKey = Deno.env.get("RESEND_API_KEY");
+            if (resendApiKey && client.email) {
+              const emailPayload: Record<string, unknown> = {
+                from: `${senderName} <invoices@mail.lawnly.com.au>`,
+                to: [client.email],
+                subject: `Payment received — ${senderName} Invoice ${invoiceNumber}`,
+                html: `
+                  <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h1 style="color: #16a34a;">✅ Payment Receipt</h1>
+                    ${contractor.gst_registered ? `<p style="font-size: 13px; color: #666;">Tax Invoice</p>` : ""}
+                    <p>Hi ${client.name},</p>
+                    <p>Your ${job.title} has been completed by ${contractor.business_name || "your contractor"}.</p>
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                      <p><strong>Invoice:</strong> ${invoiceNumber}</p>
+                      ${contractor.gst_registered && contractor.abn ? `<p><strong>ABN:</strong> ${contractor.abn}</p>` : ""}
+                      <p><strong>Service:</strong> ${job.title}</p>
+                      <p><strong>Subtotal:</strong> $${subtotal.toFixed(2)}</p>
+                      ${gstAmount > 0 ? `<p><strong>GST (10%):</strong> $${gstAmount.toFixed(2)}</p>` : ""}
+                      <p style="font-size: 18px; margin-top: 8px;"><strong>Total Charged:</strong> $${total.toFixed(2)}</p>
+                    </div>
+                    ${contractor.gst_registered ? `<p style="color: #999; font-size: 12px;">All prices in AUD. GST included.</p>` : ""}
+                    ${YARDLY_FOOTER}
+                  </div>
+                `,
+              };
+              if (contractorLoginEmail) emailPayload.reply_to = contractorLoginEmail;
+              await fetch("https://api.resend.com/emails", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
+                body: JSON.stringify(emailPayload),
+              });
+              log("Receipt email sent");
+            }
+          } catch (e) {
+            log("Receipt email failed (non-blocking)", { error: String(e) });
+          }
+
+          return new Response(JSON.stringify({
+            success: true,
+            path: "website_booking",
+            payment_status: "paid",
+            invoice_id: invoice?.id,
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
 
       } else {
         // PATH B: Manual job — just mark as completed, return options
