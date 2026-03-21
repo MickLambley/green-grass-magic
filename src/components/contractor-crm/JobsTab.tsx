@@ -1236,8 +1236,56 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Job Title</Label>
-              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Lawn Mowing" />
+              <Label>Service / Job Title</Label>
+              {enabledServices.length > 0 && !useCustomTitle ? (
+                <Select value={form.title} onValueChange={handleServiceSelect}>
+                  <SelectTrigger><SelectValue placeholder="Select a service" /></SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      const grouped = enabledServices.reduce<Record<string, ServiceOffering[]>>((acc, s) => {
+                        (acc[s.category] = acc[s.category] || []).push(s);
+                        return acc;
+                      }, {});
+                      const categoryLabels: Record<string, string> = { lawn: "Lawn Care", garden: "Garden & Landscaping", removal: "Removal", other: "Other Services" };
+                      const showGroups = enabledServices.length > 5;
+                      const items: React.ReactNode[] = [];
+                      Object.entries(grouped).forEach(([cat, svcs]) => {
+                        if (showGroups) {
+                          items.push(
+                            <div key={`label-${cat}`} className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                              {categoryLabels[cat] || cat}
+                            </div>
+                          );
+                        }
+                        svcs.forEach(s => {
+                          items.push(<SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>);
+                        });
+                      });
+                      items.push(<SelectItem key="__custom__" value="__custom__"><span className="flex items-center gap-1.5"><PencilLine className="w-3.5 h-3.5" /> Other / Custom...</span></SelectItem>);
+                      return items;
+                    })()}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex gap-2">
+                    <Input
+                      value={form.title}
+                      onChange={(e) => setForm({ ...form, title: e.target.value })}
+                      placeholder="Enter custom job title"
+                      className="flex-1"
+                    />
+                    {enabledServices.length > 0 && (
+                      <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => { setUseCustomTitle(false); setForm(f => ({ ...f, title: enabledServices[0].name })); setPriceHelperText(null); }}>
+                        Pick service
+                      </Button>
+                    )}
+                  </div>
+                  {enabledServices.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No services enabled — go to Services to add some, or type a custom title.</p>
+                  )}
+                </div>
+              )}
             </div>
             {/* Recurring series indicator */}
             {editingJob && seriesInfo && (
