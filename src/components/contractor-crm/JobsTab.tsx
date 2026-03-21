@@ -659,7 +659,40 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     }
     setIsDeleting(false);
     setDeleteConfirmOpen(false);
+    setDeleteSeriesOpen(false);
     setDeletingJobId(null);
+  };
+
+  const handleDeleteAllFuture = async () => {
+    if (!deletingJobId || !editingJob?.recurring_job_id) return;
+    setIsDeleting(true);
+    const today = new Date().toISOString().split("T")[0];
+
+    // Delete the current job
+    const { error: currentError } = await supabase.from("jobs").delete().eq("id", deletingJobId);
+    if (currentError) {
+      toast.error("Failed to delete job");
+      setIsDeleting(false);
+      return;
+    }
+
+    // Delete all future scheduled jobs in the series
+    const { error: futureError } = await supabase
+      .from("jobs")
+      .delete()
+      .eq("recurring_job_id", editingJob.recurring_job_id)
+      .gte("scheduled_date", today)
+      .eq("status", "scheduled");
+
+    if (futureError) toast.error("Some future jobs failed to delete");
+    else toast.success("Deleted this job and all future jobs in the series");
+
+    setIsDeleting(false);
+    setDeleteConfirmOpen(false);
+    setDeleteSeriesOpen(false);
+    setDeletingJobId(null);
+    setDialogOpen(false);
+    fetchData();
   };
 
   const filtered = jobs.filter((j) => {
