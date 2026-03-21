@@ -27,9 +27,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock, Trash2, MessageSquare, Send } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock, Trash2, MessageSquare, Send, RefreshCw } from "lucide-react";
 import DayTimeline from "./DayTimeline";
-import RecurringEditDialog from "./RecurringEditDialog";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, endOfWeek, isToday } from "date-fns";
 import type { Tables, Json } from "@/integrations/supabase/types";
@@ -126,13 +125,15 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [markPaidJob, setMarkPaidJob] = useState<{
     id: string; title: string; client_name: string; total_price: number | null;
   } | null>(null);
-   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [pendingSuggestionJobIds, setPendingSuggestionJobIds] = useState<Set<string>>(new Set());
-  const [recurringEditOpen, setRecurringEditOpen] = useState(false);
-  const [recurringEditScope, setRecurringEditScope] = useState<"this" | "future" | null>(null);
-  const [pendingEditJob, setPendingEditJob] = useState<Job | null>(null);
+  const [seriesInfo, setSeriesInfo] = useState<{ id: string; frequency: string; count: number } | null>(null);
+  const [saveScope, setSaveScope] = useState<null | "pending">(null);
+  const [originalFormValues, setOriginalFormValues] = useState<Record<string, any> | null>(null);
+  const [deleteSeriesOpen, setDeleteSeriesOpen] = useState(false);
+  const [frequencyChangeConfirmOpen, setFrequencyChangeConfirmOpen] = useState(false);
   const [listPage, setListPage] = useState(0);
   const PAGE_SIZE = 25;
   const [quoteResponseOpen, setQuoteResponseOpen] = useState(false);
@@ -303,22 +304,30 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     setDialogOpen(true);
   };
 
-  const openEditDialog = (job: Job) => {
-    // Check if this job belongs to a recurring series
+  const openEditDialog = async (job: Job) => {
     const recurringId = job.recurring_job_id;
     if (recurringId) {
-      setPendingEditJob(job);
-      setRecurringEditScope(null);
-      setRecurringEditOpen(true);
-      return;
+      const { count } = await supabase
+        .from("jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("recurring_job_id", recurringId);
+      const recRule = job.recurrence_rule as unknown as RecurrenceRule | null;
+      setSeriesInfo({
+        id: recurringId,
+        frequency: recRule?.frequency || "weekly",
+        count: count || 1,
+      });
+    } else {
+      setSeriesInfo(null);
     }
+    setSaveScope(null);
     proceedToEditDialog(job);
   };
 
   const proceedToEditDialog = (job: Job) => {
     setEditingJob(job);
     const recurrence = job.recurrence_rule as unknown as RecurrenceRule | null;
-    setForm({
+    const formValues = {
       title: job.title,
       client_id: job.client_id,
       description: job.description || "",
@@ -331,20 +340,10 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       is_recurring: !!recurrence,
       recurrence_frequency: recurrence?.frequency || "weekly",
       recurrence_count: recurrence?.count?.toString() || "4",
-    });
+    };
+    setForm(formValues);
+    setOriginalFormValues({ ...formValues });
     setDialogOpen(true);
-  };
-
-  const handleRecurringThisOnly = () => {
-    setRecurringEditScope("this");
-    setRecurringEditOpen(false);
-    if (pendingEditJob) proceedToEditDialog(pendingEditJob);
-  };
-
-  const handleRecurringAllFuture = () => {
-    setRecurringEditScope("future");
-    setRecurringEditOpen(false);
-    if (pendingEditJob) proceedToEditDialog(pendingEditJob);
   };
 
   // Helper: get existing job slots for a given date (for conflict detection)
@@ -363,17 +362,44 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     if (!form.client_id) { toast.error("Please select a client"); return; }
     if (!form.scheduled_date) { toast.error("Please select a date"); return; }
 
+    // For recurring jobs with field changes, show scope selection first
+    if (editingJob && seriesInfo && !saveScope) {
+      const hasFieldChanges = originalFormValues && (
+        form.title !== originalFormValues.title ||
+        form.scheduled_date !== originalFormValues.scheduled_date ||
+        form.scheduled_time !== originalFormValues.scheduled_time ||
+        form.total_price !== originalFormValues.total_price ||
+        form.duration_minutes !== originalFormValues.duration_minutes ||
+        form.notes !== originalFormValues.notes ||
+        form.recurrence_frequency !== originalFormValues.recurrence_frequency
+      );
+      if (hasFieldChanges) {
+        setSaveScope("pending");
+        return;
+      }
+    }
+
+    await executeSave(null);
+  };
+
+  const handleSaveThisOnly = () => executeSave("this");
+
+  const handleSaveAllFuture = async () => {
+    if (originalFormValues && form.recurrence_frequency !== originalFormValues.recurrence_frequency) {
+      setFrequencyChangeConfirmOpen(true);
+      return;
+    }
+    await executeSave("future");
+  };
+
+  const executeSave = async (scope: "this" | "future" | null) => {
     setIsSaving(true);
+    setFrequencyChangeConfirmOpen(false);
 
     const recurrenceRule: RecurrenceRule | null = form.is_recurring
-      ? {
-          frequency: form.recurrence_frequency,
-          interval: form.recurrence_frequency === "fortnightly" ? 2 : 1,
-          count: parseInt(form.recurrence_count) || 4,
-        }
+      ? { frequency: form.recurrence_frequency, interval: form.recurrence_frequency === "fortnightly" ? 2 : 1, count: parseInt(form.recurrence_count) || 4 }
       : null;
 
-    // Auto-shift if there's a scheduling conflict
     let resolvedTime = form.scheduled_time || null;
     let originalTime: string | null = null;
     if (resolvedTime) {
@@ -387,7 +413,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       }
     }
 
-    const payload = {
+    const payload: Record<string, any> = {
       contractor_id: contractorId,
       client_id: form.client_id,
       title: form.title.trim() || "Lawn Mowing",
@@ -404,48 +430,105 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     };
 
     if (editingJob) {
-      // Update this job
+      // "Save this only": detach from series
+      if (scope === "this" && editingJob.recurring_job_id) {
+        payload.recurring_job_id = null;
+        payload.recurrence_rule = null;
+      }
+
       const { error } = await supabase.from("jobs").update(payload).eq("id", editingJob.id);
       if (error) { toast.error("Failed to update job"); setIsSaving(false); return; }
 
-      // If "all future" scope, also update all future jobs in the series
-      const recurringId = editingJob.recurring_job_id;
-      if (recurringEditScope === "future" && recurringId) {
+      if (scope === "future" && editingJob.recurring_job_id) {
         const today = new Date().toISOString().split("T")[0];
-        const futurePayload = {
-          title: payload.title,
-          description: payload.description,
-          scheduled_time: payload.scheduled_time,
-          duration_minutes: payload.duration_minutes,
-          total_price: payload.total_price,
-          notes: payload.notes,
-          original_scheduled_time: payload.original_scheduled_time,
-        };
-        const { error: futureError } = await supabase
-          .from("jobs")
-          .update(futurePayload)
-          .eq("recurring_job_id", recurringId)
-          .neq("id", editingJob.id)
-          .gte("scheduled_date", today);
-        if (futureError) toast.error("Some future jobs failed to update");
-        else toast.success("Updated this job and all future jobs in the series");
+        const frequencyChanged = originalFormValues && form.recurrence_frequency !== originalFormValues.recurrence_frequency;
+
+        if (frequencyChanged) {
+          // Call edge function to delete+regenerate with new frequency
+          const { error: fnError } = await supabase.functions.invoke("manage-recurring-series", {
+            body: {
+              action: "change_frequency",
+              series_id: editingJob.recurring_job_id,
+              current_job_id: editingJob.id,
+              new_frequency: form.recurrence_frequency,
+              contractor_id: contractorId,
+            },
+          });
+          if (fnError) toast.error("Failed to update series frequency");
+          else toast.success("Series frequency updated and future jobs regenerated");
+        } else {
+          const dateChanged = originalFormValues && form.scheduled_date !== originalFormValues.scheduled_date;
+          const timeChanged = originalFormValues && form.scheduled_time !== originalFormValues.scheduled_time;
+
+          if (dateChanged && originalFormValues) {
+            // Day-of-week shift: apply same shift to all future jobs
+            const oldDow = new Date(originalFormValues.scheduled_date).getDay();
+            const newDow = new Date(form.scheduled_date).getDay();
+            const dowShift = newDow - oldDow;
+
+            const { data: futureJobs } = await supabase
+              .from("jobs")
+              .select("id, scheduled_date")
+              .eq("recurring_job_id", editingJob.recurring_job_id)
+              .neq("id", editingJob.id)
+              .gte("scheduled_date", today)
+              .eq("status", "scheduled");
+
+            if (futureJobs) {
+              const fieldUpdates: Record<string, any> = {};
+              if (form.title !== originalFormValues.title) fieldUpdates.title = form.title.trim() || "Lawn Mowing";
+              if (form.total_price !== originalFormValues.total_price) fieldUpdates.total_price = form.total_price ? parseFloat(form.total_price) : null;
+              if (form.duration_minutes !== originalFormValues.duration_minutes) fieldUpdates.duration_minutes = form.duration_minutes ? parseInt(form.duration_minutes) : null;
+              if (form.notes !== originalFormValues.notes) fieldUpdates.notes = form.notes.trim() || null;
+              if (timeChanged) fieldUpdates.scheduled_time = resolvedTime;
+
+              for (const fj of futureJobs) {
+                const fjDate = new Date(fj.scheduled_date);
+                fjDate.setDate(fjDate.getDate() + dowShift);
+                await supabase.from("jobs").update({
+                  ...fieldUpdates,
+                  scheduled_date: fjDate.toISOString().split("T")[0],
+                }).eq("id", fj.id);
+              }
+            }
+          } else if (originalFormValues) {
+            // No date change — bulk update other fields
+            const futurePayload: Record<string, any> = {};
+            if (timeChanged) futurePayload.scheduled_time = resolvedTime;
+            if (form.title !== originalFormValues.title) futurePayload.title = form.title.trim() || "Lawn Mowing";
+            if (form.total_price !== originalFormValues.total_price) futurePayload.total_price = form.total_price ? parseFloat(form.total_price) : null;
+            if (form.duration_minutes !== originalFormValues.duration_minutes) futurePayload.duration_minutes = form.duration_minutes ? parseInt(form.duration_minutes) : null;
+            if (form.notes !== originalFormValues.notes) futurePayload.notes = form.notes.trim() || null;
+
+            if (Object.keys(futurePayload).length > 0) {
+              await supabase.from("jobs").update(futurePayload)
+                .eq("recurring_job_id", editingJob.recurring_job_id)
+                .neq("id", editingJob.id)
+                .gte("scheduled_date", today)
+                .eq("status", "scheduled");
+            }
+          }
+          toast.success("Updated this job and all future jobs");
+        }
+      } else if (scope === "this") {
+        toast.success("Job updated (detached from series)");
       } else {
         toast.success("Job updated");
       }
-      setRecurringEditScope(null);
-      setPendingEditJob(null);
+
+      setSaveScope(null);
+      setSeriesInfo(null);
+      setOriginalFormValues(null);
       setDialogOpen(false);
       fetchData();
     } else {
-      // Generate a recurring_job_id for the series
+      // Create new job
       const seriesId = form.is_recurring ? crypto.randomUUID() : null;
       const createPayload = { ...payload, ...(seriesId ? { recurring_job_id: seriesId } : {}) };
 
-      // Create the initial job
-      const { error } = await supabase.from("jobs").insert(createPayload);
+      const { error } = await supabase.from("jobs").insert(createPayload as any);
       if (error) { toast.error("Failed to create job"); setIsSaving(false); return; }
 
-      // If recurring, create additional jobs
       if (form.is_recurring && seriesId) {
         const count = parseInt(form.recurrence_count) || 4;
         const baseDate = new Date(form.scheduled_date);
@@ -460,10 +543,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           } else {
             nextDate.setMonth(baseDate.getMonth() + i);
           }
-          additionalJobs.push({
-            ...createPayload,
-            scheduled_date: nextDate.toISOString().split("T")[0],
-          });
+          additionalJobs.push({ ...createPayload, scheduled_date: nextDate.toISOString().split("T")[0] });
         }
 
         if (additionalJobs.length > 0) {
@@ -579,7 +659,40 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     }
     setIsDeleting(false);
     setDeleteConfirmOpen(false);
+    setDeleteSeriesOpen(false);
     setDeletingJobId(null);
+  };
+
+  const handleDeleteAllFuture = async () => {
+    if (!deletingJobId || !editingJob?.recurring_job_id) return;
+    setIsDeleting(true);
+    const today = new Date().toISOString().split("T")[0];
+
+    // Delete the current job
+    const { error: currentError } = await supabase.from("jobs").delete().eq("id", deletingJobId);
+    if (currentError) {
+      toast.error("Failed to delete job");
+      setIsDeleting(false);
+      return;
+    }
+
+    // Delete all future scheduled jobs in the series
+    const { error: futureError } = await supabase
+      .from("jobs")
+      .delete()
+      .eq("recurring_job_id", editingJob.recurring_job_id)
+      .gte("scheduled_date", today)
+      .eq("status", "scheduled");
+
+    if (futureError) toast.error("Some future jobs failed to delete");
+    else toast.success("Deleted this job and all future jobs in the series");
+
+    setIsDeleting(false);
+    setDeleteConfirmOpen(false);
+    setDeleteSeriesOpen(false);
+    setDeletingJobId(null);
+    setDialogOpen(false);
+    fetchData();
   };
 
   const filtered = jobs.filter((j) => {
@@ -1026,10 +1139,11 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       )}
 
       {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setSaveScope(null); setSeriesInfo(null); setOriginalFormValues(null); } }}>
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingJob ? "Edit Job" : "New Job"}</DialogTitle>
+            {editingJob && <DialogDescription>Update the job details below.</DialogDescription>}
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -1045,6 +1159,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               <Label>Job Title</Label>
               <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Lawn Mowing" />
             </div>
+            {/* Recurring series indicator */}
+            {editingJob && seriesInfo && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">
+                <RefreshCw className="w-4 h-4 text-primary shrink-0" />
+                <span>Recurring job · {seriesInfo.frequency.charAt(0).toUpperCase() + seriesInfo.frequency.slice(1)} · {seriesInfo.count} jobs in series</span>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Date *</Label>
@@ -1066,7 +1187,22 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               </div>
             </div>
 
-            {/* Recurrence */}
+            {/* Frequency dropdown for recurring series */}
+            {editingJob && seriesInfo && (
+              <div className="space-y-2">
+                <Label>Frequency</Label>
+                <Select value={form.recurrence_frequency} onValueChange={(v: "weekly" | "fortnightly" | "monthly") => setForm({ ...form, recurrence_frequency: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="fortnightly">Fortnightly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Recurrence for new jobs */}
             {!editingJob && (
               <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
                 <div className="flex items-center gap-2">
@@ -1123,17 +1259,38 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               <Button
                 variant="destructive"
                 size="sm"
-                onClick={() => { setDeletingJobId(editingJob.id); setDeleteConfirmOpen(true); }}
+                onClick={() => {
+                  setDeletingJobId(editingJob.id);
+                  if (seriesInfo) {
+                    setDeleteSeriesOpen(true);
+                  } else {
+                    setDeleteConfirmOpen(true);
+                  }
+                }}
               >
                 <Trash2 className="w-4 h-4 mr-1" /> Delete
               </Button>
             )}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleSave} disabled={isSaving}>
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingJob ? "Save Changes" : form.is_recurring ? `Create ${form.recurrence_count} Jobs` : "Create Job"}
-              </Button>
-            </div>
+            {saveScope === "pending" ? (
+              <div className="flex gap-2 items-center">
+                <Button variant="ghost" size="sm" onClick={() => setSaveScope(null)}>Cancel</Button>
+                <Button variant="outline" size="sm" onClick={handleSaveThisOnly} disabled={isSaving}>
+                  {isSaving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+                  Save this job only
+                </Button>
+                <Button size="sm" onClick={handleSaveAllFuture} disabled={isSaving}>
+                  {isSaving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+                  Save all future jobs
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => { setDialogOpen(false); setSaveScope(null); setSeriesInfo(null); }}>Cancel</Button>
+                <Button onClick={handleSave} disabled={isSaving}>
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingJob ? "Save Changes" : form.is_recurring ? `Create ${form.recurrence_count} Jobs` : "Create Job"}
+                </Button>
+              </div>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1182,7 +1339,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
         onQuoteSent={fetchData}
       />
 
-      {/* Delete Confirmation */}
+      {/* Delete Confirmation — Single Job */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1199,13 +1356,57 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Recurring Edit Dialog */}
-      <RecurringEditDialog
-        open={recurringEditOpen}
-        onOpenChange={setRecurringEditOpen}
-        onThisOnly={handleRecurringThisOnly}
-        onAllFuture={handleRecurringAllFuture}
-      />
+      {/* Delete Confirmation — Recurring Series */}
+      <AlertDialog open={deleteSeriesOpen} onOpenChange={setDeleteSeriesOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <RefreshCw className="w-5 h-5 text-destructive" />
+              Delete Recurring Job
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This job is part of a recurring series. How would you like to proceed?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteJob}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Trash2 className="w-4 h-4 mr-1.5" />}
+              Delete this job only
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={handleDeleteAllFuture}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Trash2 className="w-4 h-4 mr-1.5" />}
+              Delete all future jobs
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Frequency Change Confirmation */}
+      <AlertDialog open={frequencyChangeConfirmOpen} onOpenChange={setFrequencyChangeConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change Series Frequency?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Changing the frequency will delete and recreate upcoming scheduled jobs in this series. This cannot be undone. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => executeSave("future")}>
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
