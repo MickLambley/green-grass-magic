@@ -528,7 +528,8 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
             {/* Summary */}
             <div className="mt-4 ml-14 flex items-center gap-4 pt-3 border-t border-border">
               <span className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">{sortedJobs.length}</span> job{sortedJobs.length !== 1 ? "s" : ""}
+                <span className="font-semibold text-foreground">{sortedJobs.length + untimedJobs.length}</span> job{(sortedJobs.length + untimedJobs.length) !== 1 ? "s" : ""}
+                {untimedJobs.length > 0 && <span className="text-sunshine ml-1">({untimedJobs.length} unscheduled)</span>}
               </span>
               {entries.filter(e => e.type === "travel").length > 0 && (
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
