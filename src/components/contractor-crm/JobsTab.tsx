@@ -187,7 +187,70 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   useEffect(() => {
     fetchData();
     fetchPendingSuggestions();
+    fetchServiceOfferings();
   }, [contractorId]);
+
+  const fetchServiceOfferings = async () => {
+    const { data } = await supabase
+      .from("service_offerings")
+      .select("*")
+      .eq("contractor_id", contractorId)
+      .eq("is_active", true)
+      .order("created_at");
+    if (data) setServiceOfferings(data);
+  };
+
+  const getContractorBasePrice = async (): Promise<number | null> => {
+    const { data } = await supabase
+      .from("contractors")
+      .select("questionnaire_responses")
+      .eq("id", contractorId)
+      .single();
+    const pricing = (data?.questionnaire_responses as any)?.pricing;
+    return pricing?.base_price ?? null;
+  };
+
+  const enabledServices = useMemo(() => {
+    if (serviceOfferings.length === 0) return [];
+    const CATEGORY_ORDER: Record<string, number> = { lawn: 0, garden: 1, removal: 2, other: 3 };
+    return [...serviceOfferings].sort((a, b) => (CATEGORY_ORDER[a.category] ?? 99) - (CATEGORY_ORDER[b.category] ?? 99));
+  }, [serviceOfferings]);
+
+  const isLawnService = (name: string) => {
+    const lawnNames = ["lawn mowing", "edging & trimming", "edging and trimming"];
+    return lawnNames.includes(name.toLowerCase());
+  };
+
+  const handleServiceSelect = async (value: string) => {
+    if (value === "__custom__") {
+      setUseCustomTitle(true);
+      setForm(f => ({ ...f, title: "" }));
+      setPriceHelperText(null);
+      return;
+    }
+    setUseCustomTitle(false);
+    setForm(f => ({ ...f, title: value }));
+
+    const service = enabledServices.find(s => s.name === value);
+    if (service) {
+      if (isLawnService(service.name)) {
+        const basePrice = await getContractorBasePrice();
+        if (basePrice) {
+          setForm(f => ({ ...f, title: value, total_price: basePrice.toString() }));
+        }
+        setPriceHelperText(null);
+      } else if (service.requires_quote) {
+        setPriceHelperText("Quote required — enter the agreed price for this job.");
+        if (service.default_rate) {
+          setForm(f => ({ ...f, title: value, total_price: service.default_rate!.toString() }));
+        } else {
+          setForm(f => ({ ...f, title: value, total_price: "" }));
+        }
+      } else {
+        setPriceHelperText(null);
+      }
+    }
+  };
 
   const fetchPendingSuggestions = async () => {
     // Fetch alternative_suggestions with status='pending' for this contractor
