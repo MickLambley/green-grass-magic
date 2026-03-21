@@ -86,11 +86,17 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
   const [dropPreviewMinutes, setDropPreviewMinutes] = useState<number | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
+  const untimedJobs = useMemo(() => {
+    return jobs.filter((j) => !j.scheduled_time && j.status !== "cancelled");
+  }, [jobs]);
+
   const sortedJobs = useMemo(() => {
     return [...jobs]
       .filter((j) => j.scheduled_time && j.status !== "cancelled")
       .sort((a, b) => timeToMinutes(a.scheduled_time!) - timeToMinutes(b.scheduled_time!));
   }, [jobs]);
+
+  const hasAnyJobs = sortedJobs.length > 0 || untimedJobs.length > 0;
 
   const entries = useMemo(() => {
     const result: {
