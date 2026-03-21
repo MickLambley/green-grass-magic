@@ -223,19 +223,15 @@ export const generateInvoicePdf = async (data: InvoicePdfData) => {
     if (pd.hasStripe) {
       doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
-      doc.text("Pay by Card:", 14, y);
+      doc.text("Pay online by card:", 14, y);
       doc.setFont("helvetica", "normal");
       if (pd.stripePaymentUrl) {
         doc.setTextColor(22, 163, 74);
-        doc.textWithLink("Pay online now →", 50, y, { url: pd.stripePaymentUrl });
+        doc.textWithLink(pd.stripePaymentUrl, 14, y + 5, { url: pd.stripePaymentUrl });
         doc.setTextColor(0, 0, 0);
-        y += 6;
-        doc.setFontSize(8);
-        doc.setTextColor(100, 100, 100);
-        doc.textWithLink(pd.stripePaymentUrl, 18, y, { url: pd.stripePaymentUrl });
-        doc.setTextColor(0, 0, 0);
+        y += 5;
       } else {
-        doc.text(`Contact ${pd.businessName || "us"} for a secure payment link.`, 50, y);
+        doc.text(`Contact ${pd.businessName || "us"} for a secure payment link.`, 65, y);
       }
       y += 7;
     }
