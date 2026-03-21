@@ -526,7 +526,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       const seriesId = form.is_recurring ? crypto.randomUUID() : null;
       const createPayload = { ...payload, ...(seriesId ? { recurring_job_id: seriesId } : {}) };
 
-      const { error } = await supabase.from("jobs").insert(createPayload);
+      const { error } = await supabase.from("jobs").insert(createPayload as any);
       if (error) { toast.error("Failed to create job"); setIsSaving(false); return; }
 
       if (form.is_recurring && seriesId) {
