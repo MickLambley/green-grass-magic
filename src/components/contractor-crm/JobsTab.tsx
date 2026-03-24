@@ -158,18 +158,28 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     setIsOptimizing(true);
     try {
       const { data, error } = await supabase.functions.invoke("route-optimization", {
-        body: { contractor_id: contractorId },
+        body: { contractor_id: contractorId, preview: true },
       });
       if (error) throw error;
       if (data?.result) {
         const r = data.result;
-        toast.success(`Route optimized! Level ${r.level} saved ${r.timeSaved} minutes. Status: ${r.status === "pending_approval" ? "Awaiting your approval" : "Applied"}`);
-        if (r.status === "pending_approval" && onOpenRouteOptimization) {
-          onOpenRouteOptimization();
+        // Handle missing addresses error
+        if (r.error === "missing_addresses") {
+          setMissingAddressJobs(r.affectedJobs || []);
+          setMissingAddressDialogOpen(true);
+          setIsOptimizing(false);
+          return;
         }
-        fetchData();
+        // If no changes needed, show toast
+        if (!r.proposedChanges || r.proposedChanges.length === 0) {
+          toast.success(r.message || "Your schedule is already optimised — no changes needed.", { duration: 4000 });
+        } else {
+          // Show preview dialog
+          setOptimizationPreview(r);
+          setOptimizationPreviewOpen(true);
+        }
       } else {
-        toast.info("No optimization opportunities found for today's jobs. Ensure jobs have client addresses and are not locked.");
+        toast.info("No optimization opportunities found for today's jobs.");
       }
     } catch (err) {
       console.error("Optimization error:", err);
@@ -177,6 +187,42 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     }
     setIsOptimizing(false);
   };
+
+  const handleApplyOptimization = async () => {
+    setIsApplyingOptimization(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("route-optimization", {
+        body: { contractor_id: contractorId, preview: false },
+      });
+      if (error) throw error;
+      toast.success("Route optimisation applied!");
+      setOptimizationPreviewOpen(false);
+      setOptimizationPreview(null);
+      fetchData();
+    } catch (err) {
+      console.error("Apply optimization error:", err);
+      toast.error("Failed to apply route optimization");
+    }
+    setIsApplyingOptimization(false);
+  };
+
+  const handleEditClientFromMissingAddress = (clientId: string) => {
+    setMissingAddressDialogOpen(false);
+    setEditingClientId(clientId);
+    setEditClientDialogOpen(true);
+  };
+
+  // Helper to check if a client has a valid address
+  const clientHasValidAddress = useCallback((clientId: string): boolean => {
+    const client = clients.find(c => c.id === clientId);
+    if (!client) return false;
+    const addr = client.address as any;
+    if (!addr) return false;
+    const street = (addr.street || "").trim();
+    const city = (addr.city || "").trim();
+    const postcode = (addr.postcode || "").trim();
+    return street.length > 0 && (city.length > 0 || postcode.length > 0);
+  }, [clients]);
 
   const [form, setForm] = useState({
     title: "Lawn Mowing",
