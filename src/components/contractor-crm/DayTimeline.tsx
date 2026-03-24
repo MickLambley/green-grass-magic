@@ -352,6 +352,16 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                           <CalendarClock className="w-2.5 h-2.5 mr-0.5" />
                           Unscheduled
                         </Badge>
+                        {job.has_valid_address === false && (
+                          <Badge
+                            variant="outline"
+                            className="text-[9px] px-1.5 py-0 border-sunshine/40 text-sunshine bg-sunshine/10 shrink-0 cursor-pointer hover:bg-sunshine/20"
+                            onClick={(e) => { e.stopPropagation(); if (job.client_id && onEditClient) onEditClient(job.client_id); }}
+                          >
+                            <MapPin className="w-2.5 h-2.5 mr-0.5" />
+                            No address
+                          </Badge>
+                        )}
                       </div>
                       {(job.client_address?.street || job.client_address?.city || job.client_address?.postcode) && (
                         <div className="flex items-center gap-1 mt-1">
