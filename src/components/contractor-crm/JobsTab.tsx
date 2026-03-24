@@ -1305,6 +1305,21 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                   {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {form.client_id && !clientHasValidAddress(form.client_id) && (
+                <div className="flex items-center gap-1.5 p-2 rounded-md bg-sunshine/10 border border-sunshine/20">
+                  <AlertTriangle className="w-3.5 h-3.5 text-sunshine shrink-0" />
+                  <p className="text-xs text-sunshine">
+                    ⚠ {clients.find(c => c.id === form.client_id)?.name || "Client"} has no address — Route Optimisation won't work for this job.{" "}
+                    <button
+                      type="button"
+                      className="underline font-medium hover:text-sunshine/80"
+                      onClick={() => { setEditingClientId(form.client_id); setEditClientDialogOpen(true); }}
+                    >
+                      Add an address →
+                    </button>
+                  </p>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Service / Job Title</Label>
