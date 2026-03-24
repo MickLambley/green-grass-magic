@@ -1165,11 +1165,20 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                 {paginatedJobs.map((job) => (
                   <TableRow key={job.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { if (job.source === "platform") { setSelectedPlatformBookingId(job.id); setPlatformDetailOpen(true); } else { openEditDialog(job as any); } }}>
                     <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {job.title}
                         {job.recurrence_rule && <Badge variant="outline" className="text-[10px]">Recurring</Badge>}
                         {!job.scheduled_time && (
                           <Badge variant="outline" className="text-[10px] bg-sunshine/10 text-sunshine border-sunshine/30">No time set</Badge>
+                        )}
+                        {job.source === "crm" && job.client_id && !clientHasValidAddress(job.client_id) && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] bg-sunshine/10 text-sunshine border-sunshine/30 cursor-pointer hover:bg-sunshine/20"
+                            onClick={(e) => { e.stopPropagation(); setEditingClientId(job.client_id!); setEditClientDialogOpen(true); }}
+                          >
+                            <MapPin className="w-3 h-3 mr-0.5" /> No address
+                          </Badge>
                         )}
                       </div>
                     </TableCell>
