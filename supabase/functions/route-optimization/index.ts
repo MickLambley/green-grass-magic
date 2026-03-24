@@ -153,6 +153,7 @@ async function getDistanceMatrix(
     }
 
     const results: DistanceResult[] = [];
+    const notFoundIds = new Set<string>();
     for (let i = 0; i < data.rows.length; i++) {
       for (let j = 0; j < data.rows[i].elements.length; j++) {
         const el = data.rows[i].elements[j];
@@ -162,9 +163,14 @@ async function getDistanceMatrix(
             toId: destinations[j].id,
             durationMinutes: Math.round(el.duration.value / 60),
           });
+        } else if (el.status === "NOT_FOUND" || el.status === "ZERO_RESULTS") {
+          notFoundIds.add(origins[i].id);
+          notFoundIds.add(destinations[j].id);
         }
       }
     }
+    // Attach notFoundIds to results for caller to check
+    (results as any)._notFoundIds = notFoundIds;
     return results;
   } catch (err) {
     console.error("Distance Matrix fetch error:", err);
