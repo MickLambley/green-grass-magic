@@ -973,6 +973,9 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             const schedule = contractorWorkingHours[dayKey];
             return schedule?.enabled ? { start: schedule.start, end: schedule.end } : null;
           })()}
+          onRunOptimization={subscriptionTier && ["starter", "pro"].includes(subscriptionTier) ? handleRunOptimization : undefined}
+          isOptimizing={isOptimizing}
+          canOptimize={!!subscriptionTier && ["starter", "pro"].includes(subscriptionTier)}
           onJobClick={(job) => {
             const unified = jobs.find(j => j.id === job.id);
             if (!unified) return;
@@ -984,7 +987,6 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             }
           }}
           onJobReschedule={async (jobId, newTime, source) => {
-            // Auto-shift if conflict
             const dateStr = format(timelineDate, "yyyy-MM-dd");
             const job = jobs.find(j => j.id === jobId);
             const duration = job?.duration_minutes || 60;
@@ -1108,8 +1110,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                 {paginatedJobs.map((job) => (
                   <TableRow key={job.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { if (job.source === "platform") { setSelectedPlatformBookingId(job.id); setPlatformDetailOpen(true); } else { openEditDialog(job as any); } }}>
                     <TableCell className="font-medium">
-                      {job.title}
-                      {job.recurrence_rule && <Badge variant="outline" className="ml-2 text-[10px]">Recurring</Badge>}
+                      <div className="flex items-center gap-2">
+                        {job.title}
+                        {job.recurrence_rule && <Badge variant="outline" className="text-[10px]">Recurring</Badge>}
+                        {!job.scheduled_time && (
+                          <Badge variant="outline" className="text-[10px] bg-sunshine/10 text-sunshine border-sunshine/30">No time set</Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       <div>{job.client_name}</div>
@@ -1302,6 +1309,9 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               <div className="space-y-2">
                 <Label>Time</Label>
                 <Input type="time" value={form.scheduled_time} onChange={(e) => setForm({ ...form, scheduled_time: e.target.value })} />
+                {!form.scheduled_time && (
+                  <p className="text-xs text-muted-foreground">No time set — Route Optimisation will assign a start time based on your working hours.</p>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">

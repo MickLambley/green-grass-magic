@@ -63,6 +63,8 @@ const ContractorDashboard = () => {
   const [optimizationPreview, setOptimizationPreview] = useState<{
     timeSaved: number;
     proposedChanges: { jobId: string; title: string; clientName: string; date: string; currentTime: string | null; newTime: string }[];
+    message?: string;
+    usedFallbackDistances?: boolean;
   } | null>(null);
   const [isApplying, setIsApplying] = useState(false);
 
@@ -70,12 +72,10 @@ const ContractorDashboard = () => {
     if (!contractor) return;
     setIsOptimizing(true);
     try {
-      // Step 1: Preview (dry run)
       const { data, error } = await supabase.functions.invoke("route-optimization", {
         body: { contractor_id: contractor.id, preview: true },
       });
       if (error) {
-        // Parse the error body for a user-friendly message
         let errorMsg = "Failed to preview optimization";
         try {
           const errBody = typeof error === "object" && error.message ? error.message : String(error);
@@ -85,14 +85,26 @@ const ContractorDashboard = () => {
       }
       if (data?.error) {
         toast.error(data.error);
-      } else if (data?.result && data.result.timeSaved > 0) {
-        setOptimizationPreview({
-          timeSaved: data.result.timeSaved,
-          proposedChanges: data.result.proposedChanges || [],
-        });
-        setPreviewOpen(true);
+      } else if (data?.result) {
+        const r = data.result;
+        const changes = r.proposedChanges || [];
+        const timeSaved = r.timeSaved || 0;
+
+        if (changes.length === 0 && timeSaved === 0) {
+          // Nothing to do — simple toast
+          toast.success(r.message || "Your schedule is already optimised — no changes needed.", { duration: 4000 });
+        } else {
+          // Show preview modal (covers both timeSaved > 0 and timeSaved === 0 with changes)
+          setOptimizationPreview({
+            timeSaved,
+            proposedChanges: changes,
+            message: r.message,
+            usedFallbackDistances: r.usedFallbackDistances || false,
+          });
+          setPreviewOpen(true);
+        }
       } else {
-        toast.info("No optimization opportunities found. Ensure jobs have client addresses and are not locked.");
+        toast.info("No optimization opportunities found.");
       }
     } catch (err: any) {
       console.error("Optimization error:", err);
@@ -383,7 +395,7 @@ const ContractorDashboard = () => {
           {activeTab === "invoices" && <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} contractor={contractor} />}
           {activeTab === "services" && <ServiceOfferingsTab contractorId={contractor.id} />}
           {activeTab === "pricing" && <ContractorPricingTab contractor={contractor} onUpdate={setContractor} />}
-          {activeTab === "scheduling" && <AlternativeTimeTab contractorId={contractor.id} />}
+          {activeTab === "scheduling" && <AlternativeTimeTab contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} onRunOptimization={handleRunOptimization} isOptimizing={isOptimizing} />}
           {activeTab === "disputes" && <DisputeManagementTab contractorId={contractor.id} />}
           {activeTab === "website" && <WebsiteBuilderTab contractor={contractor} onUpdate={setContractor} onNavigateToPricing={() => switchTab("pricing")} />}
           {activeTab === "settings" && <ProfileSettingsTab contractor={contractor} onUpdate={setContractor} />}

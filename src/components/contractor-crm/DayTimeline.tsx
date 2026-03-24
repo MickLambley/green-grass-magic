@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Clock, Car, ChevronLeft, ChevronRight, GripVertical, ChevronDown, ChevronUp, ArrowRight, AlertTriangle, CalendarClock } from "lucide-react";
+import { MapPin, Clock, Car, ChevronLeft, ChevronRight, GripVertical, ChevronDown, ChevronUp, ArrowRight, AlertTriangle, CalendarClock, Route, Loader2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { format, addDays, subDays, isToday, isTomorrow, isYesterday } from "date-fns";
 
@@ -29,6 +30,9 @@ interface DayTimelineProps {
   onJobClick?: (job: TimelineJob) => void;
   onJobReschedule?: (jobId: string, newTime: string, source: "crm" | "platform") => void;
   workingHours?: WorkingHoursRange | null;
+  onRunOptimization?: () => void;
+  isOptimizing?: boolean;
+  canOptimize?: boolean;
 }
 
 const statusColors: Record<string, { bg: string; border: string; text: string }> = {
@@ -80,7 +84,7 @@ function formatHourLabel(hour: number): string {
   return `${hour - 12} PM`;
 }
 
-const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, workingHours }: DayTimelineProps) => {
+const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, workingHours, onRunOptimization, isOptimizing, canOptimize }: DayTimelineProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
   const [dragJobId, setDragJobId] = useState<string | null>(null);
   const [dropPreviewMinutes, setDropPreviewMinutes] = useState<number | null>(null);
@@ -250,6 +254,11 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
     }
   };
 
+  // Count eligible (unlocked, non-completed) jobs for optimization
+  const eligibleJobCount = useMemo(() => {
+    return jobs.filter(j => j.status !== "cancelled" && j.status !== "completed").length;
+  }, [jobs]);
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -260,9 +269,36 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
           <CardTitle className="font-display text-base text-center">
             {formatDateLabel(date)}
           </CardTitle>
-          <Button variant="ghost" size="icon" onClick={() => onDateChange(addDays(date, 1))}>
-            <ChevronRight className="w-4 h-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {onRunOptimization && canOptimize && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onRunOptimization}
+                      disabled={isOptimizing || eligibleJobCount === 0}
+                      className="text-xs"
+                    >
+                      {isOptimizing ? (
+                        <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                      ) : (
+                        <Route className="w-3.5 h-3.5 mr-1" />
+                      )}
+                      {isOptimizing ? "Optimising..." : "Optimise Route"}
+                    </Button>
+                  </TooltipTrigger>
+                  {eligibleJobCount === 0 && (
+                    <TooltipContent>No jobs to optimise today</TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            <Button variant="ghost" size="icon" onClick={() => onDateChange(addDays(date, 1))}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="px-3 pb-4">
