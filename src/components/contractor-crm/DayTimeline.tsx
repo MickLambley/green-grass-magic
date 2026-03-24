@@ -16,6 +16,8 @@ interface TimelineJob {
   source: "crm" | "platform";
   client_address?: { street?: string; city?: string; state?: string; postcode?: string } | null;
   original_scheduled_time?: string | null;
+  has_valid_address?: boolean;
+  client_id?: string;
 }
 
 interface WorkingHoursRange {
