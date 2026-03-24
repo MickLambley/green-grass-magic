@@ -63,6 +63,8 @@ const ContractorDashboard = () => {
   const [optimizationPreview, setOptimizationPreview] = useState<{
     timeSaved: number;
     proposedChanges: { jobId: string; title: string; clientName: string; date: string; currentTime: string | null; newTime: string }[];
+    message?: string;
+    usedFallbackDistances?: boolean;
   } | null>(null);
   const [isApplying, setIsApplying] = useState(false);
 
