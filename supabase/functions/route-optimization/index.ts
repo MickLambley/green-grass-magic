@@ -292,6 +292,32 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     };
   }
 
+  // ── ADDRESS VALIDATION: Check all jobs have valid addresses ──
+  const jobsMissingAddress: { jobId: string; jobTitle: string; clientName: string; clientId: string }[] = [];
+  for (const job of jobs) {
+    const addr = (job.clients as any)?.address as any;
+    const street = addr?.street?.trim() || "";
+    const city = addr?.city?.trim() || "";
+    const postcode = addr?.postcode?.trim() || "";
+    const hasStreet = street.length > 0;
+    const hasCityOrPostcode = city.length > 0 || postcode.length > 0;
+    if (!hasStreet || !hasCityOrPostcode) {
+      jobsMissingAddress.push({
+        jobId: job.id,
+        jobTitle: job.title || "Job",
+        clientName: (job.clients as any)?.name || "Unknown",
+        clientId: job.client_id,
+      });
+    }
+  }
+  if (jobsMissingAddress.length > 0) {
+    return {
+      error: "missing_addresses",
+      affectedJobs: jobsMissingAddress,
+      message: `Route optimisation cannot run — ${jobsMissingAddress.length} job(s) have no address. Add addresses to continue.`,
+    };
+  }
+
   // ── BUG 1 FIX: Pre-process null times ──
   // Assign default times to jobs with no scheduled_time before any optimization
   for (const job of jobs) {
