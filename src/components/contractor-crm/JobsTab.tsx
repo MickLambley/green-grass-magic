@@ -973,6 +973,9 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             const schedule = contractorWorkingHours[dayKey];
             return schedule?.enabled ? { start: schedule.start, end: schedule.end } : null;
           })()}
+          onRunOptimization={subscriptionTier && ["starter", "pro"].includes(subscriptionTier) ? handleRunOptimization : undefined}
+          isOptimizing={isOptimizing}
+          canOptimize={!!subscriptionTier && ["starter", "pro"].includes(subscriptionTier)}
           onJobClick={(job) => {
             const unified = jobs.find(j => j.id === job.id);
             if (!unified) return;
@@ -984,7 +987,6 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             }
           }}
           onJobReschedule={async (jobId, newTime, source) => {
-            // Auto-shift if conflict
             const dateStr = format(timelineDate, "yyyy-MM-dd");
             const job = jobs.find(j => j.id === jobId);
             const duration = job?.duration_minutes || 60;
