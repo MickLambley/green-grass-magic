@@ -254,6 +254,11 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
     }
   };
 
+  // Count eligible (unlocked, non-completed) jobs for optimization
+  const eligibleJobCount = useMemo(() => {
+    return jobs.filter(j => j.status !== "cancelled" && j.status !== "completed").length;
+  }, [jobs]);
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -264,9 +269,36 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
           <CardTitle className="font-display text-base text-center">
             {formatDateLabel(date)}
           </CardTitle>
-          <Button variant="ghost" size="icon" onClick={() => onDateChange(addDays(date, 1))}>
-            <ChevronRight className="w-4 h-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {onRunOptimization && canOptimize && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onRunOptimization}
+                      disabled={isOptimizing || eligibleJobCount === 0}
+                      className="text-xs"
+                    >
+                      {isOptimizing ? (
+                        <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                      ) : (
+                        <Route className="w-3.5 h-3.5 mr-1" />
+                      )}
+                      {isOptimizing ? "Optimising..." : "Optimise Route"}
+                    </Button>
+                  </TooltipTrigger>
+                  {eligibleJobCount === 0 && (
+                    <TooltipContent>No jobs to optimise today</TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            <Button variant="ghost" size="icon" onClick={() => onDateChange(addDays(date, 1))}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="px-3 pb-4">
