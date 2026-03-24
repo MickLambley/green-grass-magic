@@ -30,6 +30,9 @@ interface DayTimelineProps {
   onJobClick?: (job: TimelineJob) => void;
   onJobReschedule?: (jobId: string, newTime: string, source: "crm" | "platform") => void;
   workingHours?: WorkingHoursRange | null;
+  onRunOptimization?: () => void;
+  isOptimizing?: boolean;
+  canOptimize?: boolean;
 }
 
 const statusColors: Record<string, { bg: string; border: string; text: string }> = {
