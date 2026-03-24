@@ -1033,6 +1033,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           onRunOptimization={subscriptionTier && ["starter", "pro"].includes(subscriptionTier) ? handleRunOptimization : undefined}
           isOptimizing={isOptimizing}
           canOptimize={!!subscriptionTier && ["starter", "pro"].includes(subscriptionTier)}
+          onEditClient={(clientId) => { setEditingClientId(clientId); setEditClientDialogOpen(true); }}
           onJobClick={(job) => {
             const unified = jobs.find(j => j.id === job.id);
             if (!unified) return;
