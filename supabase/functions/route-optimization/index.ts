@@ -153,6 +153,7 @@ async function getDistanceMatrix(
     }
 
     const results: DistanceResult[] = [];
+    const notFoundIds = new Set<string>();
     for (let i = 0; i < data.rows.length; i++) {
       for (let j = 0; j < data.rows[i].elements.length; j++) {
         const el = data.rows[i].elements[j];
@@ -162,9 +163,14 @@ async function getDistanceMatrix(
             toId: destinations[j].id,
             durationMinutes: Math.round(el.duration.value / 60),
           });
+        } else if (el.status === "NOT_FOUND" || el.status === "ZERO_RESULTS") {
+          notFoundIds.add(origins[i].id);
+          notFoundIds.add(destinations[j].id);
         }
       }
     }
+    // Attach notFoundIds to results for caller to check
+    (results as any)._notFoundIds = notFoundIds;
     return results;
   } catch (err) {
     console.error("Distance Matrix fetch error:", err);
@@ -289,6 +295,32 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
       proposedChanges: [],
       message: "No eligible jobs found in the next 3 days.",
       usedFallbackDistances: false,
+    };
+  }
+
+  // ── ADDRESS VALIDATION: Check all jobs have valid addresses ──
+  const jobsMissingAddress: { jobId: string; jobTitle: string; clientName: string; clientId: string }[] = [];
+  for (const job of jobs) {
+    const addr = (job.clients as any)?.address as any;
+    const street = addr?.street?.trim() || "";
+    const city = addr?.city?.trim() || "";
+    const postcode = addr?.postcode?.trim() || "";
+    const hasStreet = street.length > 0;
+    const hasCityOrPostcode = city.length > 0 || postcode.length > 0;
+    if (!hasStreet || !hasCityOrPostcode) {
+      jobsMissingAddress.push({
+        jobId: job.id,
+        jobTitle: job.title || "Job",
+        clientName: (job.clients as any)?.name || "Unknown",
+        clientId: job.client_id,
+      });
+    }
+  }
+  if (jobsMissingAddress.length > 0) {
+    return {
+      error: "missing_addresses",
+      affectedJobs: jobsMissingAddress,
+      message: `Route optimisation cannot run — ${jobsMissingAddress.length} job(s) have no address. Add addresses to continue.`,
     };
   }
 

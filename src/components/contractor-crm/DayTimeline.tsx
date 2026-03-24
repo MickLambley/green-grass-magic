@@ -16,6 +16,8 @@ interface TimelineJob {
   source: "crm" | "platform";
   client_address?: { street?: string; city?: string; state?: string; postcode?: string } | null;
   original_scheduled_time?: string | null;
+  has_valid_address?: boolean;
+  client_id?: string;
 }
 
 interface WorkingHoursRange {
@@ -33,6 +35,7 @@ interface DayTimelineProps {
   onRunOptimization?: () => void;
   isOptimizing?: boolean;
   canOptimize?: boolean;
+  onEditClient?: (clientId: string) => void;
 }
 
 const statusColors: Record<string, { bg: string; border: string; text: string }> = {
@@ -84,7 +87,7 @@ function formatHourLabel(hour: number): string {
   return `${hour - 12} PM`;
 }
 
-const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, workingHours, onRunOptimization, isOptimizing, canOptimize }: DayTimelineProps) => {
+const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, workingHours, onRunOptimization, isOptimizing, canOptimize, onEditClient }: DayTimelineProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
   const [dragJobId, setDragJobId] = useState<string | null>(null);
   const [dropPreviewMinutes, setDropPreviewMinutes] = useState<number | null>(null);
@@ -349,6 +352,16 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                           <CalendarClock className="w-2.5 h-2.5 mr-0.5" />
                           Unscheduled
                         </Badge>
+                        {job.has_valid_address === false && (
+                          <Badge
+                            variant="outline"
+                            className="text-[9px] px-1.5 py-0 border-sunshine/40 text-sunshine bg-sunshine/10 shrink-0 cursor-pointer hover:bg-sunshine/20"
+                            onClick={(e) => { e.stopPropagation(); if (job.client_id && onEditClient) onEditClient(job.client_id); }}
+                          >
+                            <MapPin className="w-2.5 h-2.5 mr-0.5" />
+                            No address
+                          </Badge>
+                        )}
                       </div>
                       {(job.client_address?.street || job.client_address?.city || job.client_address?.postcode) && (
                         <div className="flex items-center gap-1 mt-1">
@@ -529,6 +542,15 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                                 )}
                               </div>
                               <p className="text-[11px] text-muted-foreground truncate">{job.client_name}</p>
+                              {job.has_valid_address === false && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[8px] px-1 py-0 border-sunshine/40 text-sunshine bg-sunshine/10 cursor-pointer hover:bg-sunshine/20 mt-0.5"
+                                  onClick={(e) => { e.stopPropagation(); if (job.client_id && onEditClient) onEditClient(job.client_id); }}
+                                >
+                                  <MapPin className="w-2.5 h-2.5 mr-0.5" /> No address
+                                </Badge>
+                              )}
                             </div>
                           </div>
                           <div className="text-right shrink-0">

@@ -7,6 +7,8 @@ import JobCompletionDialog from "./JobCompletionDialog";
 import SuggestTimeDialog from "./SuggestTimeDialog";
 import MarkPaidDialog from "./MarkPaidDialog";
 import QuoteResponseDialog from "./QuoteResponseDialog";
+import MissingAddressesDialog from "./MissingAddressesDialog";
+import OptimizationPreviewDialog from "./OptimizationPreviewDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,7 +29,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock, Trash2, MessageSquare, Send, RefreshCw, PencilLine } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock, Trash2, MessageSquare, Send, RefreshCw, PencilLine, AlertTriangle } from "lucide-react";
 import DayTimeline from "./DayTimeline";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, endOfWeek, isToday } from "date-fns";
@@ -144,23 +146,40 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   } | null>(null);
   const [useCustomTitle, setUseCustomTitle] = useState(false);
   const [priceHelperText, setPriceHelperText] = useState<string | null>(null);
+  const [missingAddressDialogOpen, setMissingAddressDialogOpen] = useState(false);
+  const [missingAddressJobs, setMissingAddressJobs] = useState<{ jobId: string; jobTitle: string; clientName: string; clientId: string }[]>([]);
+  const [optimizationPreview, setOptimizationPreview] = useState<any>(null);
+  const [optimizationPreviewOpen, setOptimizationPreviewOpen] = useState(false);
+  const [isApplyingOptimization, setIsApplyingOptimization] = useState(false);
+  const [editClientDialogOpen, setEditClientDialogOpen] = useState(false);
+  const [editingClientId, setEditingClientId] = useState<string | null>(null);
 
   const handleRunOptimization = async () => {
     setIsOptimizing(true);
     try {
       const { data, error } = await supabase.functions.invoke("route-optimization", {
-        body: { contractor_id: contractorId },
+        body: { contractor_id: contractorId, preview: true },
       });
       if (error) throw error;
       if (data?.result) {
         const r = data.result;
-        toast.success(`Route optimized! Level ${r.level} saved ${r.timeSaved} minutes. Status: ${r.status === "pending_approval" ? "Awaiting your approval" : "Applied"}`);
-        if (r.status === "pending_approval" && onOpenRouteOptimization) {
-          onOpenRouteOptimization();
+        // Handle missing addresses error
+        if (r.error === "missing_addresses") {
+          setMissingAddressJobs(r.affectedJobs || []);
+          setMissingAddressDialogOpen(true);
+          setIsOptimizing(false);
+          return;
         }
-        fetchData();
+        // If no changes needed, show toast
+        if (!r.proposedChanges || r.proposedChanges.length === 0) {
+          toast.success(r.message || "Your schedule is already optimised — no changes needed.", { duration: 4000 });
+        } else {
+          // Show preview dialog
+          setOptimizationPreview(r);
+          setOptimizationPreviewOpen(true);
+        }
       } else {
-        toast.info("No optimization opportunities found for today's jobs. Ensure jobs have client addresses and are not locked.");
+        toast.info("No optimization opportunities found for today's jobs.");
       }
     } catch (err) {
       console.error("Optimization error:", err);
@@ -168,6 +187,42 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     }
     setIsOptimizing(false);
   };
+
+  const handleApplyOptimization = async () => {
+    setIsApplyingOptimization(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("route-optimization", {
+        body: { contractor_id: contractorId, preview: false },
+      });
+      if (error) throw error;
+      toast.success("Route optimisation applied!");
+      setOptimizationPreviewOpen(false);
+      setOptimizationPreview(null);
+      fetchData();
+    } catch (err) {
+      console.error("Apply optimization error:", err);
+      toast.error("Failed to apply route optimization");
+    }
+    setIsApplyingOptimization(false);
+  };
+
+  const handleEditClientFromMissingAddress = (clientId: string) => {
+    setMissingAddressDialogOpen(false);
+    setEditingClientId(clientId);
+    setEditClientDialogOpen(true);
+  };
+
+  // Helper to check if a client has a valid address
+  const clientHasValidAddress = useCallback((clientId: string): boolean => {
+    const client = clients.find(c => c.id === clientId);
+    if (!client) return false;
+    const addr = client.address as any;
+    if (!addr) return false;
+    const street = (addr.street || "").trim();
+    const city = (addr.city || "").trim();
+    const postcode = (addr.postcode || "").trim();
+    return street.length > 0 && (city.length > 0 || postcode.length > 0);
+  }, [clients]);
 
   const [form, setForm] = useState({
     title: "Lawn Mowing",
@@ -963,6 +1018,8 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             source: j.source,
             client_address: j.client_address,
             original_scheduled_time: (j as any).original_scheduled_time ?? null,
+            has_valid_address: j.source === "crm" && j.client_id ? clientHasValidAddress(j.client_id) : true,
+            client_id: j.client_id,
           }))}
           date={timelineDate}
           onDateChange={setTimelineDate}
@@ -976,6 +1033,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           onRunOptimization={subscriptionTier && ["starter", "pro"].includes(subscriptionTier) ? handleRunOptimization : undefined}
           isOptimizing={isOptimizing}
           canOptimize={!!subscriptionTier && ["starter", "pro"].includes(subscriptionTier)}
+          onEditClient={(clientId) => { setEditingClientId(clientId); setEditClientDialogOpen(true); }}
           onJobClick={(job) => {
             const unified = jobs.find(j => j.id === job.id);
             if (!unified) return;
@@ -1110,11 +1168,20 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                 {paginatedJobs.map((job) => (
                   <TableRow key={job.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { if (job.source === "platform") { setSelectedPlatformBookingId(job.id); setPlatformDetailOpen(true); } else { openEditDialog(job as any); } }}>
                     <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {job.title}
                         {job.recurrence_rule && <Badge variant="outline" className="text-[10px]">Recurring</Badge>}
                         {!job.scheduled_time && (
                           <Badge variant="outline" className="text-[10px] bg-sunshine/10 text-sunshine border-sunshine/30">No time set</Badge>
+                        )}
+                        {job.source === "crm" && job.client_id && !clientHasValidAddress(job.client_id) && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] bg-sunshine/10 text-sunshine border-sunshine/30 cursor-pointer hover:bg-sunshine/20"
+                            onClick={(e) => { e.stopPropagation(); setEditingClientId(job.client_id!); setEditClientDialogOpen(true); }}
+                          >
+                            <MapPin className="w-3 h-3 mr-0.5" /> No address
+                          </Badge>
                         )}
                       </div>
                     </TableCell>
@@ -1241,6 +1308,21 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                   {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {form.client_id && !clientHasValidAddress(form.client_id) && (
+                <div className="flex items-center gap-1.5 p-2 rounded-md bg-sunshine/10 border border-sunshine/20">
+                  <AlertTriangle className="w-3.5 h-3.5 text-sunshine shrink-0" />
+                  <p className="text-xs text-sunshine">
+                    ⚠ {clients.find(c => c.id === form.client_id)?.name || "Client"} has no address — Route Optimisation won't work for this job.{" "}
+                    <button
+                      type="button"
+                      className="underline font-medium hover:text-sunshine/80"
+                      onClick={() => { setEditingClientId(form.client_id); setEditClientDialogOpen(true); }}
+                    >
+                      Add an address →
+                    </button>
+                  </p>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Service / Job Title</Label>
@@ -1546,6 +1628,112 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Missing Addresses Dialog */}
+      <MissingAddressesDialog
+        open={missingAddressDialogOpen}
+        onOpenChange={setMissingAddressDialogOpen}
+        affectedJobs={missingAddressJobs}
+        onEditClient={handleEditClientFromMissingAddress}
+      />
+
+      {/* Optimization Preview Dialog */}
+      <OptimizationPreviewDialog
+        open={optimizationPreviewOpen}
+        onOpenChange={setOptimizationPreviewOpen}
+        preview={optimizationPreview}
+        onConfirm={handleApplyOptimization}
+        isApplying={isApplyingOptimization}
+      />
+
+      {/* Edit Client Dialog (for adding address from job context) */}
+      {editClientDialogOpen && editingClientId && (() => {
+        const client = clients.find(c => c.id === editingClientId);
+        if (!client) return null;
+        const addr = client.address as any;
+        return (
+          <Dialog open={editClientDialogOpen} onOpenChange={setEditClientDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit Client — {client.name}</DialogTitle>
+              </DialogHeader>
+              <EditClientAddressForm
+                client={client}
+                contractorId={contractorId}
+                onSaved={() => {
+                  setEditClientDialogOpen(false);
+                  setEditingClientId(null);
+                  fetchData();
+                }}
+                onCancel={() => { setEditClientDialogOpen(false); setEditingClientId(null); }}
+              />
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+    </div>
+  );
+};
+
+// Inline component for editing a client's address from job context
+const EditClientAddressForm = ({ client, contractorId, onSaved, onCancel }: {
+  client: Client;
+  contractorId: string;
+  onSaved: () => void;
+  onCancel: () => void;
+}) => {
+  const addr = client.address as any;
+  const [street, setStreet] = useState(addr?.street || "");
+  const [city, setCity] = useState(addr?.city || "");
+  const [state, setState] = useState(addr?.state || "");
+  const [postcode, setPostcode] = useState(addr?.postcode || "");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!street.trim()) { toast.error("Street address is required"); return; }
+    if (!city.trim() && !postcode.trim()) { toast.error("City or postcode is required"); return; }
+    setIsSaving(true);
+    const address = { street: street.trim(), city: city.trim(), state: state.trim(), postcode: postcode.trim() };
+    const { error } = await supabase.from("clients").update({ address }).eq("id", client.id);
+    if (error) {
+      toast.error("Failed to update address");
+    } else {
+      toast.success("Address updated");
+      onSaved();
+    }
+    setIsSaving(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-3 p-3 rounded-lg bg-sunshine/10 border border-sunshine/20">
+        <AlertTriangle className="w-5 h-5 text-sunshine shrink-0 mt-0.5" />
+        <p className="text-sm text-sunshine">Add an address for this client so Route Optimisation can include their jobs.</p>
+      </div>
+      <div className="space-y-2">
+        <Label>Street Address *</Label>
+        <Input value={street} onChange={(e) => setStreet(e.target.value)} placeholder="123 Main St" />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="space-y-1">
+          <Label className="text-xs">City</Label>
+          <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">State</Label>
+          <Input value={state} onChange={(e) => setState(e.target.value)} placeholder="State" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Postcode</Label>
+          <Input value={postcode} onChange={(e) => setPostcode(e.target.value)} placeholder="Postcode" />
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button onClick={handleSave} disabled={isSaving}>
+          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Address"}
+        </Button>
+      </DialogFooter>
     </div>
   );
 };
