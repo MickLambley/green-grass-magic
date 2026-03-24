@@ -1018,6 +1018,8 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             source: j.source,
             client_address: j.client_address,
             original_scheduled_time: (j as any).original_scheduled_time ?? null,
+            has_valid_address: j.source === "crm" && j.client_id ? clientHasValidAddress(j.client_id) : true,
+            client_id: j.client_id,
           }))}
           date={timelineDate}
           onDateChange={setTimelineDate}
