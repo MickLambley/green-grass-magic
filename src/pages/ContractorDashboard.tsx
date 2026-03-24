@@ -395,7 +395,7 @@ const ContractorDashboard = () => {
           {activeTab === "invoices" && <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} contractor={contractor} />}
           {activeTab === "services" && <ServiceOfferingsTab contractorId={contractor.id} />}
           {activeTab === "pricing" && <ContractorPricingTab contractor={contractor} onUpdate={setContractor} />}
-          {activeTab === "scheduling" && <AlternativeTimeTab contractorId={contractor.id} />}
+          {activeTab === "scheduling" && <AlternativeTimeTab contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} onRunOptimization={handleRunOptimization} isOptimizing={isOptimizing} />}
           {activeTab === "disputes" && <DisputeManagementTab contractorId={contractor.id} />}
           {activeTab === "website" && <WebsiteBuilderTab contractor={contractor} onUpdate={setContractor} onNavigateToPricing={() => switchTab("pricing")} />}
           {activeTab === "settings" && <ProfileSettingsTab contractor={contractor} onUpdate={setContractor} />}
