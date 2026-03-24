@@ -84,7 +84,7 @@ function formatHourLabel(hour: number): string {
   return `${hour - 12} PM`;
 }
 
-const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, workingHours }: DayTimelineProps) => {
+const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, workingHours, onRunOptimization, isOptimizing, canOptimize }: DayTimelineProps) => {
   const timelineRef = useRef<HTMLDivElement>(null);
   const [dragJobId, setDragJobId] = useState<string | null>(null);
   const [dropPreviewMinutes, setDropPreviewMinutes] = useState<number | null>(null);
