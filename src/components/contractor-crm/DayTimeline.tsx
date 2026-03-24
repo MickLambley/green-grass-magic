@@ -542,6 +542,15 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                                 )}
                               </div>
                               <p className="text-[11px] text-muted-foreground truncate">{job.client_name}</p>
+                              {job.has_valid_address === false && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[8px] px-1 py-0 border-sunshine/40 text-sunshine bg-sunshine/10 cursor-pointer hover:bg-sunshine/20 mt-0.5"
+                                  onClick={(e) => { e.stopPropagation(); if (job.client_id && onEditClient) onEditClient(job.client_id); }}
+                                >
+                                  <MapPin className="w-2.5 h-2.5 mr-0.5" /> No address
+                                </Badge>
+                              )}
                             </div>
                           </div>
                           <div className="text-right shrink-0">
