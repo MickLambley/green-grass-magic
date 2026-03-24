@@ -1309,6 +1309,9 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               <div className="space-y-2">
                 <Label>Time</Label>
                 <Input type="time" value={form.scheduled_time} onChange={(e) => setForm({ ...form, scheduled_time: e.target.value })} />
+                {!form.scheduled_time && (
+                  <p className="text-xs text-muted-foreground">No time set — Route Optimisation will assign a start time based on your working hours.</p>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
