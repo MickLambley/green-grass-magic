@@ -330,12 +330,38 @@ const ClientsTab = ({ contractorId }: ClientsTabProps) => {
                       {client.phone || "—"}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-muted-foreground">
-                      {addr?.city && addr?.state ? (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {addr.street ? `${addr.street}, ` : ""}{addr.city}, {addr.state} {addr.postcode || ""}
-                        </span>
-                      ) : "—"}
+                      {(() => {
+                        const hasStreet = !!addr?.street?.trim();
+                        const hasCityOrPostcode = !!(addr?.city?.trim() || addr?.postcode?.trim());
+                        if (hasStreet && hasCityOrPostcode) {
+                          return (
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
+                              {addr.city}, {addr.state} {addr.postcode || ""}
+                            </span>
+                          );
+                        }
+                        if (hasCityOrPostcode && !hasStreet) {
+                          return (
+                            <span className="flex items-center gap-1 text-sunshine">
+                              <AlertTriangle className="w-3 h-3" />
+                              {addr?.city || ""} {addr?.state || ""} (no street)
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="flex items-center gap-1 text-sunshine">
+                            <AlertTriangle className="w-3 h-3" />
+                            No address
+                            <button
+                              className="text-xs underline text-primary hover:text-primary/80 ml-1"
+                              onClick={(e) => { e.stopPropagation(); openEditDialog(client); }}
+                            >
+                              Add →
+                            </button>
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
