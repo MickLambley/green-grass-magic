@@ -35,6 +35,7 @@ interface DayTimelineProps {
   onRunOptimization?: () => void;
   isOptimizing?: boolean;
   canOptimize?: boolean;
+  onEditClient?: (clientId: string) => void;
 }
 
 const statusColors: Record<string, { bg: string; border: string; text: string }> = {
