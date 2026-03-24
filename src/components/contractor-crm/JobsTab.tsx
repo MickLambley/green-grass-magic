@@ -1625,6 +1625,112 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Missing Addresses Dialog */}
+      <MissingAddressesDialog
+        open={missingAddressDialogOpen}
+        onOpenChange={setMissingAddressDialogOpen}
+        affectedJobs={missingAddressJobs}
+        onEditClient={handleEditClientFromMissingAddress}
+      />
+
+      {/* Optimization Preview Dialog */}
+      <OptimizationPreviewDialog
+        open={optimizationPreviewOpen}
+        onOpenChange={setOptimizationPreviewOpen}
+        preview={optimizationPreview}
+        onConfirm={handleApplyOptimization}
+        isApplying={isApplyingOptimization}
+      />
+
+      {/* Edit Client Dialog (for adding address from job context) */}
+      {editClientDialogOpen && editingClientId && (() => {
+        const client = clients.find(c => c.id === editingClientId);
+        if (!client) return null;
+        const addr = client.address as any;
+        return (
+          <Dialog open={editClientDialogOpen} onOpenChange={setEditClientDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit Client — {client.name}</DialogTitle>
+              </DialogHeader>
+              <EditClientAddressForm
+                client={client}
+                contractorId={contractorId}
+                onSaved={() => {
+                  setEditClientDialogOpen(false);
+                  setEditingClientId(null);
+                  fetchData();
+                }}
+                onCancel={() => { setEditClientDialogOpen(false); setEditingClientId(null); }}
+              />
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+    </div>
+  );
+};
+
+// Inline component for editing a client's address from job context
+const EditClientAddressForm = ({ client, contractorId, onSaved, onCancel }: {
+  client: Client;
+  contractorId: string;
+  onSaved: () => void;
+  onCancel: () => void;
+}) => {
+  const addr = client.address as any;
+  const [street, setStreet] = useState(addr?.street || "");
+  const [city, setCity] = useState(addr?.city || "");
+  const [state, setState] = useState(addr?.state || "");
+  const [postcode, setPostcode] = useState(addr?.postcode || "");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!street.trim()) { toast.error("Street address is required"); return; }
+    if (!city.trim() && !postcode.trim()) { toast.error("City or postcode is required"); return; }
+    setIsSaving(true);
+    const address = { street: street.trim(), city: city.trim(), state: state.trim(), postcode: postcode.trim() };
+    const { error } = await supabase.from("clients").update({ address }).eq("id", client.id);
+    if (error) {
+      toast.error("Failed to update address");
+    } else {
+      toast.success("Address updated");
+      onSaved();
+    }
+    setIsSaving(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-3 p-3 rounded-lg bg-sunshine/10 border border-sunshine/20">
+        <AlertTriangle className="w-5 h-5 text-sunshine shrink-0 mt-0.5" />
+        <p className="text-sm text-sunshine">Add an address for this client so Route Optimisation can include their jobs.</p>
+      </div>
+      <div className="space-y-2">
+        <Label>Street Address *</Label>
+        <Input value={street} onChange={(e) => setStreet(e.target.value)} placeholder="123 Main St" />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="space-y-1">
+          <Label className="text-xs">City</Label>
+          <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">State</Label>
+          <Input value={state} onChange={(e) => setState(e.target.value)} placeholder="State" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Postcode</Label>
+          <Input value={postcode} onChange={(e) => setPostcode(e.target.value)} placeholder="Postcode" />
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button onClick={handleSave} disabled={isSaving}>
+          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Address"}
+        </Button>
+      </DialogFooter>
     </div>
   );
 };
