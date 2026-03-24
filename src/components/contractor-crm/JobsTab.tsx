@@ -146,6 +146,13 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   } | null>(null);
   const [useCustomTitle, setUseCustomTitle] = useState(false);
   const [priceHelperText, setPriceHelperText] = useState<string | null>(null);
+  const [missingAddressDialogOpen, setMissingAddressDialogOpen] = useState(false);
+  const [missingAddressJobs, setMissingAddressJobs] = useState<{ jobId: string; jobTitle: string; clientName: string; clientId: string }[]>([]);
+  const [optimizationPreview, setOptimizationPreview] = useState<any>(null);
+  const [optimizationPreviewOpen, setOptimizationPreviewOpen] = useState(false);
+  const [isApplyingOptimization, setIsApplyingOptimization] = useState(false);
+  const [editClientDialogOpen, setEditClientDialogOpen] = useState(false);
+  const [editingClientId, setEditingClientId] = useState<string | null>(null);
 
   const handleRunOptimization = async () => {
     setIsOptimizing(true);
