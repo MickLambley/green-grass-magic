@@ -108,48 +108,105 @@ interface RunStats {
   matrixElementsRequested: number;
   fallbackPairs: number;
   geocodeCalls: number;
+  geocodeRetries: number;
   usedFallbackDistances: boolean;
   apiErrors: string[];
+  configError: string | null; // set if key/billing/quota is the real problem
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Statuses that indicate a hard configuration problem — no point retrying.
+const FATAL_GEOCODE_STATUSES = new Set([
+  "REQUEST_DENIED",       // bad key, referer/IP restriction, billing disabled
+  "INVALID_REQUEST",      // malformed call
+]);
+// Statuses worth retrying with backoff.
+const TRANSIENT_GEOCODE_STATUSES = new Set([
+  "UNKNOWN_ERROR",
+  "OVER_QUERY_LIMIT",
+]);
+
 // Returns coordinates, or one of two failure modes:
-//   { unavailable: true } — Google API itself rejected us (key/quota/network)
-//   null                  — API worked but the address could not be located
+//   { unavailable: true, fatal?: boolean } — Google API itself failed (key/quota/network)
+//   null                                   — API worked but address was unlocatable
 async function geocodeAU(
   address: string,
   stats: RunStats,
-): Promise<{ lat: number; lng: number } | { unavailable: true } | null> {
+  stage: "preflight" | "job_geocode" = "job_geocode",
+): Promise<{ lat: number; lng: number } | { unavailable: true; fatal?: boolean } | null> {
   if (!GOOGLE_MAPS_API_KEY) {
-    stats.apiErrors.push("GOOGLE_MAPS_API_KEY is not configured");
-    return { unavailable: true };
+    const msg = "GOOGLE_MAPS_API_KEY is not configured";
+    stats.apiErrors.push(msg);
+    stats.configError = stats.configError || msg;
+    console.warn(`[route-optimization] geocode FAIL stage=${stage}: ${msg}`);
+    return { unavailable: true, fatal: true };
   }
   stats.geocodeCalls++;
-  try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json`
-      + `?address=${encodeURIComponent(address)}`
-      + `&region=au&components=country:AU`
-      + `&key=${GOOGLE_MAPS_API_KEY}`;
-    const resp = await fetch(url);
-    const data = await resp.json();
 
-    // Hard API failure (bad key, referer-restricted key, quota, billing, etc.)
-    const status = data?.status;
-    if (status === "REQUEST_DENIED" || status === "OVER_QUERY_LIMIT" || status === "INVALID_REQUEST" || status === "UNKNOWN_ERROR") {
-      stats.apiErrors.push(`Geocode API ${status}: ${data?.error_message ?? "no detail"}`);
-      return { unavailable: true };
-    }
+  const MAX_ATTEMPTS = 3;
+  let lastDetail = "";
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const url = `https://maps.googleapis.com/maps/api/geocode/json`
+        + `?address=${encodeURIComponent(address)}`
+        + `&region=au&components=country:AU`
+        + `&key=${GOOGLE_MAPS_API_KEY}`;
+      const resp = await fetch(url);
 
-    const loc = data?.results?.[0]?.geometry?.location;
-    if (!loc) return null;
-    if (!inAU(loc.lat, loc.lng)) {
-      stats.apiErrors.push(`Geocode fell outside AU for "${address}"`);
+      // HTTP-level failure (5xx etc.) — retry
+      if (!resp.ok && resp.status >= 500) {
+        lastDetail = `HTTP ${resp.status}`;
+        console.warn(`[route-optimization] geocode HTTP ${resp.status} stage=${stage} attempt=${attempt} address="${address}"`);
+        if (attempt < MAX_ATTEMPTS) { stats.geocodeRetries++; await sleep(250 * attempt); continue; }
+        stats.apiErrors.push(`Geocode HTTP ${resp.status} for "${address}"`);
+        return { unavailable: true, fatal: false };
+      }
+
+      const data = await resp.json();
+      const status = data?.status as string | undefined;
+
+      if (status === "OK" || status === "ZERO_RESULTS") {
+        const loc = data?.results?.[0]?.geometry?.location;
+        if (!loc) return null; // unlocatable but API worked
+        if (!inAU(loc.lat, loc.lng)) {
+          stats.apiErrors.push(`Geocode fell outside AU for "${address}"`);
+          return null;
+        }
+        return { lat: loc.lat, lng: loc.lng };
+      }
+
+      lastDetail = `${status} ${data?.error_message ?? ""}`.trim();
+
+      if (FATAL_GEOCODE_STATUSES.has(status || "")) {
+        const msg = `Geocode API ${status}: ${data?.error_message ?? "no detail"}`;
+        stats.apiErrors.push(msg);
+        stats.configError = stats.configError || msg;
+        console.error(`[route-optimization] geocode FATAL stage=${stage} address="${address}" :: ${msg}`);
+        return { unavailable: true, fatal: true };
+      }
+
+      if (TRANSIENT_GEOCODE_STATUSES.has(status || "")) {
+        console.warn(`[route-optimization] geocode TRANSIENT stage=${stage} attempt=${attempt} address="${address}" :: ${lastDetail}`);
+        if (attempt < MAX_ATTEMPTS) { stats.geocodeRetries++; await sleep(250 * attempt); continue; }
+        stats.apiErrors.push(`Geocode ${status} after ${MAX_ATTEMPTS} attempts for "${address}"`);
+        return { unavailable: true, fatal: false };
+      }
+
+      // Unknown non-OK status — log and treat as unlocatable
+      stats.apiErrors.push(`Geocode unknown status=${status} for "${address}"`);
+      console.warn(`[route-optimization] geocode UNKNOWN status=${status} stage=${stage} address="${address}"`);
       return null;
+    } catch (err) {
+      lastDetail = String(err);
+      console.warn(`[route-optimization] geocode FETCH-ERR stage=${stage} attempt=${attempt} address="${address}" :: ${lastDetail}`);
+      if (attempt < MAX_ATTEMPTS) { stats.geocodeRetries++; await sleep(250 * attempt); continue; }
+      stats.apiErrors.push(`Geocode fetch failed for "${address}": ${lastDetail}`);
+      return { unavailable: true, fatal: false };
     }
-    return { lat: loc.lat, lng: loc.lng };
-  } catch (err) {
-    stats.apiErrors.push(`Geocode fetch failed for "${address}": ${String(err)}`);
-    return { unavailable: true };
   }
+  // Should not be reached, but keep TS happy
+  return { unavailable: true, fatal: false };
 }
 
 interface DistanceCell { fromId: string; toId: string; durationMinutes: number; }
@@ -415,8 +472,10 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     matrixElementsRequested: 0,
     fallbackPairs: 0,
     geocodeCalls: 0,
+    geocodeRetries: 0,
     usedFallbackDistances: false,
     apiErrors: [],
+    configError: null,
   };
 
   const { data: contractorData } = await supabase
@@ -492,41 +551,61 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
   }
 
   // ── PRE-FLIGHT: verify the Geocoding API actually works for us.
-  // Catches referer-restricted keys / billing / quota issues before we
-  // mislabel every job as a "missing address".
-  const preflight = await geocodeAU("Sydney NSW 2000, Australia", stats);
-  if (preflight && (preflight as any).unavailable) {
+  // Only fail hard for *fatal* config errors (REQUEST_DENIED / no key / billing).
+  // Transient blips here are tolerated and we continue; per-job retries handle them.
+  const preflight = await geocodeAU("Sydney NSW 2000, Australia", stats, "preflight");
+  if (preflight && (preflight as any).unavailable && (preflight as any).fatal) {
+    console.error(`[route-optimization] preflight FATAL contractor=${contractorId} :: ${stats.configError}`);
     return {
-      error: "geocoding_unavailable",
-      message: "Map service is temporarily unavailable. Route optimisation cannot run right now — please try again shortly or contact support.",
+      error: "map_service_misconfigured",
+      message: "Map routing isn't configured correctly on the server. Please contact support so they can re-enable it.",
       apiErrors: stats.apiErrors,
     };
   }
 
   // ── GEOCODE EVERY JOB ONCE ──
-  // Cached per address string within this run.
+  // Use stored coordinates first; geocode and persist back when missing.
   const geocodeCache = new Map<string, { lat: number; lng: number }>();
   const prepared: PreparedJob[] = [];
   const ungeocodable: { jobId: string; jobTitle: string; clientName: string; clientId: string }[] = [];
+  // Track which clients we successfully geocoded so we can persist coords once.
+  const coordsToPersist: { clientId: string; address: any; lat: number; lng: number }[] = [];
+  const persistedClients = new Set<string>();
 
   for (const j of jobs) {
     const a = j.clients?.address as any;
     const addressString = [a.street, a.city, a.state, a.postcode, "Australia"].filter(Boolean).join(", ");
 
     let coords: { lat: number; lng: number } | null = null;
-    if (typeof a.lat === "number" && typeof a.lng === "number" && inAU(a.lat, a.lng)) {
+    let coordsFromCache = false;
+
+    if (typeof a?.lat === "number" && typeof a?.lng === "number" && inAU(a.lat, a.lng)) {
       coords = { lat: a.lat, lng: a.lng };
+      coordsFromCache = true;
     } else if (geocodeCache.has(addressString)) {
       coords = geocodeCache.get(addressString)!;
+      coordsFromCache = true;
     } else {
-      const result = await geocodeAU(addressString, stats);
+      const result = await geocodeAU(addressString, stats, "job_geocode");
       if (result && (result as any).unavailable) {
-        // API broke mid-run — bail out cleanly.
-        return {
-          error: "geocoding_unavailable",
-          message: "Map service became unavailable while running optimisation. Please try again shortly.",
-          apiErrors: stats.apiErrors,
-        };
+        // FATAL = configuration problem affecting every call → bail out.
+        if ((result as any).fatal) {
+          console.error(`[route-optimization] job geocode FATAL client="${j.clients?.name}" address="${addressString}" :: ${stats.configError}`);
+          return {
+            error: "map_service_misconfigured",
+            message: "Map routing isn't configured correctly on the server. Please contact support so they can re-enable it.",
+            apiErrors: stats.apiErrors,
+          };
+        }
+        // Transient: report this specific job as needing review instead of nuking the run.
+        console.warn(`[route-optimization] job geocode TRANSIENT-FAIL client="${j.clients?.name}" address="${addressString}"`);
+        ungeocodable.push({
+          jobId: j.id,
+          jobTitle: j.title || "Job",
+          clientName: j.clients?.name || "Unknown",
+          clientId: j.client_id,
+        });
+        continue;
       }
       coords = result as { lat: number; lng: number } | null;
       if (coords) geocodeCache.set(addressString, coords);
@@ -540,6 +619,13 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
         clientId: j.client_id,
       });
       continue;
+    }
+
+    // Schedule a one-time persist of coordinates back to the client record so
+    // future runs don't need to call Google again for this address.
+    if (!coordsFromCache && !persistedClients.has(j.client_id)) {
+      persistedClients.add(j.client_id);
+      coordsToPersist.push({ clientId: j.client_id, address: a, lat: coords.lat, lng: coords.lng });
     }
 
     prepared.push({
@@ -556,6 +642,17 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
       lat: coords.lat,
       lng: coords.lng,
     });
+  }
+
+  // Persist newly geocoded coordinates back onto the client address JSON.
+  // Best-effort; failures here must never stop the optimisation.
+  for (const c of coordsToPersist) {
+    try {
+      const merged = { ...(c.address || {}), lat: c.lat, lng: c.lng };
+      await supabase.from("clients").update({ address: merged }).eq("id", c.clientId);
+    } catch (e) {
+      console.warn(`[route-optimization] persist coords FAIL client=${c.clientId}: ${String(e)}`);
+    }
   }
 
   if (ungeocodable.length > 0) {

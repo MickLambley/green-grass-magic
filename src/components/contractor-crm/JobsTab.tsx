@@ -167,13 +167,19 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       if (error) throw error;
       if (data?.result) {
         const r = data.result;
-        // Handle map service unavailable (bad API key, quota, etc.) — distinct from missing data
-        if (r.error === "geocoding_unavailable") {
-          toast.error(r.message || "Map service is temporarily unavailable.", { duration: 6000 });
+        // Hard server-side configuration problem (bad/missing key, billing disabled, etc.)
+        if (r.error === "map_service_misconfigured") {
+          toast.error(r.message || "Map routing isn't configured correctly. Please contact support.", { duration: 8000 });
           setIsOptimizing(false);
           return;
         }
-        // Handle missing addresses error
+        // Transient map service problem
+        if (r.error === "geocoding_unavailable") {
+          toast.error(r.message || "Map service is temporarily unavailable. Please try again in a minute.", { duration: 6000 });
+          setIsOptimizing(false);
+          return;
+        }
+        // Handle missing/unlocatable addresses
         if (r.error === "missing_addresses") {
           setMissingAddressJobs(r.affectedJobs || []);
           setMissingAddressDialogOpen(true);
