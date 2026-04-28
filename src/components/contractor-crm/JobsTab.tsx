@@ -52,6 +52,8 @@ interface JobsTabProps {
   workingHours?: WorkingHours | null;
   onOpenRouteOptimization?: () => void;
   mode?: "upcoming" | "completed";
+  onViewHistory?: () => void;
+  onBackToActive?: () => void;
 }
 
 const statusColors: Record<string, string> = {
