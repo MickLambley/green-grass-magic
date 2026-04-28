@@ -1301,7 +1301,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                           </div>
                         </TableCell>
                       </TableRow>
-                    </>
+                    </Fragment>
                   );
                 })}
               </TableBody>
