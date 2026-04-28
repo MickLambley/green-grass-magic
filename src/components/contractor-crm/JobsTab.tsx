@@ -155,47 +155,46 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [optimizationPreview, setOptimizationPreview] = useState<any>(null);
   const [optimizationPreviewOpen, setOptimizationPreviewOpen] = useState(false);
   const [isApplyingOptimization, setIsApplyingOptimization] = useState(false);
+  const [optimizationDate, setOptimizationDate] = useState<string | null>(null);
+  const [datePromptOpen, setDatePromptOpen] = useState(false);
+  const [datePromptValue, setDatePromptValue] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [editClientDialogOpen, setEditClientDialogOpen] = useState(false);
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
 
-  const handleRunOptimization = async () => {
+  const runOptimizationForDate = async (date: string) => {
     setIsOptimizing(true);
+    setOptimizationDate(date);
     try {
       const { data, error } = await supabase.functions.invoke("route-optimization", {
-        body: { contractor_id: contractorId, preview: true },
+        body: { contractor_id: contractorId, preview: true, date },
       });
       if (error) throw error;
       if (data?.result) {
         const r = data.result;
-        // Hard server-side configuration problem (bad/missing key, billing disabled, etc.)
         if (r.error === "map_service_misconfigured") {
           toast.error(r.message || "Map routing isn't configured correctly. Please contact support.", { duration: 8000 });
           setIsOptimizing(false);
           return;
         }
-        // Transient map service problem
         if (r.error === "geocoding_unavailable") {
           toast.error(r.message || "Map service is temporarily unavailable. Please try again in a minute.", { duration: 6000 });
           setIsOptimizing(false);
           return;
         }
-        // Handle missing/unlocatable addresses
         if (r.error === "missing_addresses") {
           setMissingAddressJobs(r.affectedJobs || []);
           setMissingAddressDialogOpen(true);
           setIsOptimizing(false);
           return;
         }
-        // If no changes needed, show toast
         if (!r.proposedChanges || r.proposedChanges.length === 0) {
-          toast.success(r.message || "Your schedule is already optimised — no changes needed.", { duration: 4000 });
+          toast.success(r.message || `No changes needed for ${format(new Date(date + "T00:00:00"), "EEE d MMM")} — already optimised.`, { duration: 4000 });
         } else {
-          // Show preview dialog
           setOptimizationPreview(r);
           setOptimizationPreviewOpen(true);
         }
       } else {
-        toast.info("No optimization opportunities found for today's jobs.");
+        toast.info(`No jobs to optimise on ${format(new Date(date + "T00:00:00"), "EEE d MMM")}.`);
       }
     } catch (err) {
       console.error("Optimization error:", err);
@@ -204,11 +203,22 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     setIsOptimizing(false);
   };
 
+  const handleRunOptimization = async () => {
+    // Timeline view → optimise the date currently shown.
+    // Calendar / list views → ask which date to optimise.
+    if (viewMode === "timeline") {
+      await runOptimizationForDate(format(timelineDate, "yyyy-MM-dd"));
+    } else {
+      setDatePromptValue(format(new Date(), "yyyy-MM-dd"));
+      setDatePromptOpen(true);
+    }
+  };
+
   const handleApplyOptimization = async () => {
     setIsApplyingOptimization(true);
     try {
       const { data, error } = await supabase.functions.invoke("route-optimization", {
-        body: { contractor_id: contractorId, preview: false },
+        body: { contractor_id: contractorId, preview: false, date: optimizationDate },
       });
       if (error) throw error;
       toast.success("Route optimisation applied!");
