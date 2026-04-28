@@ -108,48 +108,105 @@ interface RunStats {
   matrixElementsRequested: number;
   fallbackPairs: number;
   geocodeCalls: number;
+  geocodeRetries: number;
   usedFallbackDistances: boolean;
   apiErrors: string[];
+  configError: string | null; // set if key/billing/quota is the real problem
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Statuses that indicate a hard configuration problem — no point retrying.
+const FATAL_GEOCODE_STATUSES = new Set([
+  "REQUEST_DENIED",       // bad key, referer/IP restriction, billing disabled
+  "INVALID_REQUEST",      // malformed call
+]);
+// Statuses worth retrying with backoff.
+const TRANSIENT_GEOCODE_STATUSES = new Set([
+  "UNKNOWN_ERROR",
+  "OVER_QUERY_LIMIT",
+]);
+
 // Returns coordinates, or one of two failure modes:
-//   { unavailable: true } — Google API itself rejected us (key/quota/network)
-//   null                  — API worked but the address could not be located
+//   { unavailable: true, fatal?: boolean } — Google API itself failed (key/quota/network)
+//   null                                   — API worked but address was unlocatable
 async function geocodeAU(
   address: string,
   stats: RunStats,
-): Promise<{ lat: number; lng: number } | { unavailable: true } | null> {
+  stage: "preflight" | "job_geocode" = "job_geocode",
+): Promise<{ lat: number; lng: number } | { unavailable: true; fatal?: boolean } | null> {
   if (!GOOGLE_MAPS_API_KEY) {
-    stats.apiErrors.push("GOOGLE_MAPS_API_KEY is not configured");
-    return { unavailable: true };
+    const msg = "GOOGLE_MAPS_API_KEY is not configured";
+    stats.apiErrors.push(msg);
+    stats.configError = stats.configError || msg;
+    console.warn(`[route-optimization] geocode FAIL stage=${stage}: ${msg}`);
+    return { unavailable: true, fatal: true };
   }
   stats.geocodeCalls++;
-  try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json`
-      + `?address=${encodeURIComponent(address)}`
-      + `&region=au&components=country:AU`
-      + `&key=${GOOGLE_MAPS_API_KEY}`;
-    const resp = await fetch(url);
-    const data = await resp.json();
 
-    // Hard API failure (bad key, referer-restricted key, quota, billing, etc.)
-    const status = data?.status;
-    if (status === "REQUEST_DENIED" || status === "OVER_QUERY_LIMIT" || status === "INVALID_REQUEST" || status === "UNKNOWN_ERROR") {
-      stats.apiErrors.push(`Geocode API ${status}: ${data?.error_message ?? "no detail"}`);
-      return { unavailable: true };
-    }
+  const MAX_ATTEMPTS = 3;
+  let lastDetail = "";
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const url = `https://maps.googleapis.com/maps/api/geocode/json`
+        + `?address=${encodeURIComponent(address)}`
+        + `&region=au&components=country:AU`
+        + `&key=${GOOGLE_MAPS_API_KEY}`;
+      const resp = await fetch(url);
 
-    const loc = data?.results?.[0]?.geometry?.location;
-    if (!loc) return null;
-    if (!inAU(loc.lat, loc.lng)) {
-      stats.apiErrors.push(`Geocode fell outside AU for "${address}"`);
+      // HTTP-level failure (5xx etc.) — retry
+      if (!resp.ok && resp.status >= 500) {
+        lastDetail = `HTTP ${resp.status}`;
+        console.warn(`[route-optimization] geocode HTTP ${resp.status} stage=${stage} attempt=${attempt} address="${address}"`);
+        if (attempt < MAX_ATTEMPTS) { stats.geocodeRetries++; await sleep(250 * attempt); continue; }
+        stats.apiErrors.push(`Geocode HTTP ${resp.status} for "${address}"`);
+        return { unavailable: true, fatal: false };
+      }
+
+      const data = await resp.json();
+      const status = data?.status as string | undefined;
+
+      if (status === "OK" || status === "ZERO_RESULTS") {
+        const loc = data?.results?.[0]?.geometry?.location;
+        if (!loc) return null; // unlocatable but API worked
+        if (!inAU(loc.lat, loc.lng)) {
+          stats.apiErrors.push(`Geocode fell outside AU for "${address}"`);
+          return null;
+        }
+        return { lat: loc.lat, lng: loc.lng };
+      }
+
+      lastDetail = `${status} ${data?.error_message ?? ""}`.trim();
+
+      if (FATAL_GEOCODE_STATUSES.has(status || "")) {
+        const msg = `Geocode API ${status}: ${data?.error_message ?? "no detail"}`;
+        stats.apiErrors.push(msg);
+        stats.configError = stats.configError || msg;
+        console.error(`[route-optimization] geocode FATAL stage=${stage} address="${address}" :: ${msg}`);
+        return { unavailable: true, fatal: true };
+      }
+
+      if (TRANSIENT_GEOCODE_STATUSES.has(status || "")) {
+        console.warn(`[route-optimization] geocode TRANSIENT stage=${stage} attempt=${attempt} address="${address}" :: ${lastDetail}`);
+        if (attempt < MAX_ATTEMPTS) { stats.geocodeRetries++; await sleep(250 * attempt); continue; }
+        stats.apiErrors.push(`Geocode ${status} after ${MAX_ATTEMPTS} attempts for "${address}"`);
+        return { unavailable: true, fatal: false };
+      }
+
+      // Unknown non-OK status — log and treat as unlocatable
+      stats.apiErrors.push(`Geocode unknown status=${status} for "${address}"`);
+      console.warn(`[route-optimization] geocode UNKNOWN status=${status} stage=${stage} address="${address}"`);
       return null;
+    } catch (err) {
+      lastDetail = String(err);
+      console.warn(`[route-optimization] geocode FETCH-ERR stage=${stage} attempt=${attempt} address="${address}" :: ${lastDetail}`);
+      if (attempt < MAX_ATTEMPTS) { stats.geocodeRetries++; await sleep(250 * attempt); continue; }
+      stats.apiErrors.push(`Geocode fetch failed for "${address}": ${lastDetail}`);
+      return { unavailable: true, fatal: false };
     }
-    return { lat: loc.lat, lng: loc.lng };
-  } catch (err) {
-    stats.apiErrors.push(`Geocode fetch failed for "${address}": ${String(err)}`);
-    return { unavailable: true };
   }
+  // Should not be reached, but keep TS happy
+  return { unavailable: true, fatal: false };
 }
 
 interface DistanceCell { fromId: string; toId: string; durationMinutes: number; }
