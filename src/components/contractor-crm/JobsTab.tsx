@@ -103,7 +103,7 @@ interface UnifiedJob {
   address_state?: string;
 }
 
-const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorkingHours, onOpenRouteOptimization, mode = "upcoming" }: JobsTabProps) => {
+const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorkingHours, onOpenRouteOptimization, mode = "upcoming", onViewHistory, onBackToActive }: JobsTabProps) => {
   const [jobs, setJobs] = useState<UnifiedJob[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [serviceOfferings, setServiceOfferings] = useState<ServiceOffering[]>([]);
