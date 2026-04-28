@@ -740,20 +740,13 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
 
     const WORK_START = timeToMinutes(sched.start);
     const WORK_END = timeToMinutes(sched.end);
-    const MIDPOINT = Math.floor((WORK_START + WORK_END) / 2);
 
+    // Locked = the contractor explicitly opted this job out of optimisation
+    // (e.g. customer-confirmed appointment time). Anything else is unlocked
+    // and gets re-sequenced freely across the whole day — no morning/afternoon
+    // split anymore.
     const lockedJobs = dayJobs.filter(j => j.locked && j.lockedTime);
     const unlocked = dayJobs.filter(j => !(j.locked && j.lockedTime));
-
-    // Time-restricted jobs keep their morning/afternoon allegiance based on
-    // their CURRENT scheduled time. Untimed restricted jobs default to morning.
-    function slotOf(j: PreparedJob): "morning" | "afternoon" {
-      if (j.flexibility === "flexible") return "morning"; // grouped with morning band
-      if (!j.originalTime) return "morning";
-      return timeToMinutes(j.originalTime) >= MIDPOINT ? "afternoon" : "morning";
-    }
-    const morning = unlocked.filter(j => slotOf(j) === "morning");
-    const afternoon = unlocked.filter(j => slotOf(j) === "afternoon");
 
     // Compute "before" travel time for the day using the original ordering
     const originalOrder = [...dayJobs]
@@ -761,19 +754,11 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
       .map(j => j.id);
     const beforeTravel = totalRouteMinutes(originalOrder, dist);
 
-    // Optimise each band, then concatenate so a SINGLE layoutDay call handles
-    // travel across the morning/afternoon boundary AND across every locked anchor.
-    const morningOrderIds = solveTSP(morning.map(j => j.id), dist);
-    const afternoonOrderIds = solveTSP(afternoon.map(j => j.id), dist);
-    const morningOrdered = morningOrderIds.map(id => morning.find(j => j.id === id)!);
-    const afternoonOrdered = afternoonOrderIds.map(id => afternoon.find(j => j.id === id)!);
-    const orderedUnlocked = [...morningOrdered, ...afternoonOrdered];
+    // Single TSP across the whole day's unlocked jobs.
+    const unlockedOrderIds = solveTSP(unlocked.map(j => j.id), dist);
+    const orderedUnlocked = unlockedOrderIds.map(id => unlocked.find(j => j.id === id)!);
 
-    // Afternoon-tagged jobs must not start before MIDPOINT.
-    const earliestStart = new Map<string, number>();
-    for (const j of afternoon) earliestStart.set(j.id, MIDPOINT);
-
-    const layoutResult = layoutDay(orderedUnlocked, lockedJobs, dist, WORK_START, WORK_END, earliestStart);
+    const layoutResult = layoutDay(orderedUnlocked, lockedJobs, dist, WORK_START, WORK_END);
 
     const allScheduled: ScheduledJob[] = [
       ...layoutResult.scheduled,
