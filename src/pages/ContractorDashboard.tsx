@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Leaf, LogOut, Users, Calendar, FileText, Receipt,
   LayoutDashboard, Settings, Globe, Loader2, Menu, X,
-  Bell, DollarSign, AlertTriangle, Clock, Sparkles,
+  Bell, DollarSign, AlertTriangle, Clock, Sparkles, CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
@@ -32,7 +32,8 @@ type Contractor = Tables<"contractors">;
 
 const NAV_ITEMS = [
   { key: "overview", label: "Home", icon: LayoutDashboard },
-  { key: "jobs", label: "Jobs", icon: Calendar },
+  { key: "jobs", label: "Upcoming Jobs", icon: Calendar },
+  { key: "completed-jobs", label: "Completed Jobs", icon: CheckCircle2 },
   { key: "clients", label: "Clients", icon: Users },
   { key: "quotes", label: "Quotes", icon: FileText },
   { key: "invoices", label: "Invoices", icon: Receipt },
@@ -388,8 +389,11 @@ const ContractorDashboard = () => {
                 onRunOptimization={handleRunOptimization}
                 isOptimizing={isOptimizing}
               />
-              <JobsTab contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} workingHours={contractor.working_hours as any} onOpenRouteOptimization={() => setRouteOptOpen(true)} />
+              <JobsTab mode="upcoming" contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} workingHours={contractor.working_hours as any} onOpenRouteOptimization={() => setRouteOptOpen(true)} />
             </div>
+          )}
+          {activeTab === "completed-jobs" && (
+            <JobsTab mode="completed" contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} workingHours={contractor.working_hours as any} onOpenRouteOptimization={() => setRouteOptOpen(true)} />
           )}
           {activeTab === "quotes" && <QuotesTab contractorId={contractor.id} />}
           {activeTab === "invoices" && <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} contractor={contractor} />}

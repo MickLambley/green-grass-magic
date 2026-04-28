@@ -51,6 +51,7 @@ interface JobsTabProps {
   subscriptionTier?: string;
   workingHours?: WorkingHours | null;
   onOpenRouteOptimization?: () => void;
+  mode?: "upcoming" | "completed";
 }
 
 const statusColors: Record<string, string> = {
@@ -100,7 +101,7 @@ interface UnifiedJob {
   address_state?: string;
 }
 
-const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorkingHours, onOpenRouteOptimization }: JobsTabProps) => {
+const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorkingHours, onOpenRouteOptimization, mode = "upcoming" }: JobsTabProps) => {
   const [jobs, setJobs] = useState<UnifiedJob[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [serviceOfferings, setServiceOfferings] = useState<ServiceOffering[]>([]);
@@ -830,12 +831,31 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     fetchData();
   };
 
+  const todayStr = format(new Date(), "yyyy-MM-dd");
   const filtered = jobs.filter((j) => {
     const matchesSearch =
       j.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (j.client_name && j.client_name.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesStatus = statusFilter === "all" || j.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    // Mode-based completion filtering
+    const isCompleted = j.status === "completed";
+    const matchesMode = mode === "completed" ? isCompleted : !isCompleted;
+    return matchesSearch && matchesStatus && matchesMode;
+  }).sort((a, b) => {
+    if (mode === "completed") {
+      // Most recently completed first
+      return b.scheduled_date.localeCompare(a.scheduled_date);
+    }
+    // Upcoming: today's incomplete jobs first, then chronological ascending
+    const aToday = a.scheduled_date === todayStr ? 0 : 1;
+    const bToday = b.scheduled_date === todayStr ? 0 : 1;
+    if (aToday !== bToday) return aToday - bToday;
+    const dateCmp = a.scheduled_date.localeCompare(b.scheduled_date);
+    if (dateCmp !== 0) return dateCmp;
+    // Same date: order by time (jobs without time go last)
+    const aTime = a.scheduled_time || "99:99";
+    const bTime = b.scheduled_time || "99:99";
+    return aTime.localeCompare(bTime);
   });
 
   // Paginated slice for list view
@@ -884,10 +904,10 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="pending_confirmation">Pending</SelectItem>
-              <SelectItem value="scheduled">Scheduled</SelectItem>
-              <SelectItem value="in_progress">In Progress</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
+              {mode === "upcoming" && <SelectItem value="pending_confirmation">Pending</SelectItem>}
+              {mode === "upcoming" && <SelectItem value="scheduled">Scheduled</SelectItem>}
+              {mode === "upcoming" && <SelectItem value="in_progress">In Progress</SelectItem>}
+              {mode === "completed" && <SelectItem value="completed">Completed</SelectItem>}
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
@@ -921,7 +941,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       )}
 
       {/* Pending Confirmation Section */}
-      {pendingJobs.length > 0 && (
+      {mode === "upcoming" && pendingJobs.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-sunshine animate-pulse" />
