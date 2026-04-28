@@ -551,13 +551,11 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
   };
   const wh: WorkingHours = (contractorData?.working_hours as WorkingHours) || defaultWH;
 
+  // Optimise today only — single-day pass keeps results predictable for the
+  // contractor and avoids surprise reshuffles of tomorrow's bookings.
   const today = new Date();
-  const dates = [0, 1, 2].map(off => {
-    const d = new Date(today);
-    d.setDate(today.getDate() + off);
-    return d.toISOString().split("T")[0];
-  });
-  const todayStr = dates[0];
+  const todayStr = today.toISOString().split("T")[0];
+  const dates = [todayStr];
 
   const { data: rawJobs } = await supabase
     .from("jobs")
