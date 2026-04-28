@@ -831,12 +831,31 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     fetchData();
   };
 
+  const todayStr = format(new Date(), "yyyy-MM-dd");
   const filtered = jobs.filter((j) => {
     const matchesSearch =
       j.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (j.client_name && j.client_name.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesStatus = statusFilter === "all" || j.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    // Mode-based completion filtering
+    const isCompleted = j.status === "completed";
+    const matchesMode = mode === "completed" ? isCompleted : !isCompleted;
+    return matchesSearch && matchesStatus && matchesMode;
+  }).sort((a, b) => {
+    if (mode === "completed") {
+      // Most recently completed first
+      return b.scheduled_date.localeCompare(a.scheduled_date);
+    }
+    // Upcoming: today's incomplete jobs first, then chronological ascending
+    const aToday = a.scheduled_date === todayStr ? 0 : 1;
+    const bToday = b.scheduled_date === todayStr ? 0 : 1;
+    if (aToday !== bToday) return aToday - bToday;
+    const dateCmp = a.scheduled_date.localeCompare(b.scheduled_date);
+    if (dateCmp !== 0) return dateCmp;
+    // Same date: order by time (jobs without time go last)
+    const aTime = a.scheduled_time || "99:99";
+    const bTime = b.scheduled_time || "99:99";
+    return aTime.localeCompare(bTime);
   });
 
   // Paginated slice for list view
