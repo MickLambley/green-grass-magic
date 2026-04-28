@@ -1191,111 +1191,119 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedJobs.map((job) => (
-                  <TableRow key={job.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { if (job.source === "platform") { setSelectedPlatformBookingId(job.id); setPlatformDetailOpen(true); } else { openEditDialog(job as any); } }}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {job.title}
-                        {job.recurrence_rule && <Badge variant="outline" className="text-[10px]">Recurring</Badge>}
-                        {!job.scheduled_time && (
-                          <Badge variant="outline" className="text-[10px] bg-sunshine/10 text-sunshine border-sunshine/30">No time set</Badge>
-                        )}
-                        {job.source === "crm" && job.client_id && !clientHasValidAddress(job.client_id) && (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] bg-sunshine/10 text-sunshine border-sunshine/30 cursor-pointer hover:bg-sunshine/20"
-                            onClick={(e) => { e.stopPropagation(); setEditingClientId(job.client_id!); setEditClientDialogOpen(true); }}
-                          >
-                            <MapPin className="w-3 h-3 mr-0.5" /> No address
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      <div>{job.client_name}</div>
-                      {job.client_address && (job.client_address.street || job.client_address.city) && (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground/70 mt-0.5">
-                          <MapPin className="w-3 h-3 shrink-0" />
-                          <span className="truncate max-w-[200px]">
-                            {[job.client_address.street, job.client_address.city, job.client_address.postcode].filter(Boolean).join(", ")}
-                          </span>
-                        </div>
+                {paginatedJobs.map((job, idx) => {
+                  const prev = idx > 0 ? paginatedJobs[idx - 1] : null;
+                  const isToday = job.scheduled_date === todayStr;
+                  const prevWasToday = prev ? prev.scheduled_date === todayStr : false;
+                  const showHeader =
+                    mode !== "completed" && (idx === 0 || isToday !== prevWasToday);
+                  const headerLabel = isToday ? "Today" : "Upcoming";
+                  return (
+                    <>
+                      {showHeader && (
+                        <TableRow key={`hdr-${headerLabel}-${idx}`} className="bg-muted/40 hover:bg-muted/40">
+                          <TableCell colSpan={6} className="py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            {headerLabel}
+                          </TableCell>
+                        </TableRow>
                       )}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
-                      {format(new Date(job.scheduled_date), "dd MMM yyyy")}
-                      {job.scheduled_time && ` ${job.scheduled_time}`}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
-                      {job.total_price ? `$${Number(job.total_price).toFixed(2)}` : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <Badge variant="outline" className={statusColors[job.status] || ""}>
-                          {job.source === "platform" && <span className="mr-1">🌐</span>}
-                          {job.status === "in_progress" ? "In Progress" 
-                            : job.status === "pending_confirmation" ? "Pending" 
-                            : job.status === "pending" ? "Awaiting Accept"
-                            : job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-                        </Badge>
-                        {job.requires_quote && job.quote_status === "pending" && (
-                          <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30 animate-pulse">
-                            ⚡ Quote Needed
-                          </Badge>
-                        )}
-                        {job.requires_quote && job.quote_status === "quoted" && (
-                          <Badge variant="outline" className="text-[10px] bg-sky/20 text-sky border-sky/30">
-                            💬 Quoted
-                          </Badge>
-                        )}
-                        {job.requires_quote && job.quote_status === "accepted" && (
-                          <Badge variant="outline" className="text-[10px] bg-primary/20 text-primary border-primary/30">
-                            ✅ Accepted
-                          </Badge>
-                        )}
-                        {job.requires_quote && job.quote_status === "declined" && (
-                          <Badge variant="outline" className="text-[10px] bg-destructive/20 text-destructive border-destructive/30">
-                            Declined
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {/* Send Quote button for quote-required pending jobs */}
-                        {job.requires_quote && job.quote_status === "pending" && (
-                          <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleOpenQuoteResponse(job); }} title="Send Quote">
-                            <Send className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {(job.status === "pending_confirmation" || job.status === "pending") && !(job.requires_quote && job.quote_status === "pending") && (
-                          <>
-                            <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleConfirmJob(job.id, job.source); }} title="Accept">
-                              <Check className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); handleSuggestTime(job); }} title="Suggest New Time">
-                              <Calendar className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDeclineJob(job.id, job.source); }} title="Decline">
-                              <X className="w-4 h-4" />
-                            </Button>
-                          </>
-                        )}
-                        {(job.status === "scheduled" || job.status === "in_progress" || job.status === "confirmed") && (
-                          <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleStartCompletion(job); }} title="Complete Job">
-                            <CheckCircle2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {job.status === "completed" && (job as any).payment_status === "invoiced" && (
-                          <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleOpenMarkPaid(job); }} title="Mark as Paid">
-                            <DollarSign className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {job.source === "crm" && <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEditDialog(job as any); }}><Pencil className="w-4 h-4" /></Button>}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      <TableRow key={job.id} className="cursor-pointer hover:bg-muted/50 min-h-[44px]" onClick={() => { if (job.source === "platform") { setSelectedPlatformBookingId(job.id); setPlatformDetailOpen(true); } else { openEditDialog(job as any); } }}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {job.title}
+                            {job.recurrence_rule && <Badge variant="outline" className="text-[10px]">Recurring</Badge>}
+                            {!job.scheduled_time && (
+                              <Badge variant="outline" className="text-[10px] bg-sunshine/10 text-sunshine border-sunshine/30">No time set</Badge>
+                            )}
+                            {job.source === "crm" && job.client_id && !clientHasValidAddress(job.client_id) && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] bg-sunshine/10 text-sunshine border-sunshine/30 cursor-pointer hover:bg-sunshine/20"
+                                onClick={(e) => { e.stopPropagation(); setEditingClientId(job.client_id!); setEditClientDialogOpen(true); }}
+                              >
+                                <MapPin className="w-3 h-3 mr-0.5" /> No address
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          <div>{job.client_name}</div>
+                          {job.client_address && (job.client_address.street || job.client_address.city) && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground/70 mt-0.5">
+                              <MapPin className="w-3 h-3 shrink-0" />
+                              <span className="truncate max-w-[200px]">
+                                {[job.client_address.street, job.client_address.city, job.client_address.postcode].filter(Boolean).join(", ")}
+                              </span>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-muted-foreground">
+                          {format(new Date(job.scheduled_date), "dd MMM yyyy")}
+                          {job.scheduled_time && ` ${job.scheduled_time}`}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-muted-foreground">
+                          {job.total_price ? `$${Number(job.total_price).toFixed(2)}` : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="outline" className={statusColors[job.status] || ""}>
+                              {job.source === "platform" && <span className="mr-1">🌐</span>}
+                              {job.status === "in_progress" ? "In Progress"
+                                : job.status === "pending_confirmation" ? "Pending"
+                                : job.status === "pending" ? "Awaiting Accept"
+                                : job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+                            </Badge>
+                            {job.requires_quote && job.quote_status === "pending" && (
+                              <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30 animate-pulse">⚡ Quote Needed</Badge>
+                            )}
+                            {job.requires_quote && job.quote_status === "quoted" && (
+                              <Badge variant="outline" className="text-[10px] bg-sky/20 text-sky border-sky/30">💬 Quoted</Badge>
+                            )}
+                            {job.requires_quote && job.quote_status === "accepted" && (
+                              <Badge variant="outline" className="text-[10px] bg-primary/20 text-primary border-primary/30">✅ Accepted</Badge>
+                            )}
+                            {job.requires_quote && job.quote_status === "declined" && (
+                              <Badge variant="outline" className="text-[10px] bg-destructive/20 text-destructive border-destructive/30">Declined</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            {job.requires_quote && job.quote_status === "pending" && (
+                              <Button variant="ghost" size="icon" className="text-primary hover:text-primary min-h-[44px] min-w-[44px]" onClick={(e) => { e.stopPropagation(); handleOpenQuoteResponse(job); }} title="Send Quote">
+                                <Send className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {(job.status === "pending_confirmation" || job.status === "pending") && !(job.requires_quote && job.quote_status === "pending") && (
+                              <>
+                                <Button variant="ghost" size="icon" className="text-primary hover:text-primary min-h-[44px] min-w-[44px]" onClick={(e) => { e.stopPropagation(); handleConfirmJob(job.id, job.source); }} title="Accept">
+                                  <Check className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground min-h-[44px] min-w-[44px]" onClick={(e) => { e.stopPropagation(); handleSuggestTime(job); }} title="Suggest New Time">
+                                  <Calendar className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive min-h-[44px] min-w-[44px]" onClick={(e) => { e.stopPropagation(); handleDeclineJob(job.id, job.source); }} title="Decline">
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </>
+                            )}
+                            {(job.status === "scheduled" || job.status === "in_progress" || job.status === "confirmed") && (
+                              <Button variant="ghost" size="icon" className="text-primary hover:text-primary min-h-[44px] min-w-[44px]" onClick={(e) => { e.stopPropagation(); handleStartCompletion(job); }} title="Complete Job">
+                                <CheckCircle2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {job.status === "completed" && (job as any).payment_status === "invoiced" && (
+                              <Button variant="ghost" size="icon" className="text-primary hover:text-primary min-h-[44px] min-w-[44px]" onClick={(e) => { e.stopPropagation(); handleOpenMarkPaid(job); }} title="Mark as Paid">
+                                <DollarSign className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {job.source === "crm" && <Button variant="ghost" size="icon" className="min-h-[44px] min-w-[44px]" onClick={(e) => { e.stopPropagation(); openEditDialog(job as any); }}><Pencil className="w-4 h-4" /></Button>}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    </>
+                  );
+                })}
               </TableBody>
             </Table>
             {/* Pagination Controls */}
