@@ -428,7 +428,6 @@ function layoutDay(
   dist: Map<string, number>,
   startMin: number,
   endMin: number,
-  earliestStart?: Map<string, number>,
 ): { scheduled: ScheduledJob[]; overflow: PreparedJob[]; legs: LayoutLeg[] } {
   const scheduled: ScheduledJob[] = [];
   const overflow: PreparedJob[] = [];
