@@ -442,6 +442,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       is_recurring: false,
       recurrence_frequency: "weekly",
       recurrence_count: "4",
+      route_optimization_locked: false,
     });
     setDialogOpen(true);
     // Auto-populate price for first service if it's a lawn service
