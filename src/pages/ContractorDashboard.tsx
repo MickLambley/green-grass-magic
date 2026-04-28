@@ -32,7 +32,8 @@ type Contractor = Tables<"contractors">;
 
 const NAV_ITEMS = [
   { key: "overview", label: "Home", icon: LayoutDashboard },
-  { key: "jobs", label: "Jobs", icon: Calendar },
+  { key: "jobs", label: "Upcoming Jobs", icon: Calendar },
+  { key: "completed-jobs", label: "Completed Jobs", icon: CheckCircle2 },
   { key: "clients", label: "Clients", icon: Users },
   { key: "quotes", label: "Quotes", icon: FileText },
   { key: "invoices", label: "Invoices", icon: Receipt },
