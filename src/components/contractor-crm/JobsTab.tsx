@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
 import { autoShiftTime } from "@/lib/scheduleConflict";
 import { supabase } from "@/integrations/supabase/client";
 import type { WorkingHours } from "./WorkingHoursEditor";
