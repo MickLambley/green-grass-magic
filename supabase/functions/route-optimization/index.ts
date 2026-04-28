@@ -524,7 +524,7 @@ function layoutDay(
 // Main routine
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function runOptimization(contractorId: string, supabase: any, dryRun = false) {
+async function runOptimization(contractorId: string, supabase: any, dryRun = false, targetDate?: string) {
   const stats: RunStats = {
     matrixCallsMade: 0,
     matrixElementsRequested: 0,
@@ -551,11 +551,13 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
   };
   const wh: WorkingHours = (contractorData?.working_hours as WorkingHours) || defaultWH;
 
-  // Optimise today only — single-day pass keeps results predictable for the
-  // contractor and avoids surprise reshuffles of tomorrow's bookings.
-  const today = new Date();
-  const todayStr = today.toISOString().split("T")[0];
-  const dates = [todayStr];
+  // Optimise a single day only — predictable for the contractor and avoids
+  // surprise reshuffles. Caller supplies the date (defaults to today).
+  const requestedDate = typeof targetDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(targetDate)
+    ? targetDate
+    : new Date().toISOString().split("T")[0];
+  const todayStr = requestedDate;
+  const dates = [requestedDate];
 
   const { data: rawJobs } = await supabase
     .from("jobs")
@@ -871,11 +873,15 @@ serve(async (req) => {
 
     let requestedContractorId: string | null = null;
     let isPreview = false;
+    let requestedDate: string | undefined;
     if (req.method === "POST") {
       try {
         const body = await req.json();
         requestedContractorId = body.contractor_id || null;
         isPreview = body.preview === true;
+        if (typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+          requestedDate = body.date;
+        }
       } catch { /* no body, run for all */ }
     }
 
@@ -921,7 +927,7 @@ serve(async (req) => {
         });
       }
 
-      const result = await runOptimization(contractor.id, supabase, isPreview);
+      const result = await runOptimization(contractor.id, supabase, isPreview, requestedDate);
       return new Response(JSON.stringify({ success: true, result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
