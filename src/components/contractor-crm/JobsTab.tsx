@@ -927,6 +927,16 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
+          {mode === "completed" && (
+            <Select value={historyDateRange} onValueChange={(v) => setHistoryDateRange(v as typeof historyDateRange)}>
+              <SelectTrigger className="w-[150px] min-h-[44px]"><SelectValue placeholder="Date range" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="this_month">This Month</SelectItem>
+                <SelectItem value="last_month">Last Month</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center border border-border rounded-lg overflow-hidden">
