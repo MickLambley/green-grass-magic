@@ -111,6 +111,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [historyDateRange, setHistoryDateRange] = useState<"all" | "this_month" | "last_month">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [isSaving, setIsSaving] = useState(false);
