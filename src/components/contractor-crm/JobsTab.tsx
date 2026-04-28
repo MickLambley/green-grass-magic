@@ -581,6 +581,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       original_scheduled_time: originalTime,
       completed_at: form.status === "completed" ? new Date().toISOString() : null,
       recurrence_rule: recurrenceRule as unknown as Json,
+      route_optimization_locked: form.route_optimization_locked,
     };
 
     if (editingJob) {
