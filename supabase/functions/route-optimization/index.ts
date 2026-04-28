@@ -769,7 +769,11 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     const afternoonOrdered = afternoonOrderIds.map(id => afternoon.find(j => j.id === id)!);
     const orderedUnlocked = [...morningOrdered, ...afternoonOrdered];
 
-    const layoutResult = layoutDay(orderedUnlocked, lockedJobs, dist, WORK_START, WORK_END);
+    // Afternoon-tagged jobs must not start before MIDPOINT.
+    const earliestStart = new Map<string, number>();
+    for (const j of afternoon) earliestStart.set(j.id, MIDPOINT);
+
+    const layoutResult = layoutDay(orderedUnlocked, lockedJobs, dist, WORK_START, WORK_END, earliestStart);
 
     const allScheduled: ScheduledJob[] = [
       ...layoutResult.scheduled,
