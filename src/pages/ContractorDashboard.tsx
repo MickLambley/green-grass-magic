@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Leaf, LogOut, Users, Calendar, FileText, Receipt,
   LayoutDashboard, Settings, Globe, Loader2, Menu, X,
-  Bell, DollarSign, AlertTriangle, Clock, Sparkles,
+  Bell, DollarSign, AlertTriangle, Clock, Sparkles, CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
