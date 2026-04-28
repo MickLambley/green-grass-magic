@@ -333,7 +333,7 @@ async function buildDistanceMap(
 function totalRouteMinutes(order: string[], dist: Map<string, number>): number {
   let t = 0;
   for (let i = 0; i < order.length - 1; i++) {
-    t += dist.get(`${order[i]}->${order[i + 1]}`) ?? 0;
+    t += travelBetween(order[i], order[i + 1], dist);
   }
   return t;
 }
