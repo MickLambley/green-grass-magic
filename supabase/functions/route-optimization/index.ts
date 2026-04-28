@@ -411,12 +411,16 @@ function solveTSP(ids: string[], dist: Map<string, number>): string[] {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface ScheduledJob { jobId: string; time: string; }
+interface LayoutLeg { fromId: string | null; toId: string; time: string; travel: number; duration: number; }
 
 /**
- * Place an ordered list of unlocked jobs starting at `startMin`, while
- * respecting locked anchors (lockedJobs each have a fixed scheduled_time).
- * If an unlocked job would overlap a locked anchor, it is pushed to after
- * the anchor (anchor + duration + travel-to-anchor's predecessor's travel).
+ * Lay an ordered list of unlocked jobs onto a day, slotting them around
+ * locked anchors. Travel time is added between **every** consecutive pair on
+ * the timeline — including (locked → unlocked) and (unlocked → locked).
+ *
+ *  - `orderedUnlocked`: jobs in TSP-optimised order, will be placed in this order.
+ *  - `lockedJobs`: anchors with fixed scheduled_time, never moved.
+ *  - The first unlocked job starts at max(startMin, firstLockedAnchor? + travel).
  */
 function layoutDay(
   orderedUnlocked: PreparedJob[],
@@ -424,54 +428,96 @@ function layoutDay(
   dist: Map<string, number>,
   startMin: number,
   endMin: number,
-): { scheduled: ScheduledJob[]; overflow: PreparedJob[] } {
+): { scheduled: ScheduledJob[]; overflow: PreparedJob[]; legs: LayoutLeg[] } {
   const scheduled: ScheduledJob[] = [];
   const overflow: PreparedJob[] = [];
+  const legs: LayoutLeg[] = [];
 
-  // Build a sorted list of locked occupied intervals
-  const lockedIntervals = lockedJobs
+  // Locked anchors as immovable timeline entries.
+  type Anchor = { id: string; start: number; end: number };
+  const anchors: Anchor[] = lockedJobs
     .filter(l => l.lockedTime)
     .map(l => {
       const s = timeToMinutes(l.lockedTime!);
-      return { start: s, end: s + l.duration, id: l.id };
+      return { id: l.id, start: s, end: s + l.duration };
     })
     .sort((a, b) => a.start - b.start);
 
-  // Track current cursor and last placed unlocked job (for travel calc)
-  let cursor = startMin;
-  let lastPlacedId: string | null = null;
-
-  function clearsLocked(start: number, end: number): { ok: boolean; pushTo?: number } {
-    for (const iv of lockedIntervals) {
-      if (start < iv.end && end > iv.start) {
-        return { ok: false, pushTo: iv.end };
-      }
+  // Returns the anchor that ends at-or-before `t` and is closest to `t`,
+  // i.e. the predecessor on the timeline if no unlocked job is closer.
+  function lastAnchorEndingBy(t: number): Anchor | null {
+    let best: Anchor | null = null;
+    for (const a of anchors) {
+      if (a.end <= t && (!best || a.end > best.end)) best = a;
     }
-    return { ok: true };
+    return best;
+  }
+  // Returns the next anchor that starts after `t`.
+  function nextAnchorAfter(t: number): Anchor | null {
+    for (const a of anchors) if (a.start >= t) return a;
+    return null;
   }
 
+  let cursor = startMin;
+  let lastPlacedId: string | null = null;
+  let lastPlacedEnd = startMin;
+
   for (const job of orderedUnlocked) {
-    // Add travel from previous (locked or unlocked) — pick whichever is most recent
+    // Determine the most recent predecessor on the timeline (locked or unlocked).
+    // Start by trying to place at cursor + travel from the last unlocked job.
+    let attemptStart: number;
     if (lastPlacedId) {
-      cursor += roundUpTo5(dist.get(`${lastPlacedId}->${job.id}`) ?? 0);
+      attemptStart = lastPlacedEnd + travelBetween(lastPlacedId, job.id, dist);
+    } else {
+      attemptStart = cursor;
     }
-    let attempt = cursor;
-    // Find a slot that doesn't collide with any locked anchor
+
+    // If a locked anchor sits between lastPlacedEnd and attemptStart, the
+    // anchor is the real predecessor — recompute travel from it.
     let safety = 0;
-    while (safety++ < 20) {
-      const c = clearsLocked(attempt, attempt + job.duration);
-      if (c.ok) break;
-      attempt = roundUpTo5(c.pushTo!);
+    while (safety++ < 30) {
+      const predAnchor = lastAnchorEndingBy(attemptStart);
+      if (predAnchor && (!lastPlacedId || predAnchor.end >= lastPlacedEnd)) {
+        const fromAnchorStart = predAnchor.end + travelBetween(predAnchor.id, job.id, dist);
+        if (fromAnchorStart > attemptStart) {
+          attemptStart = fromAnchorStart;
+          continue; // re-check whether this push lands us past another anchor
+        }
+      }
+      // Check overlap with the next anchor; if we would clip into it, push past.
+      const nextA = nextAnchorAfter(attemptStart);
+      if (nextA && attemptStart < nextA.end && attemptStart + job.duration > nextA.start) {
+        attemptStart = nextA.end + travelBetween(nextA.id, job.id, dist);
+        continue;
+      }
+      break;
     }
-    if (attempt + job.duration > endMin) {
+
+    // Snap to the next 5-minute slot for tidy times.
+    attemptStart = roundUpTo5(attemptStart);
+
+    if (attemptStart + job.duration > endMin) {
       overflow.push(job);
       continue;
     }
-    scheduled.push({ jobId: job.id, time: minutesToTime(attempt) });
-    cursor = attempt + job.duration;
+
+    // Determine which job actually precedes this one on the timeline (for diagnostics).
+    const predAnchor = lastAnchorEndingBy(attemptStart);
+    let predId: string | null = lastPlacedId;
+    let predEnd = lastPlacedEnd;
+    if (predAnchor && (!lastPlacedId || predAnchor.end >= lastPlacedEnd)) {
+      predId = predAnchor.id;
+      predEnd = predAnchor.end;
+    }
+    const travel = predId ? Math.max(0, attemptStart - predEnd) : 0;
+
+    scheduled.push({ jobId: job.id, time: minutesToTime(attemptStart) });
+    legs.push({ fromId: predId, toId: job.id, time: minutesToTime(attemptStart), travel, duration: job.duration });
+    cursor = attemptStart + job.duration;
     lastPlacedId = job.id;
+    lastPlacedEnd = cursor;
   }
-  return { scheduled, overflow };
+  return { scheduled, overflow, legs };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
