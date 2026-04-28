@@ -58,6 +58,7 @@ const ContractorDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [activeJobsCount, setActiveJobsCount] = useState(0);
   const [routeOptOpen, setRouteOptOpen] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
