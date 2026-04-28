@@ -472,8 +472,10 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     matrixElementsRequested: 0,
     fallbackPairs: 0,
     geocodeCalls: 0,
+    geocodeRetries: 0,
     usedFallbackDistances: false,
     apiErrors: [],
+    configError: null,
   };
 
   const { data: contractorData } = await supabase
@@ -549,41 +551,61 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
   }
 
   // ── PRE-FLIGHT: verify the Geocoding API actually works for us.
-  // Catches referer-restricted keys / billing / quota issues before we
-  // mislabel every job as a "missing address".
-  const preflight = await geocodeAU("Sydney NSW 2000, Australia", stats);
-  if (preflight && (preflight as any).unavailable) {
+  // Only fail hard for *fatal* config errors (REQUEST_DENIED / no key / billing).
+  // Transient blips here are tolerated and we continue; per-job retries handle them.
+  const preflight = await geocodeAU("Sydney NSW 2000, Australia", stats, "preflight");
+  if (preflight && (preflight as any).unavailable && (preflight as any).fatal) {
+    console.error(`[route-optimization] preflight FATAL contractor=${contractorId} :: ${stats.configError}`);
     return {
-      error: "geocoding_unavailable",
-      message: "Map service is temporarily unavailable. Route optimisation cannot run right now — please try again shortly or contact support.",
+      error: "map_service_misconfigured",
+      message: "Map routing isn't configured correctly on the server. Please contact support so they can re-enable it.",
       apiErrors: stats.apiErrors,
     };
   }
 
   // ── GEOCODE EVERY JOB ONCE ──
-  // Cached per address string within this run.
+  // Use stored coordinates first; geocode and persist back when missing.
   const geocodeCache = new Map<string, { lat: number; lng: number }>();
   const prepared: PreparedJob[] = [];
   const ungeocodable: { jobId: string; jobTitle: string; clientName: string; clientId: string }[] = [];
+  // Track which clients we successfully geocoded so we can persist coords once.
+  const coordsToPersist: { clientId: string; address: any; lat: number; lng: number }[] = [];
+  const persistedClients = new Set<string>();
 
   for (const j of jobs) {
     const a = j.clients?.address as any;
     const addressString = [a.street, a.city, a.state, a.postcode, "Australia"].filter(Boolean).join(", ");
 
     let coords: { lat: number; lng: number } | null = null;
-    if (typeof a.lat === "number" && typeof a.lng === "number" && inAU(a.lat, a.lng)) {
+    let coordsFromCache = false;
+
+    if (typeof a?.lat === "number" && typeof a?.lng === "number" && inAU(a.lat, a.lng)) {
       coords = { lat: a.lat, lng: a.lng };
+      coordsFromCache = true;
     } else if (geocodeCache.has(addressString)) {
       coords = geocodeCache.get(addressString)!;
+      coordsFromCache = true;
     } else {
-      const result = await geocodeAU(addressString, stats);
+      const result = await geocodeAU(addressString, stats, "job_geocode");
       if (result && (result as any).unavailable) {
-        // API broke mid-run — bail out cleanly.
-        return {
-          error: "geocoding_unavailable",
-          message: "Map service became unavailable while running optimisation. Please try again shortly.",
-          apiErrors: stats.apiErrors,
-        };
+        // FATAL = configuration problem affecting every call → bail out.
+        if ((result as any).fatal) {
+          console.error(`[route-optimization] job geocode FATAL client="${j.clients?.name}" address="${addressString}" :: ${stats.configError}`);
+          return {
+            error: "map_service_misconfigured",
+            message: "Map routing isn't configured correctly on the server. Please contact support so they can re-enable it.",
+            apiErrors: stats.apiErrors,
+          };
+        }
+        // Transient: report this specific job as needing review instead of nuking the run.
+        console.warn(`[route-optimization] job geocode TRANSIENT-FAIL client="${j.clients?.name}" address="${addressString}"`);
+        ungeocodable.push({
+          jobId: j.id,
+          jobTitle: j.title || "Job",
+          clientName: j.clients?.name || "Unknown",
+          clientId: j.client_id,
+        });
+        continue;
       }
       coords = result as { lat: number; lng: number } | null;
       if (coords) geocodeCache.set(addressString, coords);
@@ -597,6 +619,13 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
         clientId: j.client_id,
       });
       continue;
+    }
+
+    // Schedule a one-time persist of coordinates back to the client record so
+    // future runs don't need to call Google again for this address.
+    if (!coordsFromCache && !persistedClients.has(j.client_id)) {
+      persistedClients.add(j.client_id);
+      coordsToPersist.push({ clientId: j.client_id, address: a, lat: coords.lat, lng: coords.lng });
     }
 
     prepared.push({
@@ -613,6 +642,17 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
       lat: coords.lat,
       lng: coords.lng,
     });
+  }
+
+  // Persist newly geocoded coordinates back onto the client address JSON.
+  // Best-effort; failures here must never stop the optimisation.
+  for (const c of coordsToPersist) {
+    try {
+      const merged = { ...(c.address || {}), lat: c.lat, lng: c.lng };
+      await supabase.from("clients").update({ address: merged }).eq("id", c.clientId);
+    } catch (e) {
+      console.warn(`[route-optimization] persist coords FAIL client=${c.clientId}: ${String(e)}`);
+    }
   }
 
   if (ungeocodable.length > 0) {
