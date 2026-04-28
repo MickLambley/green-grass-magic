@@ -904,10 +904,10 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="pending_confirmation">Pending</SelectItem>
-              <SelectItem value="scheduled">Scheduled</SelectItem>
-              <SelectItem value="in_progress">In Progress</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
+              {mode === "upcoming" && <SelectItem value="pending_confirmation">Pending</SelectItem>}
+              {mode === "upcoming" && <SelectItem value="scheduled">Scheduled</SelectItem>}
+              {mode === "upcoming" && <SelectItem value="in_progress">In Progress</SelectItem>}
+              {mode === "completed" && <SelectItem value="completed">Completed</SelectItem>}
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
