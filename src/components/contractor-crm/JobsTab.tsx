@@ -1482,6 +1482,24 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                 )}
               </div>
             </div>
+            {form.scheduled_time && (
+              <div className="flex items-start gap-2 p-3 rounded-md bg-muted/40 border border-border">
+                <Checkbox
+                  id="lock-time"
+                  checked={form.route_optimization_locked}
+                  onCheckedChange={(checked) => setForm({ ...form, route_optimization_locked: !!checked })}
+                  className="mt-0.5"
+                />
+                <div className="space-y-0.5">
+                  <Label htmlFor="lock-time" className="text-sm cursor-pointer flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5" /> Lock this time
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Route Optimisation will keep this job at {form.scheduled_time} and route other jobs around it.
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Price ($)</Label>
