@@ -51,6 +51,7 @@ interface JobsTabProps {
   subscriptionTier?: string;
   workingHours?: WorkingHours | null;
   onOpenRouteOptimization?: () => void;
+  mode?: "upcoming" | "completed";
 }
 
 const statusColors: Record<string, string> = {
