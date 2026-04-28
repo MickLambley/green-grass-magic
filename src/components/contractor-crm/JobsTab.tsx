@@ -1761,6 +1761,43 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
         isApplying={isApplyingOptimization}
       />
 
+      {/* Date prompt for calendar / list views */}
+      <Dialog open={datePromptOpen} onOpenChange={setDatePromptOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Optimise which day?</DialogTitle>
+            <DialogDescription>
+              Route optimisation runs on a single day. Pick the date you want to optimise.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Label htmlFor="opt-date" className="text-sm">Date</Label>
+            <Input
+              id="opt-date"
+              type="date"
+              value={datePromptValue}
+              onChange={(e) => setDatePromptValue(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDatePromptOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!datePromptValue) { toast.error("Pick a date first"); return; }
+                setDatePromptOpen(false);
+                runOptimizationForDate(datePromptValue);
+              }}
+              disabled={isOptimizing}
+            >
+              {isOptimizing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <MapPin className="w-4 h-4 mr-2" />}
+              Optimise
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
       {/* Edit Client Dialog (for adding address from job context) */}
       {editClientDialogOpen && editingClientId && (() => {
         const client = clients.find(c => c.id === editingClientId);
