@@ -32,8 +32,8 @@ type Contractor = Tables<"contractors">;
 
 const NAV_ITEMS = [
   { key: "overview", label: "Home", icon: LayoutDashboard },
-  { key: "jobs", label: "Upcoming Jobs", icon: Calendar },
-  { key: "completed-jobs", label: "Completed Jobs", icon: CheckCircle2 },
+  { key: "jobs", label: "Jobs", icon: Calendar },
+  { key: "completed-jobs", label: "Job History", icon: CheckCircle2 },
   { key: "clients", label: "Clients", icon: Users },
   { key: "quotes", label: "Quotes", icon: FileText },
   { key: "invoices", label: "Invoices", icon: Receipt },
@@ -58,6 +58,7 @@ const ContractorDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [activeJobsCount, setActiveJobsCount] = useState(0);
   const [routeOptOpen, setRouteOptOpen] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -170,6 +171,12 @@ const ContractorDashboard = () => {
       .eq("user_id", user.id).eq("is_read", false);
     setUnreadNotifs(count || 0);
 
+    const { count: activeCount } = await supabase
+      .from("jobs").select("id", { count: "exact", head: true })
+      .eq("contractor_id", contractorData.id)
+      .in("status", ["scheduled", "in_progress", "pending_confirmation", "pending", "confirmed"]);
+    setActiveJobsCount(activeCount || 0);
+
     setIsLoading(false);
   };
 
@@ -254,18 +261,24 @@ const ContractorDashboard = () => {
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
             const isActive = activeTab === item.key;
+            const showBadge = item.key === "jobs" && activeJobsCount > 0;
             return (
               <button
                 key={item.key}
                 onClick={() => switchTab(item.key)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 min-h-[44px] ${
                   isActive
                     ? "bg-primary/10 text-primary shadow-sm"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 <item.icon className="w-5 h-5 flex-shrink-0" />
-                <span>{item.label}</span>
+                <span className="flex-1 text-left">{item.label}</span>
+                {showBadge && (
+                  <span className="ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-primary/15 text-primary text-[11px] font-semibold">
+                    {activeJobsCount > 99 ? "99+" : activeJobsCount}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -304,18 +317,24 @@ const ContractorDashboard = () => {
             <nav className="flex-1 px-3 py-4 space-y-1">
               {NAV_ITEMS.map((item) => {
                 const isActive = activeTab === item.key;
+                const showBadge = item.key === "jobs" && activeJobsCount > 0;
                 return (
                   <button
                     key={item.key}
                     onClick={() => switchTab(item.key)}
-                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all ${
+                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all min-h-[44px] ${
                       isActive
                         ? "bg-primary/10 text-primary"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     }`}
                   >
                     <item.icon className="w-5 h-5" />
-                    <span>{item.label}</span>
+                    <span className="flex-1 text-left">{item.label}</span>
+                    {showBadge && (
+                      <span className="ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-primary/15 text-primary text-[11px] font-semibold">
+                        {activeJobsCount > 99 ? "99+" : activeJobsCount}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -389,11 +408,11 @@ const ContractorDashboard = () => {
                 onRunOptimization={handleRunOptimization}
                 isOptimizing={isOptimizing}
               />
-              <JobsTab mode="upcoming" contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} workingHours={contractor.working_hours as any} onOpenRouteOptimization={() => setRouteOptOpen(true)} />
+              <JobsTab mode="upcoming" contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} workingHours={contractor.working_hours as any} onOpenRouteOptimization={() => setRouteOptOpen(true)} onViewHistory={() => switchTab("completed-jobs")} />
             </div>
           )}
           {activeTab === "completed-jobs" && (
-            <JobsTab mode="completed" contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} workingHours={contractor.working_hours as any} onOpenRouteOptimization={() => setRouteOptOpen(true)} />
+            <JobsTab mode="completed" contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} workingHours={contractor.working_hours as any} onOpenRouteOptimization={() => setRouteOptOpen(true)} onBackToActive={() => switchTab("jobs")} />
           )}
           {activeTab === "quotes" && <QuotesTab contractorId={contractor.id} />}
           {activeTab === "invoices" && <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} contractor={contractor} />}

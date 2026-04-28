@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
 import { autoShiftTime } from "@/lib/scheduleConflict";
 import { supabase } from "@/integrations/supabase/client";
 import type { WorkingHours } from "./WorkingHoursEditor";
@@ -52,6 +52,8 @@ interface JobsTabProps {
   workingHours?: WorkingHours | null;
   onOpenRouteOptimization?: () => void;
   mode?: "upcoming" | "completed";
+  onViewHistory?: () => void;
+  onBackToActive?: () => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -101,7 +103,7 @@ interface UnifiedJob {
   address_state?: string;
 }
 
-const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorkingHours, onOpenRouteOptimization, mode = "upcoming" }: JobsTabProps) => {
+const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorkingHours, onOpenRouteOptimization, mode = "upcoming", onViewHistory, onBackToActive }: JobsTabProps) => {
   const [jobs, setJobs] = useState<UnifiedJob[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [serviceOfferings, setServiceOfferings] = useState<ServiceOffering[]>([]);
@@ -832,24 +834,24 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   };
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
+  const ACTIVE_STATUSES = new Set(["scheduled", "in_progress", "pending_confirmation", "pending", "confirmed"]);
+  const HISTORY_STATUSES = new Set(["completed", "cancelled"]);
   const filtered = jobs.filter((j) => {
     const matchesSearch =
       j.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (j.client_name && j.client_name.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesStatus = statusFilter === "all" || j.status === statusFilter;
-    // Mode-based completion filtering
-    const isCompleted = j.status === "completed";
-    const matchesMode = mode === "completed" ? isCompleted : !isCompleted;
+    // Mode-based status filtering — Active page never shows completed/cancelled
+    const matchesMode = mode === "completed"
+      ? HISTORY_STATUSES.has(j.status)
+      : ACTIVE_STATUSES.has(j.status);
     return matchesSearch && matchesStatus && matchesMode;
   }).sort((a, b) => {
     if (mode === "completed") {
       // Most recently completed first
       return b.scheduled_date.localeCompare(a.scheduled_date);
     }
-    // Upcoming: today's incomplete jobs first, then chronological ascending
-    const aToday = a.scheduled_date === todayStr ? 0 : 1;
-    const bToday = b.scheduled_date === todayStr ? 0 : 1;
-    if (aToday !== bToday) return aToday - bToday;
+    // Active: chronological ascending (soonest first)
     const dateCmp = a.scheduled_date.localeCompare(b.scheduled_date);
     if (dateCmp !== 0) return dateCmp;
     // Same date: order by time (jobs without time go last)
@@ -930,7 +932,17 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               {isOptimizing ? "Optimizing..." : "Run Route Optimization"}
             </Button>
           )}
-          <Button onClick={() => openCreateDialog()} disabled={clients.length === 0}>
+          {mode === "upcoming" && onViewHistory && (
+            <Button variant="ghost" size="sm" onClick={onViewHistory} className="min-h-[44px]">
+              View History
+            </Button>
+          )}
+          {mode === "completed" && onBackToActive && (
+            <Button variant="ghost" size="sm" onClick={onBackToActive} className="min-h-[44px]">
+              <ChevronLeft className="w-4 h-4 mr-1" /> Back to Jobs
+            </Button>
+          )}
+          <Button onClick={() => openCreateDialog()} disabled={clients.length === 0} className="min-h-[44px]">
             <Plus className="w-4 h-4 mr-2" /> New Job
           </Button>
         </div>
@@ -1163,12 +1175,18 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <Calendar className="w-12 h-12 text-muted-foreground/50 mb-4" />
               <h3 className="font-display font-semibold text-lg text-foreground mb-1">
-                {jobs.length === 0 ? "No jobs yet" : "No matches"}
+                {mode === "completed" ? "No past jobs" : "No upcoming jobs"}
               </h3>
               <p className="text-muted-foreground text-sm mb-4">
-                {jobs.length === 0 ? "Schedule your first job to get started." : "Try different filters."}
+                {mode === "completed"
+                  ? "Completed and cancelled jobs will appear here."
+                  : "No upcoming jobs. Tap + to schedule one."}
               </p>
-              {jobs.length === 0 && <Button onClick={() => openCreateDialog()} size="sm"><Plus className="w-4 h-4 mr-1" /> New Job</Button>}
+              {mode !== "completed" && (
+                <Button onClick={() => openCreateDialog()} size="default" className="min-h-[44px] min-w-[44px]">
+                  <Plus className="w-4 h-4 mr-1" /> Add Job
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -1185,111 +1203,119 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedJobs.map((job) => (
-                  <TableRow key={job.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { if (job.source === "platform") { setSelectedPlatformBookingId(job.id); setPlatformDetailOpen(true); } else { openEditDialog(job as any); } }}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {job.title}
-                        {job.recurrence_rule && <Badge variant="outline" className="text-[10px]">Recurring</Badge>}
-                        {!job.scheduled_time && (
-                          <Badge variant="outline" className="text-[10px] bg-sunshine/10 text-sunshine border-sunshine/30">No time set</Badge>
-                        )}
-                        {job.source === "crm" && job.client_id && !clientHasValidAddress(job.client_id) && (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] bg-sunshine/10 text-sunshine border-sunshine/30 cursor-pointer hover:bg-sunshine/20"
-                            onClick={(e) => { e.stopPropagation(); setEditingClientId(job.client_id!); setEditClientDialogOpen(true); }}
-                          >
-                            <MapPin className="w-3 h-3 mr-0.5" /> No address
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      <div>{job.client_name}</div>
-                      {job.client_address && (job.client_address.street || job.client_address.city) && (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground/70 mt-0.5">
-                          <MapPin className="w-3 h-3 shrink-0" />
-                          <span className="truncate max-w-[200px]">
-                            {[job.client_address.street, job.client_address.city, job.client_address.postcode].filter(Boolean).join(", ")}
-                          </span>
-                        </div>
+                {paginatedJobs.map((job, idx) => {
+                  const prev = idx > 0 ? paginatedJobs[idx - 1] : null;
+                  const isToday = job.scheduled_date === todayStr;
+                  const prevWasToday = prev ? prev.scheduled_date === todayStr : false;
+                  const showHeader =
+                    mode !== "completed" && (idx === 0 || isToday !== prevWasToday);
+                  const headerLabel = isToday ? "Today" : "Upcoming";
+                  return (
+                    <Fragment key={job.id}>
+                      {showHeader && (
+                        <TableRow key={`hdr-${headerLabel}-${idx}`} className="bg-muted/40 hover:bg-muted/40">
+                          <TableCell colSpan={6} className="py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            {headerLabel}
+                          </TableCell>
+                        </TableRow>
                       )}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
-                      {format(new Date(job.scheduled_date), "dd MMM yyyy")}
-                      {job.scheduled_time && ` ${job.scheduled_time}`}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
-                      {job.total_price ? `$${Number(job.total_price).toFixed(2)}` : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <Badge variant="outline" className={statusColors[job.status] || ""}>
-                          {job.source === "platform" && <span className="mr-1">🌐</span>}
-                          {job.status === "in_progress" ? "In Progress" 
-                            : job.status === "pending_confirmation" ? "Pending" 
-                            : job.status === "pending" ? "Awaiting Accept"
-                            : job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-                        </Badge>
-                        {job.requires_quote && job.quote_status === "pending" && (
-                          <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30 animate-pulse">
-                            ⚡ Quote Needed
-                          </Badge>
-                        )}
-                        {job.requires_quote && job.quote_status === "quoted" && (
-                          <Badge variant="outline" className="text-[10px] bg-sky/20 text-sky border-sky/30">
-                            💬 Quoted
-                          </Badge>
-                        )}
-                        {job.requires_quote && job.quote_status === "accepted" && (
-                          <Badge variant="outline" className="text-[10px] bg-primary/20 text-primary border-primary/30">
-                            ✅ Accepted
-                          </Badge>
-                        )}
-                        {job.requires_quote && job.quote_status === "declined" && (
-                          <Badge variant="outline" className="text-[10px] bg-destructive/20 text-destructive border-destructive/30">
-                            Declined
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {/* Send Quote button for quote-required pending jobs */}
-                        {job.requires_quote && job.quote_status === "pending" && (
-                          <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleOpenQuoteResponse(job); }} title="Send Quote">
-                            <Send className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {(job.status === "pending_confirmation" || job.status === "pending") && !(job.requires_quote && job.quote_status === "pending") && (
-                          <>
-                            <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleConfirmJob(job.id, job.source); }} title="Accept">
-                              <Check className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); handleSuggestTime(job); }} title="Suggest New Time">
-                              <Calendar className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDeclineJob(job.id, job.source); }} title="Decline">
-                              <X className="w-4 h-4" />
-                            </Button>
-                          </>
-                        )}
-                        {(job.status === "scheduled" || job.status === "in_progress" || job.status === "confirmed") && (
-                          <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleStartCompletion(job); }} title="Complete Job">
-                            <CheckCircle2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {job.status === "completed" && (job as any).payment_status === "invoiced" && (
-                          <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={(e) => { e.stopPropagation(); handleOpenMarkPaid(job); }} title="Mark as Paid">
-                            <DollarSign className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {job.source === "crm" && <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEditDialog(job as any); }}><Pencil className="w-4 h-4" /></Button>}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      <TableRow key={job.id} className="cursor-pointer hover:bg-muted/50 min-h-[44px]" onClick={() => { if (job.source === "platform") { setSelectedPlatformBookingId(job.id); setPlatformDetailOpen(true); } else { openEditDialog(job as any); } }}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {job.title}
+                            {job.recurrence_rule && <Badge variant="outline" className="text-[10px]">Recurring</Badge>}
+                            {!job.scheduled_time && (
+                              <Badge variant="outline" className="text-[10px] bg-sunshine/10 text-sunshine border-sunshine/30">No time set</Badge>
+                            )}
+                            {job.source === "crm" && job.client_id && !clientHasValidAddress(job.client_id) && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] bg-sunshine/10 text-sunshine border-sunshine/30 cursor-pointer hover:bg-sunshine/20"
+                                onClick={(e) => { e.stopPropagation(); setEditingClientId(job.client_id!); setEditClientDialogOpen(true); }}
+                              >
+                                <MapPin className="w-3 h-3 mr-0.5" /> No address
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          <div>{job.client_name}</div>
+                          {job.client_address && (job.client_address.street || job.client_address.city) && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground/70 mt-0.5">
+                              <MapPin className="w-3 h-3 shrink-0" />
+                              <span className="truncate max-w-[200px]">
+                                {[job.client_address.street, job.client_address.city, job.client_address.postcode].filter(Boolean).join(", ")}
+                              </span>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-muted-foreground">
+                          {format(new Date(job.scheduled_date), "dd MMM yyyy")}
+                          {job.scheduled_time && ` ${job.scheduled_time}`}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-muted-foreground">
+                          {job.total_price ? `$${Number(job.total_price).toFixed(2)}` : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="outline" className={statusColors[job.status] || ""}>
+                              {job.source === "platform" && <span className="mr-1">🌐</span>}
+                              {job.status === "in_progress" ? "In Progress"
+                                : job.status === "pending_confirmation" ? "Pending"
+                                : job.status === "pending" ? "Awaiting Accept"
+                                : job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+                            </Badge>
+                            {job.requires_quote && job.quote_status === "pending" && (
+                              <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30 animate-pulse">⚡ Quote Needed</Badge>
+                            )}
+                            {job.requires_quote && job.quote_status === "quoted" && (
+                              <Badge variant="outline" className="text-[10px] bg-sky/20 text-sky border-sky/30">💬 Quoted</Badge>
+                            )}
+                            {job.requires_quote && job.quote_status === "accepted" && (
+                              <Badge variant="outline" className="text-[10px] bg-primary/20 text-primary border-primary/30">✅ Accepted</Badge>
+                            )}
+                            {job.requires_quote && job.quote_status === "declined" && (
+                              <Badge variant="outline" className="text-[10px] bg-destructive/20 text-destructive border-destructive/30">Declined</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            {job.requires_quote && job.quote_status === "pending" && (
+                              <Button variant="ghost" size="icon" className="text-primary hover:text-primary min-h-[44px] min-w-[44px]" onClick={(e) => { e.stopPropagation(); handleOpenQuoteResponse(job); }} title="Send Quote">
+                                <Send className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {(job.status === "pending_confirmation" || job.status === "pending") && !(job.requires_quote && job.quote_status === "pending") && (
+                              <>
+                                <Button variant="ghost" size="icon" className="text-primary hover:text-primary min-h-[44px] min-w-[44px]" onClick={(e) => { e.stopPropagation(); handleConfirmJob(job.id, job.source); }} title="Accept">
+                                  <Check className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground min-h-[44px] min-w-[44px]" onClick={(e) => { e.stopPropagation(); handleSuggestTime(job); }} title="Suggest New Time">
+                                  <Calendar className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive min-h-[44px] min-w-[44px]" onClick={(e) => { e.stopPropagation(); handleDeclineJob(job.id, job.source); }} title="Decline">
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </>
+                            )}
+                            {(job.status === "scheduled" || job.status === "in_progress" || job.status === "confirmed") && (
+                              <Button variant="ghost" size="icon" className="text-primary hover:text-primary min-h-[44px] min-w-[44px]" onClick={(e) => { e.stopPropagation(); handleStartCompletion(job); }} title="Complete Job">
+                                <CheckCircle2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {job.status === "completed" && (job as any).payment_status === "invoiced" && (
+                              <Button variant="ghost" size="icon" className="text-primary hover:text-primary min-h-[44px] min-w-[44px]" onClick={(e) => { e.stopPropagation(); handleOpenMarkPaid(job); }} title="Mark as Paid">
+                                <DollarSign className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {job.source === "crm" && <Button variant="ghost" size="icon" className="min-h-[44px] min-w-[44px]" onClick={(e) => { e.stopPropagation(); openEditDialog(job as any); }}><Pencil className="w-4 h-4" /></Button>}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    </Fragment>
+                  );
+                })}
               </TableBody>
             </Table>
             {/* Pagination Controls */}
