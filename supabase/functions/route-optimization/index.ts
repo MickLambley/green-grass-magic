@@ -927,7 +927,7 @@ serve(async (req) => {
         });
       }
 
-      const result = await runOptimization(contractor.id, supabase, isPreview);
+      const result = await runOptimization(contractor.id, supabase, isPreview, requestedDate);
       return new Response(JSON.stringify({ success: true, result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
