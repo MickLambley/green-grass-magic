@@ -89,6 +89,19 @@ const ContractorDashboard = () => {
         toast.error(data.error);
       } else if (data?.result) {
         const r = data.result;
+        if (r.error === "map_service_misconfigured") {
+          toast.error(r.message || "Map routing isn't configured correctly. Please contact support.", { duration: 8000 });
+          return;
+        }
+        if (r.error === "geocoding_unavailable") {
+          toast.error(r.message || "Map service is temporarily unavailable. Please try again in a minute.", { duration: 6000 });
+          return;
+        }
+        if (r.error === "missing_addresses") {
+          const count = (r.affectedJobs || []).length;
+          toast.error(`${count} job${count === 1 ? " has" : "s have"} an address that couldn't be located. Open the Jobs page to fix them.`, { duration: 6000 });
+          return;
+        }
         const changes = r.proposedChanges || [];
         const timeSaved = r.timeSaved || 0;
 
