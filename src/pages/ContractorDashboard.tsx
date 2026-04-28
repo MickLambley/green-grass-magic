@@ -317,18 +317,24 @@ const ContractorDashboard = () => {
             <nav className="flex-1 px-3 py-4 space-y-1">
               {NAV_ITEMS.map((item) => {
                 const isActive = activeTab === item.key;
+                const showBadge = item.key === "jobs" && activeJobsCount > 0;
                 return (
                   <button
                     key={item.key}
                     onClick={() => switchTab(item.key)}
-                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all ${
+                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all min-h-[44px] ${
                       isActive
                         ? "bg-primary/10 text-primary"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     }`}
                   >
                     <item.icon className="w-5 h-5" />
-                    <span>{item.label}</span>
+                    <span className="flex-1 text-left">{item.label}</span>
+                    {showBadge && (
+                      <span className="ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-primary/15 text-primary text-[11px] font-semibold">
+                        {activeJobsCount > 99 ? "99+" : activeJobsCount}
+                      </span>
+                    )}
                   </button>
                 );
               })}
