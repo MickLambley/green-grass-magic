@@ -15,11 +15,20 @@ interface ProposedChange {
   newTime: string;
 }
 
+interface OverflowJob {
+  jobId: string;
+  title: string;
+  clientName: string;
+  date: string;
+}
+
 interface OptimizationPreview {
   timeSaved: number;
   proposedChanges: ProposedChange[];
   message?: string;
   usedFallbackDistances?: boolean;
+  fallbackPairs?: number;
+  overflowJobs?: OverflowJob[];
 }
 
 interface OptimizationPreviewDialogProps {
