@@ -758,18 +758,18 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
       .map(j => j.id);
     const beforeTravel = totalRouteMinutes(originalOrder, dist);
 
-    // Optimise each band
+    // Optimise each band, then concatenate so a SINGLE layoutDay call handles
+    // travel across the morning/afternoon boundary AND across every locked anchor.
     const morningOrderIds = solveTSP(morning.map(j => j.id), dist);
     const afternoonOrderIds = solveTSP(afternoon.map(j => j.id), dist);
     const morningOrdered = morningOrderIds.map(id => morning.find(j => j.id === id)!);
     const afternoonOrdered = afternoonOrderIds.map(id => afternoon.find(j => j.id === id)!);
+    const orderedUnlocked = [...morningOrdered, ...afternoonOrdered];
 
-    const morningResult = layoutDay(morningOrdered, lockedJobs, dist, WORK_START, MIDPOINT);
-    const afternoonResult = layoutDay(afternoonOrdered, lockedJobs, dist, MIDPOINT, WORK_END);
+    const layoutResult = layoutDay(orderedUnlocked, lockedJobs, dist, WORK_START, WORK_END);
 
     const allScheduled: ScheduledJob[] = [
-      ...morningResult.scheduled,
-      ...afternoonResult.scheduled,
+      ...layoutResult.scheduled,
       // Locked anchors keep their time
       ...lockedJobs.map(l => ({ jobId: l.id, time: l.lockedTime! })),
     ];
@@ -782,9 +782,22 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     totalTimeSaved += Math.max(0, beforeTravel - afterTravel);
 
     // Track overflow (jobs that no longer fit the working day)
-    for (const o of [...morningResult.overflow, ...afternoonResult.overflow]) {
+    for (const o of layoutResult.overflow) {
       overflowJobs.push({ jobId: o.id, title: o.title, clientName: o.clientName, date });
     }
+
+    // Diagnostic: log the final laid-out timeline with travel gaps so future
+    // "no travel time" reports can be confirmed straight from the function logs.
+    const timelineForLog = [...allScheduled]
+      .sort((a, b) => a.time.localeCompare(b.time))
+      .map(s => {
+        const j = dayJobs.find(d => d.id === s.jobId)!;
+        const leg = layoutResult.legs.find(l => l.toId === s.jobId);
+        const travel = leg ? leg.travel : 0;
+        return `${s.time} ${j.clientName.slice(0, 18)}(${j.duration}m,+${travel}m)`;
+      })
+      .join(" | ");
+    console.log(`[route-optimization] day=${date} layout=[${timelineForLog}]`);
 
     // Diff against current scheduled_time
     const byId = new Map(dayJobs.map(j => [j.id, j]));
