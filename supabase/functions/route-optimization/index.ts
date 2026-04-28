@@ -347,7 +347,7 @@ function nearestNeighbour(start: string, ids: string[], dist: Map<string, number
     let best = "";
     let bestD = Infinity;
     for (const id of remaining) {
-      const d = dist.get(`${cur}->${id}`) ?? Infinity;
+      const d = travelBetween(cur, id, dist);
       if (d < bestD) { bestD = d; best = id; }
     }
     if (!best) { // shouldn't happen, but be defensive
