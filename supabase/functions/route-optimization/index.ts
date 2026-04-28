@@ -211,6 +211,18 @@ async function geocodeAU(
 
 interface DistanceCell { fromId: string; toId: string; durationMinutes: number; }
 
+// Minimum buffer (minutes) added to every non-zero leg so two jobs on the
+// same street still get a parking/walk gap. Matches the +3 buffer used in
+// the Haversine fallback, rounded up to a 5-minute slot.
+const MIN_TRAVEL_BUFFER_MIN = 5;
+
+function travelBetween(fromId: string, toId: string, dist: Map<string, number>): number {
+  if (fromId === toId) return 0;
+  const raw = dist.get(`${fromId}->${toId}`) ?? 0;
+  if (raw <= 0) return MIN_TRAVEL_BUFFER_MIN;
+  return Math.max(MIN_TRAVEL_BUFFER_MIN, roundUpTo5(raw));
+}
+
 async function distanceMatrixBatch(
   origins: { id: string; address: string }[],
   destinations: { id: string; address: string }[],
