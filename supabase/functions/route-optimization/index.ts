@@ -524,7 +524,7 @@ function layoutDay(
 // Main routine
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function runOptimization(contractorId: string, supabase: any, dryRun = false) {
+async function runOptimization(contractorId: string, supabase: any, dryRun = false, targetDate?: string) {
   const stats: RunStats = {
     matrixCallsMade: 0,
     matrixElementsRequested: 0,
