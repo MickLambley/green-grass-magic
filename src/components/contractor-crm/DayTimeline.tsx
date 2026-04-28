@@ -18,6 +18,7 @@ interface TimelineJob {
   original_scheduled_time?: string | null;
   has_valid_address?: boolean;
   client_id?: string;
+  route_optimization_locked?: boolean;
 }
 
 interface WorkingHoursRange {
