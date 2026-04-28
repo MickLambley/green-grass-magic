@@ -832,24 +832,24 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   };
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
+  const ACTIVE_STATUSES = new Set(["scheduled", "in_progress", "pending_confirmation", "pending", "confirmed"]);
+  const HISTORY_STATUSES = new Set(["completed", "cancelled"]);
   const filtered = jobs.filter((j) => {
     const matchesSearch =
       j.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (j.client_name && j.client_name.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesStatus = statusFilter === "all" || j.status === statusFilter;
-    // Mode-based completion filtering
-    const isCompleted = j.status === "completed";
-    const matchesMode = mode === "completed" ? isCompleted : !isCompleted;
+    // Mode-based status filtering — Active page never shows completed/cancelled
+    const matchesMode = mode === "completed"
+      ? HISTORY_STATUSES.has(j.status)
+      : ACTIVE_STATUSES.has(j.status);
     return matchesSearch && matchesStatus && matchesMode;
   }).sort((a, b) => {
     if (mode === "completed") {
       // Most recently completed first
       return b.scheduled_date.localeCompare(a.scheduled_date);
     }
-    // Upcoming: today's incomplete jobs first, then chronological ascending
-    const aToday = a.scheduled_date === todayStr ? 0 : 1;
-    const bToday = b.scheduled_date === todayStr ? 0 : 1;
-    if (aToday !== bToday) return aToday - bToday;
+    // Active: chronological ascending (soonest first)
     const dateCmp = a.scheduled_date.localeCompare(b.scheduled_date);
     if (dateCmp !== 0) return dateCmp;
     // Same date: order by time (jobs without time go last)
