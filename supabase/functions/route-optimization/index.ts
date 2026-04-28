@@ -6,46 +6,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-let usedFallbackDistances = false;
-let distanceApiErrorMessage = "";
-
 const GOOGLE_MAPS_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") || Deno.env.get("VITE_GOOGLE_MAPS_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-interface DaySchedule {
-  enabled: boolean;
-  start: string;
-  end: string;
-}
+// AU bounding box (rough) — used to reject geocodes that fall outside Australia
+const AU_BOUNDS = { minLat: -44, maxLat: -10, minLng: 112, maxLng: 154 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface DaySchedule { enabled: boolean; start: string; end: string; }
 interface WorkingHours {
-  monday: DaySchedule;
-  tuesday: DaySchedule;
-  wednesday: DaySchedule;
-  thursday: DaySchedule;
-  friday: DaySchedule;
-  saturday: DaySchedule;
-  sunday: DaySchedule;
+  monday: DaySchedule; tuesday: DaySchedule; wednesday: DaySchedule;
+  thursday: DaySchedule; friday: DaySchedule; saturday: DaySchedule; sunday: DaySchedule;
 }
-
 const DAY_NAMES: (keyof WorkingHours)[] = [
-  "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"
+  "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
 ];
 
-function timeToMinutes(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + (m || 0);
-}
-
-function getDaySchedule(workingHours: WorkingHours, dateStr: string): DaySchedule | null {
-  const d = new Date(dateStr + "T00:00:00");
-  const dayName = DAY_NAMES[d.getDay()];
-  const schedule = workingHours[dayName];
-  return schedule?.enabled ? schedule : null;
-}
-
-interface JobWithAddress {
+interface JobRow {
   id: string;
   scheduled_date: string;
   scheduled_time: string | null;
@@ -55,203 +36,371 @@ interface JobWithAddress {
   client_id: string;
   address_id: string | null;
   duration_minutes: number | null;
-  address_lat?: number;
-  address_lng?: number;
-  address_string?: string;
+  title: string | null;
+  status: string;
+  clients: { name: string | null; address: any } | null;
 }
 
-function roundUpTo5(minutes: number): number {
-  return Math.ceil(minutes / 5) * 5;
-}
-
-function minutesToTime(totalMinutes: number): string {
-  const h = Math.floor(totalMinutes / 60);
-  const m = Math.round(totalMinutes % 60);
-  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
-}
-
-function getTravelMinutes(fromId: string, toId: string, distanceMap: Map<string, number>): number {
-  if (fromId === toId) return 0;
-  const travelKey = `${fromId}->${toId}`;
-  return distanceMap.get(travelKey) || 0;
-}
-
-function calculateSequentialTimes(
-  jobOrder: string[],
-  jobMap: Map<string, { duration_minutes: number }>,
-  distanceMap: Map<string, number>,
-  startMinutes: number
-): { jobId: string; time: string; endMinutes: number }[] {
-  const result: { jobId: string; time: string; endMinutes: number }[] = [];
-  let currentMinutes = startMinutes;
-
-  for (let i = 0; i < jobOrder.length; i++) {
-    const jobId = jobOrder[i];
-    const job = jobMap.get(jobId);
-    const duration = job?.duration_minutes || 60;
-
-    result.push({
-      jobId,
-      time: minutesToTime(currentMinutes),
-      endMinutes: currentMinutes + duration,
-    });
-
-    if (i < jobOrder.length - 1) {
-      const travelMinutes = getTravelMinutes(jobId, jobOrder[i + 1], distanceMap);
-      currentMinutes += duration + roundUpTo5(travelMinutes);
-    }
-  }
-
-  return result;
-}
-
-interface DistanceResult {
-  fromId: string;
-  toId: string;
-  durationMinutes: number;
-}
-
-// Haversine distance in km
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-// Fallback: estimate travel time using straight-line distance at 40 km/h, rounded to 5 mins
-function estimateTravelMinutes(distKm: number): number {
-  const minutes = (distKm / 40) * 60;
-  return roundUpTo5(minutes);
-}
-
-async function getDistanceMatrix(
-  origins: { id: string; address: string }[],
-  destinations: { id: string; address: string }[]
-): Promise<DistanceResult[]> {
-  if (origins.length === 0 || destinations.length === 0) return [];
-  if (!GOOGLE_MAPS_API_KEY) {
-    console.warn("Google Maps API key not configured — using fallback distances");
-    usedFallbackDistances = true;
-    return [];
-  }
-
-  const originAddresses = origins.map(o => encodeURIComponent(o.address)).join("|");
-  const destAddresses = destinations.map(d => encodeURIComponent(d.address)).join("|");
-
-  try {
-    const resp = await fetch(
-      `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${originAddresses}&destinations=${destAddresses}&key=${GOOGLE_MAPS_API_KEY}`
-    );
-    const data = await resp.json();
-
-    if (data.status !== "OK") {
-      console.error("Distance Matrix API error:", data.status, data.error_message);
-      usedFallbackDistances = true;
-      return [];
-    }
-
-    const results: DistanceResult[] = [];
-    const notFoundIds = new Set<string>();
-    for (let i = 0; i < data.rows.length; i++) {
-      for (let j = 0; j < data.rows[i].elements.length; j++) {
-        const el = data.rows[i].elements[j];
-        if (el.status === "OK") {
-          results.push({
-            fromId: origins[i].id,
-            toId: destinations[j].id,
-            durationMinutes: Math.round(el.duration.value / 60),
-          });
-        } else if (el.status === "NOT_FOUND" || el.status === "ZERO_RESULTS") {
-          notFoundIds.add(origins[i].id);
-          notFoundIds.add(destinations[j].id);
-        }
-      }
-    }
-    // Attach notFoundIds to results for caller to check
-    (results as any)._notFoundIds = notFoundIds;
-    return results;
-  } catch (err) {
-    console.error("Distance Matrix fetch error:", err);
-    usedFallbackDistances = true;
-    return [];
-  }
-}
-
-function calculateTotalTravelTime(jobOrder: string[], distanceMap: Map<string, number>): number {
-  let total = 0;
-  for (let i = 0; i < jobOrder.length - 1; i++) {
-    total += getTravelMinutes(jobOrder[i], jobOrder[i + 1], distanceMap);
-  }
-  return total;
-}
-
-function optimizeRoute(jobIds: string[], distanceMap: Map<string, number>): string[] {
-  if (jobIds.length <= 1) return jobIds;
-
-  if (jobIds.length === 2) {
-    const order1 = [jobIds[0], jobIds[1]];
-    const order2 = [jobIds[1], jobIds[0]];
-    const time1 = calculateTotalTravelTime(order1, distanceMap);
-    const time2 = calculateTotalTravelTime(order2, distanceMap);
-    return time2 < time1 ? order2 : order1;
-  }
-
-  // Nearest-neighbour heuristic
-  const unvisited = new Set(jobIds);
-  const route: string[] = [];
-  let current = jobIds[0];
-  route.push(current);
-  unvisited.delete(current);
-
-  while (unvisited.size > 0) {
-    let nearest = "";
-    let minDist = Infinity;
-    for (const id of unvisited) {
-      const dist = distanceMap.get(`${current}->${id}`) || Infinity;
-      if (dist < minDist) {
-        minDist = dist;
-        nearest = id;
-      }
-    }
-    if (!nearest) break;
-    route.push(nearest);
-    unvisited.delete(nearest);
-    current = nearest;
-  }
-
-  return route;
-}
-
-// Geocode addresses to lat/lng for fallback distance calculation
-interface GeocodedJob {
+interface PreparedJob {
   id: string;
+  date: string;
+  duration: number;
+  flexibility: "flexible" | "time_restricted";
+  locked: boolean;
+  lockedTime: string | null; // for locked or anchored jobs
+  originalTime: string | null;
+  title: string;
+  clientName: string;
+  addressString: string;
   lat: number;
   lng: number;
 }
 
-async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+// ─────────────────────────────────────────────────────────────────────────────
+// Time helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + (m || 0);
+}
+function minutesToTime(total: number): string {
+  const h = Math.floor(total / 60);
+  const m = Math.round(total % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+function roundUpTo5(n: number): number { return Math.ceil(n / 5) * 5; }
+
+function getDaySchedule(wh: WorkingHours, dateStr: string): DaySchedule | null {
+  const d = new Date(dateStr + "T00:00:00");
+  const sched = wh[DAY_NAMES[d.getDay()]];
+  return sched?.enabled ? sched : null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Geometry
+// ─────────────────────────────────────────────────────────────────────────────
+
+function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371;
+  const dLat = (bLat - aLat) * Math.PI / 180;
+  const dLng = (bLng - aLng) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(aLat * Math.PI / 180) * Math.cos(bLat * Math.PI / 180)
+    * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function estimateTravelMinutes(distKm: number): number {
+  // Suburban driving ≈ 35 km/h average + 3 min buffer for parking/walking
+  return roundUpTo5((distKm / 35) * 60 + 3);
+}
+function inAU(lat: number, lng: number): boolean {
+  return lat >= AU_BOUNDS.minLat && lat <= AU_BOUNDS.maxLat
+    && lng >= AU_BOUNDS.minLng && lng <= AU_BOUNDS.maxLng;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Google Maps integration (AU-restricted, batched correctly)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface RunStats {
+  matrixCallsMade: number;
+  matrixElementsRequested: number;
+  fallbackPairs: number;
+  geocodeCalls: number;
+  usedFallbackDistances: boolean;
+  apiErrors: string[];
+}
+
+async function geocodeAU(address: string, stats: RunStats): Promise<{ lat: number; lng: number } | null> {
   if (!GOOGLE_MAPS_API_KEY) return null;
+  stats.geocodeCalls++;
   try {
-    const resp = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GOOGLE_MAPS_API_KEY}`
-    );
+    const url = `https://maps.googleapis.com/maps/api/geocode/json`
+      + `?address=${encodeURIComponent(address)}`
+      + `&region=au&components=country:AU`
+      + `&key=${GOOGLE_MAPS_API_KEY}`;
+    const resp = await fetch(url);
     const data = await resp.json();
-    if (data.results?.[0]?.geometry?.location) {
-      return data.results[0].geometry.location;
+    const loc = data?.results?.[0]?.geometry?.location;
+    if (!loc) return null;
+    if (!inAU(loc.lat, loc.lng)) {
+      stats.apiErrors.push(`Geocode fell outside AU for "${address}"`);
+      return null;
     }
-  } catch {}
-  return null;
+    return { lat: loc.lat, lng: loc.lng };
+  } catch (err) {
+    stats.apiErrors.push(`Geocode error for "${address}": ${String(err)}`);
+    return null;
+  }
+}
+
+interface DistanceCell { fromId: string; toId: string; durationMinutes: number; }
+
+async function distanceMatrixBatch(
+  origins: { id: string; address: string }[],
+  destinations: { id: string; address: string }[],
+  sameDay: boolean,
+  stats: RunStats,
+): Promise<DistanceCell[]> {
+  if (!GOOGLE_MAPS_API_KEY) {
+    stats.usedFallbackDistances = true;
+    return [];
+  }
+  if (origins.length === 0 || destinations.length === 0) return [];
+
+  const params = new URLSearchParams({
+    origins: origins.map(o => o.address).join("|"),
+    destinations: destinations.map(d => d.address).join("|"),
+    mode: "driving",
+    units: "metric",
+    region: "au",
+    key: GOOGLE_MAPS_API_KEY,
+  });
+  if (sameDay) {
+    params.set("departure_time", "now");
+    params.set("traffic_model", "best_guess");
+  }
+
+  stats.matrixCallsMade++;
+  stats.matrixElementsRequested += origins.length * destinations.length;
+
+  try {
+    const resp = await fetch(`https://maps.googleapis.com/maps/api/distancematrix/json?${params.toString()}`);
+    const data = await resp.json();
+    if (data.status !== "OK") {
+      stats.apiErrors.push(`Distance Matrix status=${data.status} ${data.error_message ?? ""}`);
+      stats.usedFallbackDistances = true;
+      return [];
+    }
+    const cells: DistanceCell[] = [];
+    for (let i = 0; i < data.rows.length; i++) {
+      for (let j = 0; j < data.rows[i].elements.length; j++) {
+        const el = data.rows[i].elements[j];
+        if (el.status === "OK") {
+          const seconds = el.duration_in_traffic?.value ?? el.duration?.value;
+          if (typeof seconds === "number") {
+            cells.push({
+              fromId: origins[i].id,
+              toId: destinations[j].id,
+              durationMinutes: Math.max(1, Math.round(seconds / 60)),
+            });
+          }
+        }
+      }
+    }
+    return cells;
+  } catch (err) {
+    stats.apiErrors.push(`Distance Matrix fetch failed: ${String(err)}`);
+    stats.usedFallbackDistances = true;
+    return [];
+  }
 }
 
 /**
- * Run optimization for a contractor.
- * When dryRun=true, only calculates potential savings (no DB updates to jobs).
+ * Build a complete distance map for a set of jobs.
+ * Batches origins AND destinations into <=10 chunks (Google's per-call limit
+ * is 100 elements = 10x10). For any pair the API doesn't return, falls back
+ * to Haversine using the pre-geocoded lat/lng — never leaves a pair at 0.
  */
+async function buildDistanceMap(
+  jobs: PreparedJob[],
+  sameDay: boolean,
+  stats: RunStats,
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (jobs.length < 2) return map;
+
+  const points = jobs.map(j => ({ id: j.id, address: j.addressString }));
+  const CHUNK = 10;
+
+  for (let i = 0; i < points.length; i += CHUNK) {
+    const oBatch = points.slice(i, i + CHUNK);
+    for (let j = 0; j < points.length; j += CHUNK) {
+      const dBatch = points.slice(j, j + CHUNK);
+      const cells = await distanceMatrixBatch(oBatch, dBatch, sameDay, stats);
+      for (const c of cells) map.set(`${c.fromId}->${c.toId}`, c.durationMinutes);
+    }
+  }
+
+  // Fill any missing pair with Haversine — never let a missing pair become 0
+  const byId = new Map(jobs.map(j => [j.id, j]));
+  for (const a of jobs) {
+    for (const b of jobs) {
+      if (a.id === b.id) continue;
+      const key = `${a.id}->${b.id}`;
+      if (map.has(key)) continue;
+      const fa = byId.get(a.id)!;
+      const fb = byId.get(b.id)!;
+      const km = haversineKm(fa.lat, fa.lng, fb.lat, fb.lng);
+      map.set(key, estimateTravelMinutes(km));
+      stats.fallbackPairs++;
+    }
+  }
+  return map;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TSP solver: multi-start nearest-neighbour + 2-opt
+// ─────────────────────────────────────────────────────────────────────────────
+
+function totalRouteMinutes(order: string[], dist: Map<string, number>): number {
+  let t = 0;
+  for (let i = 0; i < order.length - 1; i++) {
+    t += dist.get(`${order[i]}->${order[i + 1]}`) ?? 0;
+  }
+  return t;
+}
+
+function nearestNeighbour(start: string, ids: string[], dist: Map<string, number>): string[] {
+  const remaining = new Set(ids);
+  remaining.delete(start);
+  const route = [start];
+  let cur = start;
+  while (remaining.size > 0) {
+    let best = "";
+    let bestD = Infinity;
+    for (const id of remaining) {
+      const d = dist.get(`${cur}->${id}`) ?? Infinity;
+      if (d < bestD) { bestD = d; best = id; }
+    }
+    if (!best) { // shouldn't happen, but be defensive
+      for (const id of remaining) { best = id; break; }
+    }
+    route.push(best);
+    remaining.delete(best);
+    cur = best;
+  }
+  return route;
+}
+
+function twoOpt(order: string[], dist: Map<string, number>): string[] {
+  if (order.length < 4) return order;
+  let best = order.slice();
+  let bestT = totalRouteMinutes(best, dist);
+  let improved = true;
+  let safety = 0;
+  while (improved && safety++ < 50) {
+    improved = false;
+    for (let i = 1; i < best.length - 2; i++) {
+      for (let k = i + 1; k < best.length - 1; k++) {
+        const candidate = best.slice(0, i)
+          .concat(best.slice(i, k + 1).reverse())
+          .concat(best.slice(k + 1));
+        const t = totalRouteMinutes(candidate, dist);
+        if (t + 0.001 < bestT) {
+          best = candidate;
+          bestT = t;
+          improved = true;
+        }
+      }
+    }
+  }
+  return best;
+}
+
+function solveTSP(ids: string[], dist: Map<string, number>): string[] {
+  if (ids.length <= 1) return ids.slice();
+  if (ids.length === 2) {
+    const a = [ids[0], ids[1]];
+    const b = [ids[1], ids[0]];
+    return totalRouteMinutes(a, dist) <= totalRouteMinutes(b, dist) ? a : b;
+  }
+  // Multi-start NN: try every job as start, keep best after 2-opt
+  let best: string[] = ids.slice();
+  let bestT = Infinity;
+  // Cap starts at 12 to keep edge function fast for large days
+  const starts = ids.length <= 12 ? ids : ids.slice(0, 12);
+  for (const s of starts) {
+    const nn = nearestNeighbour(s, ids, dist);
+    const opt = twoOpt(nn, dist);
+    const t = totalRouteMinutes(opt, dist);
+    if (t < bestT) { bestT = t; best = opt; }
+  }
+  return best;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scheduling: lay jobs out on the timeline respecting locked anchors
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ScheduledJob { jobId: string; time: string; }
+
+/**
+ * Place an ordered list of unlocked jobs starting at `startMin`, while
+ * respecting locked anchors (lockedJobs each have a fixed scheduled_time).
+ * If an unlocked job would overlap a locked anchor, it is pushed to after
+ * the anchor (anchor + duration + travel-to-anchor's predecessor's travel).
+ */
+function layoutDay(
+  orderedUnlocked: PreparedJob[],
+  lockedJobs: PreparedJob[],
+  dist: Map<string, number>,
+  startMin: number,
+  endMin: number,
+): { scheduled: ScheduledJob[]; overflow: PreparedJob[] } {
+  const scheduled: ScheduledJob[] = [];
+  const overflow: PreparedJob[] = [];
+
+  // Build a sorted list of locked occupied intervals
+  const lockedIntervals = lockedJobs
+    .filter(l => l.lockedTime)
+    .map(l => {
+      const s = timeToMinutes(l.lockedTime!);
+      return { start: s, end: s + l.duration, id: l.id };
+    })
+    .sort((a, b) => a.start - b.start);
+
+  // Track current cursor and last placed unlocked job (for travel calc)
+  let cursor = startMin;
+  let lastPlacedId: string | null = null;
+
+  function clearsLocked(start: number, end: number): { ok: boolean; pushTo?: number } {
+    for (const iv of lockedIntervals) {
+      if (start < iv.end && end > iv.start) {
+        return { ok: false, pushTo: iv.end };
+      }
+    }
+    return { ok: true };
+  }
+
+  for (const job of orderedUnlocked) {
+    // Add travel from previous (locked or unlocked) — pick whichever is most recent
+    if (lastPlacedId) {
+      cursor += roundUpTo5(dist.get(`${lastPlacedId}->${job.id}`) ?? 0);
+    }
+    let attempt = cursor;
+    // Find a slot that doesn't collide with any locked anchor
+    let safety = 0;
+    while (safety++ < 20) {
+      const c = clearsLocked(attempt, attempt + job.duration);
+      if (c.ok) break;
+      attempt = roundUpTo5(c.pushTo!);
+    }
+    if (attempt + job.duration > endMin) {
+      overflow.push(job);
+      continue;
+    }
+    scheduled.push({ jobId: job.id, time: minutesToTime(attempt) });
+    cursor = attempt + job.duration;
+    lastPlacedId = job.id;
+  }
+  return { scheduled, overflow };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main routine
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function runOptimization(contractorId: string, supabase: any, dryRun = false) {
-  usedFallbackDistances = false;
-  distanceApiErrorMessage = "";
+  const stats: RunStats = {
+    matrixCallsMade: 0,
+    matrixElementsRequested: 0,
+    fallbackPairs: 0,
+    geocodeCalls: 0,
+    usedFallbackDistances: false,
+    apiErrors: [],
+  };
 
   const { data: contractorData } = await supabase
     .from("contractors")
@@ -259,368 +408,265 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     .eq("id", contractorId)
     .single();
 
-  const jobDetailsMap = new Map<string, { title: string; client_name: string; current_time: string | null }>();
-
   const defaultSchedule: DaySchedule = { enabled: true, start: "07:00", end: "17:00" };
-  const defaultWorkingHours: WorkingHours = {
+  const defaultWH: WorkingHours = {
     monday: defaultSchedule, tuesday: defaultSchedule, wednesday: defaultSchedule,
     thursday: defaultSchedule, friday: defaultSchedule,
     saturday: { enabled: false, start: "08:00", end: "14:00" },
     sunday: { enabled: false, start: "08:00", end: "14:00" },
   };
-  const workingHours: WorkingHours = (contractorData?.working_hours as WorkingHours) || defaultWorkingHours;
+  const wh: WorkingHours = (contractorData?.working_hours as WorkingHours) || defaultWH;
 
   const today = new Date();
-  const dates = [0, 1, 2].map(offset => {
+  const dates = [0, 1, 2].map(off => {
     const d = new Date(today);
-    d.setDate(today.getDate() + offset);
+    d.setDate(today.getDate() + off);
     return d.toISOString().split("T")[0];
   });
+  const todayStr = dates[0];
 
-  const { data: jobs } = await supabase
+  const { data: rawJobs } = await supabase
     .from("jobs")
     .select(`
       id, scheduled_date, scheduled_time, time_flexibility, route_optimization_locked,
-      total_price, client_id, address_id, duration_minutes, title,
-      clients!inner(address, name)
+      total_price, client_id, address_id, duration_minutes, title, status,
+      clients!inner(name, address)
     `)
     .eq("contractor_id", contractorId)
     .in("scheduled_date", dates)
     .in("status", ["scheduled", "in_progress"])
     .order("scheduled_time");
 
-  if (!jobs || jobs.length === 0) {
+  const jobs = (rawJobs as JobRow[] | null) ?? [];
+  if (jobs.length === 0) {
     return {
       timeSaved: 0,
       proposedChanges: [],
       message: "No eligible jobs found in the next 3 days.",
       usedFallbackDistances: false,
+      stats,
     };
   }
 
-  // ── ADDRESS VALIDATION: Check all jobs have valid addresses ──
-  const jobsMissingAddress: { jobId: string; jobTitle: string; clientName: string; clientId: string }[] = [];
-  for (const job of jobs) {
-    const addr = (job.clients as any)?.address as any;
-    const street = addr?.street?.trim() || "";
-    const city = addr?.city?.trim() || "";
-    const postcode = addr?.postcode?.trim() || "";
-    const hasStreet = street.length > 0;
-    const hasCityOrPostcode = city.length > 0 || postcode.length > 0;
-    if (!hasStreet || !hasCityOrPostcode) {
-      jobsMissingAddress.push({
-        jobId: job.id,
-        jobTitle: job.title || "Job",
-        clientName: (job.clients as any)?.name || "Unknown",
-        clientId: job.client_id,
+  // ── STRICT ADDRESS VALIDATION ──
+  // Require street + state + (city OR postcode). Anything weaker is reported.
+  const missing: { jobId: string; jobTitle: string; clientName: string; clientId: string }[] = [];
+  for (const j of jobs) {
+    const a = j.clients?.address as any;
+    const street = a?.street?.trim?.() || "";
+    const city = a?.city?.trim?.() || "";
+    const state = a?.state?.trim?.() || "";
+    const postcode = a?.postcode?.trim?.() || "";
+    if (!street || !state || (!city && !postcode)) {
+      missing.push({
+        jobId: j.id,
+        jobTitle: j.title || "Job",
+        clientName: j.clients?.name || "Unknown",
+        clientId: j.client_id,
       });
     }
   }
-  if (jobsMissingAddress.length > 0) {
+  if (missing.length > 0) {
     return {
       error: "missing_addresses",
-      affectedJobs: jobsMissingAddress,
-      message: `Route optimisation cannot run — ${jobsMissingAddress.length} job(s) have no address. Add addresses to continue.`,
+      affectedJobs: missing,
+      message: `Route optimisation cannot run — ${missing.length} job(s) have an incomplete address (street, suburb/postcode and state are required). Add full addresses to continue.`,
     };
   }
 
-  // ── BUG 1 FIX: Pre-process null times ──
-  // Assign default times to jobs with no scheduled_time before any optimization
-  for (const job of jobs) {
-    if (job.route_optimization_locked) continue;
-    if (job.scheduled_time && job.scheduled_time.trim() !== "") continue;
+  // ── GEOCODE EVERY JOB ONCE ──
+  // Cached per address string within this run.
+  const geocodeCache = new Map<string, { lat: number; lng: number }>();
+  const prepared: PreparedJob[] = [];
+  const ungeocodable: { jobId: string; jobTitle: string; clientName: string; clientId: string }[] = [];
 
-    const daySchedule = getDaySchedule(workingHours, job.scheduled_date);
-    const workStart = daySchedule ? daySchedule.start : "07:00";
-    const workEnd = daySchedule ? daySchedule.end : "17:00";
-    const midpoint = minutesToTime(Math.floor((timeToMinutes(workStart) + timeToMinutes(workEnd)) / 2));
+  for (const j of jobs) {
+    const a = j.clients?.address as any;
+    const addressString = [a.street, a.city, a.state, a.postcode, "Australia"].filter(Boolean).join(", ");
 
-    // Default: assign work_start time
-    let assignedTime = workStart;
-
-    if (job.time_flexibility === "time_restricted") {
-      // Check if there's a slot indicator — we infer from the current time or default to morning
-      // Since jobs without time don't have slot info, default to morning = work_start
-      assignedTime = workStart;
-    }
-    // flexible jobs also get work_start
-    job.scheduled_time = assignedTime;
-  }
-
-  // Build job details and addresses
-  const jobsWithAddresses: (JobWithAddress & { address_string: string; time_slot: string; address_coords?: { lat: number; lng: number } })[] = [];
-  for (const job of jobs) {
-    jobDetailsMap.set(job.id, {
-      title: job.title || "Job",
-      client_name: (job.clients as any)?.name || "Unknown",
-      current_time: job.scheduled_time,
-    });
-    const addr = job.clients?.address as any;
-    if (!addr) continue;
-    const addressStr = [addr.street, addr.city, addr.state, addr.postcode].filter(Boolean).join(", ");
-    if (!addressStr) continue;
-
-    const daySchedule = getDaySchedule(workingHours, job.scheduled_date);
-    const workStart = daySchedule ? timeToMinutes(daySchedule.start) : 7 * 60;
-    const workEnd = daySchedule ? timeToMinutes(daySchedule.end) : 17 * 60;
-    const midpoint = Math.floor((workStart + workEnd) / 2);
-
-    let timeSlot = "morning";
-    if (job.scheduled_time) {
-      const jobMinutes = timeToMinutes(job.scheduled_time);
-      timeSlot = jobMinutes >= midpoint ? "afternoon" : "morning";
+    let coords: { lat: number; lng: number } | null = null;
+    if (typeof a.lat === "number" && typeof a.lng === "number" && inAU(a.lat, a.lng)) {
+      coords = { lat: a.lat, lng: a.lng };
+    } else if (geocodeCache.has(addressString)) {
+      coords = geocodeCache.get(addressString)!;
+    } else {
+      coords = await geocodeAU(addressString, stats);
+      if (coords) geocodeCache.set(addressString, coords);
     }
 
-    jobsWithAddresses.push({
-      ...job,
-      address_string: addressStr,
-      time_slot: timeSlot,
-      address_coords: addr.lat && addr.lng ? { lat: addr.lat, lng: addr.lng } : undefined,
+    if (!coords) {
+      ungeocodable.push({
+        jobId: j.id,
+        jobTitle: j.title || "Job",
+        clientName: j.clients?.name || "Unknown",
+        clientId: j.client_id,
+      });
+      continue;
+    }
+
+    prepared.push({
+      id: j.id,
+      date: j.scheduled_date,
+      duration: j.duration_minutes || 60,
+      flexibility: j.time_flexibility === "flexible" ? "flexible" : "time_restricted",
+      locked: !!j.route_optimization_locked,
+      lockedTime: j.route_optimization_locked ? (j.scheduled_time || null) : null,
+      originalTime: j.scheduled_time,
+      title: j.title || "Job",
+      clientName: j.clients?.name || "Unknown",
+      addressString,
+      lat: coords.lat,
+      lng: coords.lng,
     });
   }
 
-  // Even 1 job is valid now (for time assignment)
-  if (jobsWithAddresses.length === 0) {
+  if (ungeocodable.length > 0) {
     return {
-      timeSaved: 0,
-      proposedChanges: [],
-      message: "No jobs with valid addresses found.",
-      usedFallbackDistances: false,
+      error: "missing_addresses",
+      affectedJobs: ungeocodable,
+      message: `Route optimisation cannot run — ${ungeocodable.length} address(es) couldn't be located on the map. Verify the street, suburb and postcode are correct Australian addresses.`,
     };
   }
 
-  const distanceMap = new Map<string, number>();
-
-  async function fetchDistancesForJobs(dayJobs: typeof jobsWithAddresses) {
-    if (dayJobs.length < 2) return;
-    const locations = dayJobs.map(j => ({ id: j.id, address: j.address_string }));
-    const BATCH_SIZE = 10;
-    for (let i = 0; i < locations.length; i += BATCH_SIZE) {
-      const originBatch = locations.slice(i, i + BATCH_SIZE);
-      const distances = await getDistanceMatrix(originBatch, locations);
-      for (const d of distances) {
-        distanceMap.set(`${d.fromId}->${d.toId}`, d.durationMinutes);
-      }
-    }
-
-    // ── BUG 4 FIX: Fallback to Haversine if API failed ──
-    if (usedFallbackDistances) {
-      // Try geocoding for fallback distances
-      const coordsMap = new Map<string, { lat: number; lng: number }>();
-      for (const j of dayJobs) {
-        if (j.address_coords) {
-          coordsMap.set(j.id, j.address_coords);
-        }
-      }
-
-      // If we don't have coords, try geocoding
-      if (coordsMap.size < dayJobs.length) {
-        for (const j of dayJobs) {
-          if (!coordsMap.has(j.id)) {
-            const geo = await geocodeAddress(j.address_string);
-            if (geo) coordsMap.set(j.id, geo);
-          }
-        }
-      }
-
-      // Calculate straight-line distances
-      for (const from of dayJobs) {
-        for (const to of dayJobs) {
-          if (from.id === to.id) continue;
-          const key = `${from.id}->${to.id}`;
-          if (distanceMap.has(key)) continue;
-          const fc = coordsMap.get(from.id);
-          const tc = coordsMap.get(to.id);
-          if (fc && tc) {
-            const km = haversineKm(fc.lat, fc.lng, tc.lat, tc.lng);
-            distanceMap.set(key, estimateTravelMinutes(km));
-          } else {
-            // Default fallback: 15 minutes between unknown locations
-            distanceMap.set(key, 15);
-          }
-        }
-      }
-    }
-  }
-
+  // ── Per-day optimisation ──
   const proposedChanges: { jobId: string; title: string; clientName: string; date: string; currentTime: string | null; newTime: string }[] = [];
+  const overflowJobs: { jobId: string; title: string; clientName: string; date: string }[] = [];
   let totalTimeSaved = 0;
 
   for (const date of dates) {
-    const daySchedule = getDaySchedule(workingHours, date);
-    if (!daySchedule) continue;
-
-    const dayJobs = jobsWithAddresses.filter(j => j.scheduled_date === date);
+    const sched = getDaySchedule(wh, date);
+    if (!sched) continue;
+    const dayJobs = prepared.filter(p => p.date === date);
     if (dayJobs.length === 0) continue;
 
-    await fetchDistancesForJobs(dayJobs);
+    const sameDay = date === todayStr;
+    const dist = await buildDistanceMap(dayJobs, sameDay, stats);
 
-    const jobMap = new Map<string, { duration_minutes: number }>();
-    for (const j of dayJobs) {
-      jobMap.set(j.id, { duration_minutes: j.duration_minutes || 60 });
-    }
-
-    const WORK_START = timeToMinutes(daySchedule.start);
-    const WORK_END = timeToMinutes(daySchedule.end);
+    const WORK_START = timeToMinutes(sched.start);
+    const WORK_END = timeToMinutes(sched.end);
     const MIDPOINT = Math.floor((WORK_START + WORK_END) / 2);
 
-    // Separate locked jobs (keep their times) from unlocked
-    const lockedJobs = dayJobs.filter(j => j.route_optimization_locked);
-    const unlocked = dayJobs.filter(j => !j.route_optimization_locked);
+    const lockedJobs = dayJobs.filter(j => j.locked && j.lockedTime);
+    const unlocked = dayJobs.filter(j => !(j.locked && j.lockedTime));
 
-    const flexibleDay = unlocked.filter(j => j.time_flexibility === "flexible");
-    const restrictedMorning = unlocked.filter(j => j.time_flexibility === "time_restricted" && (j as any).time_slot === "morning");
-    const restrictedAfternoon = unlocked.filter(j => j.time_flexibility === "time_restricted" && (j as any).time_slot === "afternoon");
+    // Time-restricted jobs keep their morning/afternoon allegiance based on
+    // their CURRENT scheduled time. Untimed restricted jobs default to morning.
+    function slotOf(j: PreparedJob): "morning" | "afternoon" {
+      if (j.flexibility === "flexible") return "morning"; // grouped with morning band
+      if (!j.originalTime) return "morning";
+      return timeToMinutes(j.originalTime) >= MIDPOINT ? "afternoon" : "morning";
+    }
+    const morning = unlocked.filter(j => slotOf(j) === "morning");
+    const afternoon = unlocked.filter(j => slotOf(j) === "afternoon");
 
-    const optimizationGroups = [
-      { jobs: [...flexibleDay, ...restrictedMorning], label: "morning", startMinutes: WORK_START },
-      { jobs: restrictedAfternoon, label: "afternoon", startMinutes: MIDPOINT },
+    // Compute "before" travel time for the day using the original ordering
+    const originalOrder = [...dayJobs]
+      .sort((a, b) => (a.originalTime || "99:99").localeCompare(b.originalTime || "99:99"))
+      .map(j => j.id);
+    const beforeTravel = totalRouteMinutes(originalOrder, dist);
+
+    // Optimise each band
+    const morningOrderIds = solveTSP(morning.map(j => j.id), dist);
+    const afternoonOrderIds = solveTSP(afternoon.map(j => j.id), dist);
+    const morningOrdered = morningOrderIds.map(id => morning.find(j => j.id === id)!);
+    const afternoonOrdered = afternoonOrderIds.map(id => afternoon.find(j => j.id === id)!);
+
+    const morningResult = layoutDay(morningOrdered, lockedJobs, dist, WORK_START, MIDPOINT);
+    const afternoonResult = layoutDay(afternoonOrdered, lockedJobs, dist, MIDPOINT, WORK_END);
+
+    const allScheduled: ScheduledJob[] = [
+      ...morningResult.scheduled,
+      ...afternoonResult.scheduled,
+      // Locked anchors keep their time
+      ...lockedJobs.map(l => ({ jobId: l.id, time: l.lockedTime! })),
     ];
 
-    const dayUpdates: { jobId: string; time: string; origDate: string }[] = [];
+    // Recompute "after" travel time using the new sequence (sorted by time)
+    const afterOrder = [...allScheduled]
+      .sort((a, b) => a.time.localeCompare(b.time))
+      .map(s => s.jobId);
+    const afterTravel = totalRouteMinutes(afterOrder, dist);
+    totalTimeSaved += Math.max(0, beforeTravel - afterTravel);
 
-    for (const group of optimizationGroups) {
-      if (group.jobs.length === 0) continue;
-
-      const currentOrder = group.jobs.map(j => j.id);
-
-      // ── BUG 2 FIX: Always recalculate times from scratch ──
-      // Calculate travel time for original order
-      const originalTravelTime = calculateTotalTravelTime(currentOrder, distanceMap);
-
-      // Find optimal order
-      const optimizedOrder = group.jobs.length >= 2
-        ? optimizeRoute(currentOrder, distanceMap)
-        : currentOrder;
-
-      const optimizedTravelTime = calculateTotalTravelTime(optimizedOrder, distanceMap);
-      const saved = Math.max(0, originalTravelTime - optimizedTravelTime);
-      totalTimeSaved += saved;
-
-      // Always recalculate sequential times from the anchor
-      const scheduledTimes = calculateSequentialTimes(optimizedOrder, jobMap, distanceMap, group.startMinutes);
-      for (const st of scheduledTimes) {
-        dayUpdates.push({
-          jobId: st.jobId,
-          time: st.time,
-          origDate: date,
-        });
-      }
+    // Track overflow (jobs that no longer fit the working day)
+    for (const o of [...morningResult.overflow, ...afternoonResult.overflow]) {
+      overflowJobs.push({ jobId: o.id, title: o.title, clientName: o.clientName, date });
     }
 
-    // Collect proposed changes
-    for (const upd of dayUpdates) {
-      const details = jobDetailsMap.get(upd.jobId);
-      const currentTime = details?.current_time || null;
-      if (currentTime !== upd.time) {
+    // Diff against current scheduled_time
+    const byId = new Map(dayJobs.map(j => [j.id, j]));
+    for (const s of allScheduled) {
+      const j = byId.get(s.jobId);
+      if (!j) continue;
+      if (j.locked) continue; // never propose changes to locked jobs
+      if (j.originalTime !== s.time) {
         proposedChanges.push({
-          jobId: upd.jobId,
-          title: details?.title || "Job",
-          clientName: details?.client_name || "Unknown",
-          date: upd.origDate,
-          currentTime,
-          newTime: upd.time,
+          jobId: s.jobId,
+          title: j.title,
+          clientName: j.clientName,
+          date,
+          currentTime: j.originalTime,
+          newTime: s.time,
         });
       }
     }
 
-    // Apply changes if not dry run
-    if (!dryRun && dayUpdates.length > 0) {
-      for (const upd of dayUpdates) {
+    // Apply (only when not dry run)
+    if (!dryRun) {
+      for (const s of allScheduled) {
+        const j = byId.get(s.jobId);
+        if (!j || j.locked) continue;
+        if (j.originalTime === s.time) continue;
         await supabase.from("jobs").update({
-          scheduled_time: upd.time,
-          original_scheduled_date: upd.origDate,
-        }).eq("id", upd.jobId);
+          scheduled_time: s.time,
+          original_scheduled_time: j.originalTime,
+          original_scheduled_date: date,
+        }).eq("id", s.jobId);
       }
 
-      if (totalTimeSaved > 0) {
+      if (beforeTravel - afterTravel > 0) {
         await supabase.from("route_optimizations").insert({
           contractor_id: contractorId,
           optimization_date: date,
           level: 1,
-          time_saved_minutes: totalTimeSaved,
+          time_saved_minutes: Math.max(0, beforeTravel - afterTravel),
           status: "applied",
         });
       }
     }
   }
 
-  // Level 2: Multi-Day Flexible Optimization — only on actual runs
-  if (!dryRun) {
-    const allFlexible = jobsWithAddresses.filter(j => j.time_flexibility === "flexible" && !j.route_optimization_locked);
+  console.log("[route-optimization] stats", JSON.stringify({
+    contractorId,
+    ...stats,
+    totalTimeSaved,
+    proposedChangeCount: proposedChanges.length,
+    overflowCount: overflowJobs.length,
+  }));
 
-    if (allFlexible.length >= 3) {
-      let currentTotalTime = 0;
-      for (const date of dates) {
-        const dayFlex = allFlexible.filter(j => j.scheduled_date === date);
-        if (dayFlex.length >= 2) {
-          currentTotalTime += calculateTotalTravelTime(dayFlex.map(j => j.id), distanceMap);
-        }
-      }
-
-      const allFlexIds = allFlexible.map(j => j.id);
-      const optimizedAll = optimizeRoute(allFlexIds, distanceMap);
-
-      const jobsPerDay = dates.map(date => allFlexible.filter(j => j.scheduled_date === date).length);
-      const distributed: { date: string; jobIds: string[] }[] = [];
-      let idx = 0;
-      for (let d = 0; d < dates.length; d++) {
-        const count = jobsPerDay[d];
-        distributed.push({ date: dates[d], jobIds: optimizedAll.slice(idx, idx + count) });
-        idx += count;
-      }
-
-      let newTotalTime = 0;
-      for (const group of distributed) {
-        if (group.jobIds.length >= 2) {
-          newTotalTime += calculateTotalTravelTime(group.jobIds, distanceMap);
-        }
-      }
-
-      const timeSaved = Math.max(0, currentTotalTime - newTotalTime);
-
-      if (timeSaved > 5) {
-        await supabase.from("route_optimizations").insert({
-          contractor_id: contractorId,
-          optimization_date: dates[0],
-          level: 2,
-          time_saved_minutes: timeSaved,
-          status: "applied",
-        });
-
-        for (const group of distributed) {
-          for (const jobId of group.jobIds) {
-            const job = allFlexible.find(j => j.id === jobId);
-            if (job && job.scheduled_date !== group.date) {
-              await supabase.from("jobs").update({
-                scheduled_date: group.date,
-                original_scheduled_date: job.scheduled_date,
-              }).eq("id", jobId);
-            }
-          }
-        }
-
-        totalTimeSaved += timeSaved;
-      }
-    }
-  }
-
-  // ── BUG 3 FIX: Always return success ──
   const message = totalTimeSaved > 0
     ? `Route optimised — saves ${totalTimeSaved} minutes of driving.`
     : proposedChanges.length > 0
-      ? "Your route is already optimised. Times have been set based on your working hours."
+      ? "Times have been re-aligned to the start of each working block."
       : "Your schedule is already optimised — no changes needed.";
 
   return {
     timeSaved: Math.max(0, totalTimeSaved),
     proposedChanges: dryRun ? proposedChanges : undefined,
+    overflowJobs: overflowJobs.length > 0 ? overflowJobs : undefined,
     message,
-    usedFallbackDistances,
+    usedFallbackDistances: stats.usedFallbackDistances,
+    fallbackPairs: stats.fallbackPairs,
+    matrixCallsMade: stats.matrixCallsMade,
+    apiErrors: stats.apiErrors.length > 0 ? stats.apiErrors.slice(0, 5) : undefined,
     level: 1,
     status: dryRun ? "potential" : "applied",
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HTTP handler
+// ─────────────────────────────────────────────────────────────────────────────
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -641,14 +687,12 @@ serve(async (req) => {
     }
 
     if (requestedContractorId) {
-      // ── User-invoked: require JWT auth and verify ownership ──
       const authHeader = req.headers.get("Authorization");
       if (!authHeader?.startsWith("Bearer ")) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
       const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
       const userClient = createClient(SUPABASE_URL, anonKey!, {
         global: { headers: { Authorization: authHeader } },
@@ -663,12 +707,8 @@ serve(async (req) => {
       const userId = claimsData.claims.sub;
 
       const { data: ownerCheck } = await supabase
-        .from("contractors")
-        .select("id")
-        .eq("id", requestedContractorId)
-        .eq("user_id", userId)
-        .maybeSingle();
-
+        .from("contractors").select("id")
+        .eq("id", requestedContractorId).eq("user_id", userId).maybeSingle();
       if (!ownerCheck) {
         return new Response(JSON.stringify({ error: "Forbidden" }), {
           status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -682,16 +722,13 @@ serve(async (req) => {
         .in("subscription_tier", ["starter", "pro"])
         .eq("is_active", true)
         .single();
-
       if (!contractor) {
         return new Response(JSON.stringify({ error: "Contractor not eligible for optimization" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       const result = await runOptimization(contractor.id, supabase, isPreview);
-      // Always return success — never error for "no improvement"
       return new Response(JSON.stringify({ success: true, result }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -710,86 +747,30 @@ serve(async (req) => {
     }
 
     const { data: contractors } = await supabase
-      .from("contractors")
-      .select("id, subscription_tier, user_id")
-      .in("subscription_tier", ["starter", "pro"])
-      .eq("is_active", true);
-
+      .from("contractors").select("id, subscription_tier, user_id")
+      .in("subscription_tier", ["starter", "pro"]).eq("is_active", true);
     if (!contractors || contractors.length === 0) {
       return new Response(JSON.stringify({ message: "No eligible contractors" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const results = [];
-
+    const results: any[] = [];
     for (const contractor of contractors) {
       try {
         const result = await runOptimization(contractor.id, supabase, true);
-
-        if (result && result.timeSaved > 0) {
+        if (result && (result as any).timeSaved > 0) {
           await supabase.from("notifications").insert({
             user_id: contractor.user_id,
             title: "🗺️ Route Optimization Available",
-            message: `Optimizing your routes could save ${result.timeSaved} minutes over the next 3 days. Open Jobs → Run Optimization to apply.`,
+            message: `Optimizing your routes could save ${(result as any).timeSaved} minutes over the next 3 days. Open Jobs → Run Optimization to apply.`,
             type: "route_optimization",
           });
         }
-
         results.push({ contractorId: contractor.id, result });
       } catch (err) {
         console.error(`Optimization failed for ${contractor.id}:`, err);
         results.push({ contractorId: contractor.id, error: String(err) });
-      }
-    }
-
-    // Starter tier: teaser notifications
-    const { data: starterContractors } = await supabase
-      .from("contractors")
-      .select("id, user_id")
-      .eq("subscription_tier", "starter")
-      .eq("is_active", true);
-
-    if (starterContractors) {
-      for (const contractor of starterContractors) {
-        try {
-          const todayStr = new Date().toISOString().split("T")[0];
-          const { data: starterJobs } = await supabase
-            .from("jobs")
-            .select("id, scheduled_date, scheduled_time, time_flexibility, route_optimization_locked, client_id, clients!inner(address)")
-            .eq("contractor_id", contractor.id)
-            .eq("scheduled_date", todayStr)
-            .in("status", ["scheduled", "in_progress"]);
-
-          if (starterJobs && starterJobs.length >= 2) {
-            const locations = starterJobs.map((j: any) => {
-              const addr = j.clients?.address as any;
-              return { id: j.id, address: [addr?.street, addr?.city, addr?.state].filter(Boolean).join(", ") };
-            }).filter((l: any) => l.address);
-
-            if (locations.length >= 2) {
-              const distances = await getDistanceMatrix(locations, locations);
-              const distMap = new Map<string, number>();
-              for (const d of distances) distMap.set(`${d.fromId}->${d.toId}`, d.durationMinutes);
-
-              const currentTime = calculateTotalTravelTime(locations.map((l: any) => l.id), distMap);
-              const optimized = optimizeRoute(locations.map((l: any) => l.id), distMap);
-              const optimizedTime = calculateTotalTravelTime(optimized, distMap);
-              const potentialSaving = Math.max(0, currentTime - optimizedTime);
-
-              if (potentialSaving > 15) {
-                await supabase.from("notifications").insert({
-                  user_id: contractor.user_id,
-                  title: "💡 Route Optimization Available",
-                  message: `Route Optimization could save you ${potentialSaving} minutes today! Upgrade to Pro to enable automatic scheduling.`,
-                  type: "upgrade_teaser",
-                });
-              }
-            }
-          }
-        } catch (err) {
-          console.error(`Teaser calc failed for ${contractor.id}:`, err);
-        }
       }
     }
 
@@ -799,8 +780,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("Route optimization error:", error);
     return new Response(JSON.stringify({ error: String(error) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
