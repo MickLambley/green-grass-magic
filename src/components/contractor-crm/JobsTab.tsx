@@ -253,6 +253,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     is_recurring: false,
     recurrence_frequency: "weekly" as "weekly" | "fortnightly" | "monthly",
     recurrence_count: "4",
+    route_optimization_locked: false,
   });
 
   useEffect(() => {
