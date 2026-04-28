@@ -112,8 +112,17 @@ interface RunStats {
   apiErrors: string[];
 }
 
-async function geocodeAU(address: string, stats: RunStats): Promise<{ lat: number; lng: number } | null> {
-  if (!GOOGLE_MAPS_API_KEY) return null;
+// Returns coordinates, or one of two failure modes:
+//   { unavailable: true } — Google API itself rejected us (key/quota/network)
+//   null                  — API worked but the address could not be located
+async function geocodeAU(
+  address: string,
+  stats: RunStats,
+): Promise<{ lat: number; lng: number } | { unavailable: true } | null> {
+  if (!GOOGLE_MAPS_API_KEY) {
+    stats.apiErrors.push("GOOGLE_MAPS_API_KEY is not configured");
+    return { unavailable: true };
+  }
   stats.geocodeCalls++;
   try {
     const url = `https://maps.googleapis.com/maps/api/geocode/json`
@@ -122,6 +131,14 @@ async function geocodeAU(address: string, stats: RunStats): Promise<{ lat: numbe
       + `&key=${GOOGLE_MAPS_API_KEY}`;
     const resp = await fetch(url);
     const data = await resp.json();
+
+    // Hard API failure (bad key, referer-restricted key, quota, billing, etc.)
+    const status = data?.status;
+    if (status === "REQUEST_DENIED" || status === "OVER_QUERY_LIMIT" || status === "INVALID_REQUEST" || status === "UNKNOWN_ERROR") {
+      stats.apiErrors.push(`Geocode API ${status}: ${data?.error_message ?? "no detail"}`);
+      return { unavailable: true };
+    }
+
     const loc = data?.results?.[0]?.geometry?.location;
     if (!loc) return null;
     if (!inAU(loc.lat, loc.lng)) {
@@ -130,8 +147,8 @@ async function geocodeAU(address: string, stats: RunStats): Promise<{ lat: numbe
     }
     return { lat: loc.lat, lng: loc.lng };
   } catch (err) {
-    stats.apiErrors.push(`Geocode error for "${address}": ${String(err)}`);
-    return null;
+    stats.apiErrors.push(`Geocode fetch failed for "${address}": ${String(err)}`);
+    return { unavailable: true };
   }
 }
 
