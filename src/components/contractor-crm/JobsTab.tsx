@@ -837,6 +837,16 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const todayStr = format(new Date(), "yyyy-MM-dd");
   const ACTIVE_STATUSES = new Set(["scheduled", "in_progress", "pending_confirmation", "pending", "confirmed"]);
   const HISTORY_STATUSES = new Set(["completed", "cancelled"]);
+  const historyRangeBounds = useMemo(() => {
+    if (mode !== "completed" || historyDateRange === "all") return null;
+    const now = new Date();
+    const ref = historyDateRange === "this_month" ? now : subMonths(now, 1);
+    return {
+      start: format(startOfMonth(ref), "yyyy-MM-dd"),
+      end: format(endOfMonth(ref), "yyyy-MM-dd"),
+    };
+  }, [mode, historyDateRange]);
+
   const filtered = jobs.filter((j) => {
     const matchesSearch =
       j.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -846,7 +856,10 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     const matchesMode = mode === "completed"
       ? HISTORY_STATUSES.has(j.status)
       : ACTIVE_STATUSES.has(j.status);
-    return matchesSearch && matchesStatus && matchesMode;
+    const matchesRange = !historyRangeBounds
+      ? true
+      : j.scheduled_date >= historyRangeBounds.start && j.scheduled_date <= historyRangeBounds.end;
+    return matchesSearch && matchesStatus && matchesMode && matchesRange;
   }).sort((a, b) => {
     if (mode === "completed") {
       // Most recently completed first
@@ -866,7 +879,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
   const paginatedJobs = filtered.slice(listPage * PAGE_SIZE, (listPage + 1) * PAGE_SIZE);
 
   // Reset page when filters change
-  useEffect(() => { setListPage(0); }, [searchQuery, statusFilter]);
+  useEffect(() => { setListPage(0); }, [searchQuery, statusFilter, historyDateRange]);
 
   // Pending confirmation jobs for the hero section
   const pendingJobs = jobs.filter(j => j.status === "pending_confirmation" || j.status === "pending");
