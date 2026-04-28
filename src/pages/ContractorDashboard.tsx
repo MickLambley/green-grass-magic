@@ -389,8 +389,11 @@ const ContractorDashboard = () => {
                 onRunOptimization={handleRunOptimization}
                 isOptimizing={isOptimizing}
               />
-              <JobsTab contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} workingHours={contractor.working_hours as any} onOpenRouteOptimization={() => setRouteOptOpen(true)} />
+              <JobsTab mode="upcoming" contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} workingHours={contractor.working_hours as any} onOpenRouteOptimization={() => setRouteOptOpen(true)} />
             </div>
+          )}
+          {activeTab === "completed-jobs" && (
+            <JobsTab mode="completed" contractorId={contractor.id} subscriptionTier={contractor.subscription_tier} workingHours={contractor.working_hours as any} onOpenRouteOptimization={() => setRouteOptOpen(true)} />
           )}
           {activeTab === "quotes" && <QuotesTab contractorId={contractor.id} />}
           {activeTab === "invoices" && <InvoicesTab contractorId={contractor.id} gstRegistered={contractor.gst_registered} contractor={contractor} />}
