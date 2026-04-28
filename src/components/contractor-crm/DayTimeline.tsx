@@ -549,6 +549,14 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                                 {job.source === "platform" && (
                                   <Badge variant="outline" className="text-[8px] px-1 py-0 shrink-0">🌐</Badge>
                                 )}
+                                {job.route_optimization_locked && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Lock className="w-2.5 h-2.5 text-muted-foreground shrink-0" />
+                                    </TooltipTrigger>
+                                    <TooltipContent>Locked — excluded from Route Optimisation</TooltipContent>
+                                  </Tooltip>
+                                )}
                               </div>
                               <p className="text-[11px] text-muted-foreground truncate">{job.client_name}</p>
                               {job.has_valid_address === false && (
