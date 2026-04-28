@@ -71,10 +71,26 @@ const OptimizationPreviewDialog = ({
           <div className="flex items-start gap-3 p-3 rounded-lg bg-sunshine/10 border border-sunshine/30">
             <AlertTriangle className="w-5 h-5 text-sunshine shrink-0 mt-0.5" />
             <p className="text-sm text-sunshine">
-              ⚠ Live traffic data was unavailable — travel times are estimated. Results may be less accurate.
+              ⚠ Live traffic data was unavailable — travel times are estimated{preview.fallbackPairs ? ` for ${preview.fallbackPairs} leg${preview.fallbackPairs === 1 ? "" : "s"}` : ""}. Results may be less accurate.
             </p>
           </div>
         )}
+
+        {/* Overflow warning */}
+        {preview.overflowJobs && preview.overflowJobs.length > 0 && (
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
+            <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+            <div className="text-sm text-destructive">
+              <p className="font-semibold mb-1">{preview.overflowJobs.length} job{preview.overflowJobs.length === 1 ? " doesn't" : "s don't"} fit your working hours.</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                {preview.overflowJobs.slice(0, 5).map(o => (
+                  <li key={o.jobId}>{o.clientName} — {o.title} ({o.date})</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
 
         {/* Summary banner */}
         {hasTimeSaved ? (
