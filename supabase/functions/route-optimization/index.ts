@@ -471,8 +471,6 @@ function layoutDay(
     } else {
       attemptStart = cursor;
     }
-    const earliest = earliestStart?.get(job.id);
-    if (typeof earliest === "number" && earliest > attemptStart) attemptStart = earliest;
 
     // If a locked anchor sits between lastPlacedEnd and attemptStart, the
     // anchor is the real predecessor — recompute travel from it.
