@@ -553,8 +553,8 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
 
   // Optimise a single day only — predictable for the contractor and avoids
   // surprise reshuffles. Caller supplies the date (defaults to today).
-  const requestedDate = typeof (input as any)?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test((input as any).date)
-    ? (input as any).date
+  const requestedDate = typeof targetDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(targetDate)
+    ? targetDate
     : new Date().toISOString().split("T")[0];
   const todayStr = requestedDate;
   const dates = [requestedDate];
