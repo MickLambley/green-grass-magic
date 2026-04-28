@@ -873,11 +873,15 @@ serve(async (req) => {
 
     let requestedContractorId: string | null = null;
     let isPreview = false;
+    let requestedDate: string | undefined;
     if (req.method === "POST") {
       try {
         const body = await req.json();
         requestedContractorId = body.contractor_id || null;
         isPreview = body.preview === true;
+        if (typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+          requestedDate = body.date;
+        }
       } catch { /* no body, run for all */ }
     }
 
