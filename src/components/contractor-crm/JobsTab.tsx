@@ -1199,7 +1199,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                     mode !== "completed" && (idx === 0 || isToday !== prevWasToday);
                   const headerLabel = isToday ? "Today" : "Upcoming";
                   return (
-                    <>
+                    <Fragment key={job.id}>
                       {showHeader && (
                         <TableRow key={`hdr-${headerLabel}-${idx}`} className="bg-muted/40 hover:bg-muted/40">
                           <TableCell colSpan={6} className="py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
