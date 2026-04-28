@@ -171,6 +171,12 @@ const ContractorDashboard = () => {
       .eq("user_id", user.id).eq("is_read", false);
     setUnreadNotifs(count || 0);
 
+    const { count: activeCount } = await supabase
+      .from("jobs").select("id", { count: "exact", head: true })
+      .eq("contractor_id", contractorData.id)
+      .in("status", ["scheduled", "in_progress", "pending_confirmation", "pending", "confirmed"]);
+    setActiveJobsCount(activeCount || 0);
+
     setIsLoading(false);
   };
 
