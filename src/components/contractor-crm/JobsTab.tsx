@@ -932,7 +932,17 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
               {isOptimizing ? "Optimizing..." : "Run Route Optimization"}
             </Button>
           )}
-          <Button onClick={() => openCreateDialog()} disabled={clients.length === 0}>
+          {mode === "upcoming" && onViewHistory && (
+            <Button variant="ghost" size="sm" onClick={onViewHistory} className="min-h-[44px]">
+              View History
+            </Button>
+          )}
+          {mode === "completed" && onBackToActive && (
+            <Button variant="ghost" size="sm" onClick={onBackToActive} className="min-h-[44px]">
+              <ChevronLeft className="w-4 h-4 mr-1" /> Back to Jobs
+            </Button>
+          )}
+          <Button onClick={() => openCreateDialog()} disabled={clients.length === 0} className="min-h-[44px]">
             <Plus className="w-4 h-4 mr-2" /> New Job
           </Button>
         </div>
