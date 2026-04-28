@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Clock, Car, ChevronLeft, ChevronRight, GripVertical, ChevronDown, ChevronUp, ArrowRight, AlertTriangle, CalendarClock, Route, Loader2 } from "lucide-react";
+import { MapPin, Clock, Car, ChevronLeft, ChevronRight, GripVertical, ChevronDown, ChevronUp, ArrowRight, AlertTriangle, CalendarClock, Route, Loader2, Lock } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { format, addDays, subDays, isToday, isTomorrow, isYesterday } from "date-fns";
@@ -18,6 +18,7 @@ interface TimelineJob {
   original_scheduled_time?: string | null;
   has_valid_address?: boolean;
   client_id?: string;
+  route_optimization_locked?: boolean;
 }
 
 interface WorkingHoursRange {
@@ -345,6 +346,14 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                             {job.source === "platform" && (
                               <Badge variant="outline" className="text-[8px] px-1 py-0 shrink-0">🌐</Badge>
                             )}
+                            {job.route_optimization_locked && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Lock className="w-2.5 h-2.5 text-muted-foreground shrink-0" />
+                                </TooltipTrigger>
+                                <TooltipContent>Locked — excluded from Route Optimisation</TooltipContent>
+                              </Tooltip>
+                            )}
                           </div>
                           <p className="text-[11px] text-muted-foreground truncate">{job.client_name}</p>
                         </div>
@@ -539,6 +548,14 @@ const DayTimeline = ({ jobs, date, onDateChange, onJobClick, onJobReschedule, wo
                                 <span className="text-xs font-bold text-foreground truncate">{job.title}</span>
                                 {job.source === "platform" && (
                                   <Badge variant="outline" className="text-[8px] px-1 py-0 shrink-0">🌐</Badge>
+                                )}
+                                {job.route_optimization_locked && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Lock className="w-2.5 h-2.5 text-muted-foreground shrink-0" />
+                                    </TooltipTrigger>
+                                    <TooltipContent>Locked — excluded from Route Optimisation</TooltipContent>
+                                  </Tooltip>
                                 )}
                               </div>
                               <p className="text-[11px] text-muted-foreground truncate">{job.client_name}</p>

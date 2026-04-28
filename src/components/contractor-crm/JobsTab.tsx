@@ -29,7 +29,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock, Trash2, MessageSquare, Send, RefreshCw, PencilLine, AlertTriangle } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Calendar, ChevronLeft, ChevronRight, List, LayoutGrid, Check, X, MapPin, CheckCircle2, DollarSign, Clock, Trash2, MessageSquare, Send, RefreshCw, PencilLine, AlertTriangle, Lock } from "lucide-react";
 import DayTimeline from "./DayTimeline";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, endOfWeek, isToday } from "date-fns";
@@ -253,6 +253,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
     is_recurring: false,
     recurrence_frequency: "weekly" as "weekly" | "fortnightly" | "monthly",
     recurrence_count: "4",
+    route_optimization_locked: false,
   });
 
   useEffect(() => {
@@ -441,6 +442,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       is_recurring: false,
       recurrence_frequency: "weekly",
       recurrence_count: "4",
+      route_optimization_locked: false,
     });
     setDialogOpen(true);
     // Auto-populate price for first service if it's a lawn service
@@ -491,6 +493,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       is_recurring: !!recurrence,
       recurrence_frequency: recurrence?.frequency || "weekly",
       recurrence_count: recurrence?.count?.toString() || "4",
+      route_optimization_locked: !!job.route_optimization_locked,
     };
     setForm(formValues);
     setOriginalFormValues({ ...formValues });
@@ -578,6 +581,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       original_scheduled_time: originalTime,
       completed_at: form.status === "completed" ? new Date().toISOString() : null,
       recurrence_rule: recurrenceRule as unknown as Json,
+      route_optimization_locked: form.route_optimization_locked,
     };
 
     if (editingJob) {
@@ -1088,6 +1092,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             original_scheduled_time: (j as any).original_scheduled_time ?? null,
             has_valid_address: j.source === "crm" && j.client_id ? clientHasValidAddress(j.client_id) : true,
             client_id: j.client_id,
+            route_optimization_locked: !!(j as any).route_optimization_locked,
           }))}
           date={timelineDate}
           onDateChange={setTimelineDate}
@@ -1478,6 +1483,24 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
                 )}
               </div>
             </div>
+            {form.scheduled_time && (
+              <div className="flex items-start gap-2 p-3 rounded-md bg-muted/40 border border-border">
+                <Checkbox
+                  id="lock-time"
+                  checked={form.route_optimization_locked}
+                  onCheckedChange={(checked) => setForm({ ...form, route_optimization_locked: !!checked })}
+                  className="mt-0.5"
+                />
+                <div className="space-y-0.5">
+                  <Label htmlFor="lock-time" className="text-sm cursor-pointer flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5" /> Lock this time
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Route Optimisation will keep this job at {form.scheduled_time} and route other jobs around it.
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Price ($)</Label>
