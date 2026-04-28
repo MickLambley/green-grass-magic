@@ -941,7 +941,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       )}
 
       {/* Pending Confirmation Section */}
-      {pendingJobs.length > 0 && (
+      {mode === "upcoming" && pendingJobs.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-sunshine animate-pulse" />
