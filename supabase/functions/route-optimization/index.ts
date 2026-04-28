@@ -491,6 +491,18 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     };
   }
 
+  // ── PRE-FLIGHT: verify the Geocoding API actually works for us.
+  // Catches referer-restricted keys / billing / quota issues before we
+  // mislabel every job as a "missing address".
+  const preflight = await geocodeAU("Sydney NSW 2000, Australia", stats);
+  if (preflight && (preflight as any).unavailable) {
+    return {
+      error: "geocoding_unavailable",
+      message: "Map service is temporarily unavailable. Route optimisation cannot run right now — please try again shortly or contact support.",
+      apiErrors: stats.apiErrors,
+    };
+  }
+
   // ── GEOCODE EVERY JOB ONCE ──
   // Cached per address string within this run.
   const geocodeCache = new Map<string, { lat: number; lng: number }>();
@@ -507,7 +519,16 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     } else if (geocodeCache.has(addressString)) {
       coords = geocodeCache.get(addressString)!;
     } else {
-      coords = await geocodeAU(addressString, stats);
+      const result = await geocodeAU(addressString, stats);
+      if (result && (result as any).unavailable) {
+        // API broke mid-run — bail out cleanly.
+        return {
+          error: "geocoding_unavailable",
+          message: "Map service became unavailable while running optimisation. Please try again shortly.",
+          apiErrors: stats.apiErrors,
+        };
+      }
+      coords = result as { lat: number; lng: number } | null;
       if (coords) geocodeCache.set(addressString, coords);
     }
 
