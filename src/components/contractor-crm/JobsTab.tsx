@@ -1163,12 +1163,18 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <Calendar className="w-12 h-12 text-muted-foreground/50 mb-4" />
               <h3 className="font-display font-semibold text-lg text-foreground mb-1">
-                {jobs.length === 0 ? "No jobs yet" : "No matches"}
+                {mode === "completed" ? "No past jobs" : "No upcoming jobs"}
               </h3>
               <p className="text-muted-foreground text-sm mb-4">
-                {jobs.length === 0 ? "Schedule your first job to get started." : "Try different filters."}
+                {mode === "completed"
+                  ? "Completed and cancelled jobs will appear here."
+                  : "No upcoming jobs. Tap + to schedule one."}
               </p>
-              {jobs.length === 0 && <Button onClick={() => openCreateDialog()} size="sm"><Plus className="w-4 h-4 mr-1" /> New Job</Button>}
+              {mode !== "completed" && (
+                <Button onClick={() => openCreateDialog()} size="default" className="min-h-[44px] min-w-[44px]">
+                  <Plus className="w-4 h-4 mr-1" /> Add Job
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
