@@ -211,6 +211,18 @@ async function geocodeAU(
 
 interface DistanceCell { fromId: string; toId: string; durationMinutes: number; }
 
+// Minimum buffer (minutes) added to every non-zero leg so two jobs on the
+// same street still get a parking/walk gap. Matches the +3 buffer used in
+// the Haversine fallback, rounded up to a 5-minute slot.
+const MIN_TRAVEL_BUFFER_MIN = 5;
+
+function travelBetween(fromId: string, toId: string, dist: Map<string, number>): number {
+  if (fromId === toId) return 0;
+  const raw = dist.get(`${fromId}->${toId}`) ?? 0;
+  if (raw <= 0) return MIN_TRAVEL_BUFFER_MIN;
+  return Math.max(MIN_TRAVEL_BUFFER_MIN, roundUpTo5(raw));
+}
+
 async function distanceMatrixBatch(
   origins: { id: string; address: string }[],
   destinations: { id: string; address: string }[],
@@ -321,7 +333,7 @@ async function buildDistanceMap(
 function totalRouteMinutes(order: string[], dist: Map<string, number>): number {
   let t = 0;
   for (let i = 0; i < order.length - 1; i++) {
-    t += dist.get(`${order[i]}->${order[i + 1]}`) ?? 0;
+    t += travelBetween(order[i], order[i + 1], dist);
   }
   return t;
 }
@@ -335,7 +347,7 @@ function nearestNeighbour(start: string, ids: string[], dist: Map<string, number
     let best = "";
     let bestD = Infinity;
     for (const id of remaining) {
-      const d = dist.get(`${cur}->${id}`) ?? Infinity;
+      const d = travelBetween(cur, id, dist);
       if (d < bestD) { bestD = d; best = id; }
     }
     if (!best) { // shouldn't happen, but be defensive
@@ -399,12 +411,16 @@ function solveTSP(ids: string[], dist: Map<string, number>): string[] {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface ScheduledJob { jobId: string; time: string; }
+interface LayoutLeg { fromId: string | null; toId: string; time: string; travel: number; duration: number; }
 
 /**
- * Place an ordered list of unlocked jobs starting at `startMin`, while
- * respecting locked anchors (lockedJobs each have a fixed scheduled_time).
- * If an unlocked job would overlap a locked anchor, it is pushed to after
- * the anchor (anchor + duration + travel-to-anchor's predecessor's travel).
+ * Lay an ordered list of unlocked jobs onto a day, slotting them around
+ * locked anchors. Travel time is added between **every** consecutive pair on
+ * the timeline — including (locked → unlocked) and (unlocked → locked).
+ *
+ *  - `orderedUnlocked`: jobs in TSP-optimised order, will be placed in this order.
+ *  - `lockedJobs`: anchors with fixed scheduled_time, never moved.
+ *  - The first unlocked job starts at max(startMin, firstLockedAnchor? + travel).
  */
 function layoutDay(
   orderedUnlocked: PreparedJob[],
@@ -412,54 +428,99 @@ function layoutDay(
   dist: Map<string, number>,
   startMin: number,
   endMin: number,
-): { scheduled: ScheduledJob[]; overflow: PreparedJob[] } {
+  earliestStart?: Map<string, number>,
+): { scheduled: ScheduledJob[]; overflow: PreparedJob[]; legs: LayoutLeg[] } {
   const scheduled: ScheduledJob[] = [];
   const overflow: PreparedJob[] = [];
+  const legs: LayoutLeg[] = [];
 
-  // Build a sorted list of locked occupied intervals
-  const lockedIntervals = lockedJobs
+  // Locked anchors as immovable timeline entries.
+  type Anchor = { id: string; start: number; end: number };
+  const anchors: Anchor[] = lockedJobs
     .filter(l => l.lockedTime)
     .map(l => {
       const s = timeToMinutes(l.lockedTime!);
-      return { start: s, end: s + l.duration, id: l.id };
+      return { id: l.id, start: s, end: s + l.duration };
     })
     .sort((a, b) => a.start - b.start);
 
-  // Track current cursor and last placed unlocked job (for travel calc)
-  let cursor = startMin;
-  let lastPlacedId: string | null = null;
-
-  function clearsLocked(start: number, end: number): { ok: boolean; pushTo?: number } {
-    for (const iv of lockedIntervals) {
-      if (start < iv.end && end > iv.start) {
-        return { ok: false, pushTo: iv.end };
-      }
+  // Returns the anchor that ends at-or-before `t` and is closest to `t`,
+  // i.e. the predecessor on the timeline if no unlocked job is closer.
+  function lastAnchorEndingBy(t: number): Anchor | null {
+    let best: Anchor | null = null;
+    for (const a of anchors) {
+      if (a.end <= t && (!best || a.end > best.end)) best = a;
     }
-    return { ok: true };
+    return best;
+  }
+  // Returns the next anchor that starts after `t`.
+  function nextAnchorAfter(t: number): Anchor | null {
+    for (const a of anchors) if (a.start >= t) return a;
+    return null;
   }
 
+  let cursor = startMin;
+  let lastPlacedId: string | null = null;
+  let lastPlacedEnd = startMin;
+
   for (const job of orderedUnlocked) {
-    // Add travel from previous (locked or unlocked) — pick whichever is most recent
+    // Determine the most recent predecessor on the timeline (locked or unlocked).
+    // Start by trying to place at cursor + travel from the last unlocked job.
+    let attemptStart: number;
     if (lastPlacedId) {
-      cursor += roundUpTo5(dist.get(`${lastPlacedId}->${job.id}`) ?? 0);
+      attemptStart = lastPlacedEnd + travelBetween(lastPlacedId, job.id, dist);
+    } else {
+      attemptStart = cursor;
     }
-    let attempt = cursor;
-    // Find a slot that doesn't collide with any locked anchor
+    const earliest = earliestStart?.get(job.id);
+    if (typeof earliest === "number" && earliest > attemptStart) attemptStart = earliest;
+
+    // If a locked anchor sits between lastPlacedEnd and attemptStart, the
+    // anchor is the real predecessor — recompute travel from it.
     let safety = 0;
-    while (safety++ < 20) {
-      const c = clearsLocked(attempt, attempt + job.duration);
-      if (c.ok) break;
-      attempt = roundUpTo5(c.pushTo!);
+    while (safety++ < 30) {
+      const predAnchor = lastAnchorEndingBy(attemptStart);
+      if (predAnchor && (!lastPlacedId || predAnchor.end >= lastPlacedEnd)) {
+        const fromAnchorStart = predAnchor.end + travelBetween(predAnchor.id, job.id, dist);
+        if (fromAnchorStart > attemptStart) {
+          attemptStart = fromAnchorStart;
+          continue; // re-check whether this push lands us past another anchor
+        }
+      }
+      // Check overlap with the next anchor; if we would clip into it, push past.
+      const nextA = nextAnchorAfter(attemptStart);
+      if (nextA && attemptStart < nextA.end && attemptStart + job.duration > nextA.start) {
+        attemptStart = nextA.end + travelBetween(nextA.id, job.id, dist);
+        continue;
+      }
+      break;
     }
-    if (attempt + job.duration > endMin) {
+
+    // Snap to the next 5-minute slot for tidy times.
+    attemptStart = roundUpTo5(attemptStart);
+
+    if (attemptStart + job.duration > endMin) {
       overflow.push(job);
       continue;
     }
-    scheduled.push({ jobId: job.id, time: minutesToTime(attempt) });
-    cursor = attempt + job.duration;
+
+    // Determine which job actually precedes this one on the timeline (for diagnostics).
+    const predAnchor = lastAnchorEndingBy(attemptStart);
+    let predId: string | null = lastPlacedId;
+    let predEnd = lastPlacedEnd;
+    if (predAnchor && (!lastPlacedId || predAnchor.end >= lastPlacedEnd)) {
+      predId = predAnchor.id;
+      predEnd = predAnchor.end;
+    }
+    const travel = predId ? Math.max(0, attemptStart - predEnd) : 0;
+
+    scheduled.push({ jobId: job.id, time: minutesToTime(attemptStart) });
+    legs.push({ fromId: predId, toId: job.id, time: minutesToTime(attemptStart), travel, duration: job.duration });
+    cursor = attemptStart + job.duration;
     lastPlacedId = job.id;
+    lastPlacedEnd = cursor;
   }
-  return { scheduled, overflow };
+  return { scheduled, overflow, legs };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -700,18 +761,22 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
       .map(j => j.id);
     const beforeTravel = totalRouteMinutes(originalOrder, dist);
 
-    // Optimise each band
+    // Optimise each band, then concatenate so a SINGLE layoutDay call handles
+    // travel across the morning/afternoon boundary AND across every locked anchor.
     const morningOrderIds = solveTSP(morning.map(j => j.id), dist);
     const afternoonOrderIds = solveTSP(afternoon.map(j => j.id), dist);
     const morningOrdered = morningOrderIds.map(id => morning.find(j => j.id === id)!);
     const afternoonOrdered = afternoonOrderIds.map(id => afternoon.find(j => j.id === id)!);
+    const orderedUnlocked = [...morningOrdered, ...afternoonOrdered];
 
-    const morningResult = layoutDay(morningOrdered, lockedJobs, dist, WORK_START, MIDPOINT);
-    const afternoonResult = layoutDay(afternoonOrdered, lockedJobs, dist, MIDPOINT, WORK_END);
+    // Afternoon-tagged jobs must not start before MIDPOINT.
+    const earliestStart = new Map<string, number>();
+    for (const j of afternoon) earliestStart.set(j.id, MIDPOINT);
+
+    const layoutResult = layoutDay(orderedUnlocked, lockedJobs, dist, WORK_START, WORK_END, earliestStart);
 
     const allScheduled: ScheduledJob[] = [
-      ...morningResult.scheduled,
-      ...afternoonResult.scheduled,
+      ...layoutResult.scheduled,
       // Locked anchors keep their time
       ...lockedJobs.map(l => ({ jobId: l.id, time: l.lockedTime! })),
     ];
@@ -724,9 +789,22 @@ async function runOptimization(contractorId: string, supabase: any, dryRun = fal
     totalTimeSaved += Math.max(0, beforeTravel - afterTravel);
 
     // Track overflow (jobs that no longer fit the working day)
-    for (const o of [...morningResult.overflow, ...afternoonResult.overflow]) {
+    for (const o of layoutResult.overflow) {
       overflowJobs.push({ jobId: o.id, title: o.title, clientName: o.clientName, date });
     }
+
+    // Diagnostic: log the final laid-out timeline with travel gaps so future
+    // "no travel time" reports can be confirmed straight from the function logs.
+    const timelineForLog = [...allScheduled]
+      .sort((a, b) => a.time.localeCompare(b.time))
+      .map(s => {
+        const j = dayJobs.find(d => d.id === s.jobId)!;
+        const leg = layoutResult.legs.find(l => l.toId === s.jobId);
+        const travel = leg ? leg.travel : 0;
+        return `${s.time} ${j.clientName.slice(0, 18)}(${j.duration}m,+${travel}m)`;
+      })
+      .join(" | ");
+    console.log(`[route-optimization] day=${date} layout=[${timelineForLog}]`);
 
     // Diff against current scheduled_time
     const byId = new Map(dayJobs.map(j => [j.id, j]));

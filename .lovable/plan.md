@@ -1,126 +1,62 @@
-# Diagnosis
+## Why the 3 afternoon jobs on 28/04 have no travel time
 
-Route optimisation is no longer failing because Sarah Mitchell’s address is invalid, and the server-side map key appears to be working now.
+The optimiser **does** call Google Distance Matrix (latest run logged `matrixCallsMade: 3`, `matrixElementsRequested: 108`, `fallbackPairs: 0`, `usedFallbackDistances: false`), so distances are available. The bug is in how those distances are applied when the day is split into morning/afternoon bands. There are three concrete defects in `supabase/functions/route-optimization/index.ts`:
 
-What I found:
+### Defect 1 — Travel time is dropped between locked anchors and unlocked jobs
+`layoutDay()` only adds travel from `lastPlacedId` (the previous *unlocked* job it placed). When an unlocked job is pushed past a locked anchor via `clearsLocked()`, it lands at `lockedAnchor.end` exactly, with **zero travel** added from the anchor. Same problem for the very first unlocked job in the afternoon band — there is no `lastPlacedId`, so it starts at `MIDPOINT` with no travel from whatever job (locked or otherwise) actually precedes it.
 
-- The backend function has successfully run multiple times for the seeded contractor with Sarah Mitchell and 18 jobs in the next 3 days.
-- Recent route optimisation logs show clean runs:
-  - `geocodeCalls: 19`
-  - `matrixCallsMade: 3`
-  - `fallbackPairs: 0`
-  - `apiErrors: []`
-  - proposed route changes were generated.
-- Sarah Mitchell’s address geocodes successfully:
-  - `14 Ocean Park Road, Belmont, NSW 2280` resolves to a valid Australian location.
-- The currently logged-in preview contractor, `John's Lawn Care`, has no eligible jobs in the next 3 days, so their run returns “No eligible jobs found”, not a map service error.
-- The exact message “Map service became unavailable while running optimisation” can only be returned when the pre-flight map check passes, but one of the later per-job geocode calls returns an API/system failure.
+### Defect 2 — The afternoon band always restarts at the work-day midpoint
+`layoutDay(afternoonOrdered, lockedJobs, dist, MIDPOINT, WORK_END)` ignores when the morning band actually finished. If the morning ends at 11:30 and the afternoon’s `MIDPOINT` is 12:00, the first afternoon job is placed at 12:00 with no travel from the last morning job. More importantly, **inside the afternoon band itself**, travel between consecutive afternoon jobs IS added by `cursor += dist[...]`, but only between unlocked jobs that the function placed sequentially. Any locked anchor in between resets the travel chain (see Defect 1), so a sequence like “unlocked → locked → unlocked” produces back-to-back times across the locked job.
 
-Most likely cause:
+### Defect 3 — “Time saved” is computed against a sequence that ignores travel from anchors too
+`totalRouteMinutes()` just sums `dist[a→b]` along a sorted-by-time order, but the `afterOrder` includes locked anchors whose times are fixed. The number reported as “time saved” is meaningful, but the *displayed* schedule still has zero gaps because `layoutDay()` never inserted them.
 
-The current implementation treats any transient geocoding status such as `UNKNOWN_ERROR`, `OVER_QUERY_LIMIT`, network hiccup, or temporary JSON/fetch issue as a hard failure. There is no retry/backoff, no per-address diagnostic logging before early return, and no saved lat/lng cache on clients. So a single temporary Google geocoding blip can abort the entire optimisation run with a vague “Map service became unavailable” message.
+### What you’re actually seeing on screen
+For the 3 jobs after 12pm:
+- The afternoon band is solved as a TSP, then laid out starting at `MIDPOINT` (12:00).
+- The first afternoon job is placed at 12:00 with **no travel from the morning’s last job**.
+- Each subsequent unlocked-after-unlocked transition does add travel — but if any of the three is locked or pushed past a locked anchor, the next job lands at `anchor.end` with no travel. Result: visible back-to-back times.
 
-# Plan
+There is also a secondary issue: `layoutDay` adds travel from `lastPlacedId` *before* checking `clearsLocked`, so when a job is shoved past an anchor the travel addition becomes meaningless (it gets overwritten by `attempt = roundUpTo5(c.pushTo!)`).
 
-## 1. Add robust map API diagnostics
+---
 
-Update the route optimisation backend function to log structured diagnostics before every early map-service failure:
+## Plan to fix
 
-- contractor id
-- stage: `preflight`, `job_geocode`, or `distance_matrix`
-- address being geocoded, redacted enough for safety but useful for debugging
-- Google status and error message
-- HTTP status
-- whether the failure is retryable or configuration-related
+### A. Make `layoutDay` aware of every preceding job
+Change the “last placed” tracking to be the **most recent job on the timeline** (locked or unlocked), not just the previous unlocked one. Concretely:
 
-This will make the next failure identify the exact address/status instead of showing a generic toast.
+1. Build a single combined timeline as we go: insert locked anchors first as immovable items, then walk the ordered unlocked list and place each one after the latest end time we’ve emitted, plus travel from whichever job (locked or unlocked) is immediately before it.
+2. When an unlocked job has to be pushed past a locked anchor, recompute travel using the **anchor as the predecessor**, not the unlocked job we tried to start from.
+3. Apply the same rule across the morning→afternoon boundary: the first afternoon job gets `travel(lastMorningJob → firstAfternoonJob)` added on top of `max(MIDPOINT, lastMorningEnd)`.
 
-## 2. Retry transient geocoding failures
+### B. Stop using a fixed midpoint for the afternoon start
+Pass the morning band’s actual end time into the afternoon layout call, and start the afternoon at `max(MIDPOINT, morningEnd + travel)`. The midpoint stays only as a *minimum* for jobs the user explicitly tagged as afternoon.
 
-Change geocoding so retryable failures do not immediately abort the run.
+### C. Fold the morning + afternoon bands into a single layout pass
+Right now we solve them as two TSPs and lay them out independently. Cleaner fix:
+- Solve morning TSP, solve afternoon TSP.
+- Concatenate `[...morningOrdered, ...afternoonOrdered]` and run a **single** `layoutDay` over the whole working day with both bands’ locked anchors present.
+- This naturally handles travel across the band boundary and across every locked anchor.
 
-Retryable:
+### D. Add a per-leg minimum buffer
+Even when Distance Matrix returns a small number for nearby suburbs, jobs need a parking/walk buffer. We already have `roundUpTo5(... + 3)` in the Haversine fallback, but the real Matrix path uses raw `Math.round(seconds / 60)` with no buffer. Add a `MIN_TRAVEL_BUFFER_MIN = 5` floor for any non-zero leg so two jobs on the same street still show a 5-minute gap.
 
-- `UNKNOWN_ERROR`
-- temporary fetch/network failures
-- HTTP 5xx
-- possibly rate-limit-style temporary failures with short backoff
+### E. Diagnostics
+Add one log line per day summarising the laid-out timeline:
+`[route-optimization] day=2026-04-28 layout=[09:00 jobA(60), 10:05 jobB(45), …]` with the travel minutes inserted between each. This makes future “zero gap” reports trivial to confirm from the function logs without re-running.
 
-Non-retryable:
+### F. Verify on test@test.com / 28/04
+After deploying:
+- Trigger a preview run for contractor `95be33fc-8cf0-40e6-9c7c-e2d51386e8bd`.
+- Read the new log line for `2026-04-28` and confirm each consecutive pair on the afternoon has a non-zero travel gap.
+- Compare proposed times in the preview dialog with the previous run.
 
-- `REQUEST_DENIED`
-- invalid/missing key
-- billing/API-not-enabled errors
-- clearly invalid address results
+### Files to change
+- `supabase/functions/route-optimization/index.ts` — defects A–E (single file).
+- No DB migration required.
+- No frontend change required; the preview dialog already renders whatever times the function returns.
 
-Behaviour:
-
-- Try each geocode up to 3 times with short backoff.
-- Only return `geocoding_unavailable` after retries are exhausted.
-- Return a more specific message if the failure is configuration/quota related.
-
-## 3. Stop aborting the entire route where safe
-
-For Distance Matrix failures, the code already falls back to estimated travel times. I will extend the same resilience where possible:
-
-- If an address already has valid stored coordinates, skip geocoding.
-- If geocoding for one address has a transient failure after retries, report that address specifically instead of blaming the whole map service when appropriate.
-- Keep hard-failing only for actual map service configuration problems.
-
-## 4. Persist geocoded coordinates on client records
-
-Add a backend-safe coordinate cache for client addresses:
-
-- Store `lat` and `lng` inside the existing address JSON after successful geocoding.
-- Reuse stored coordinates on future optimisation runs.
-- Invalidate/re-geocode when the address fields change.
-
-This reduces calls, avoids quota pressure, and prevents transient geocoding failures from breaking future runs.
-
-## 5. Improve frontend error messages
-
-Update both route optimisation entry points so errors are clear:
-
-- If no eligible jobs exist: show “No scheduled/in-progress jobs in the next 3 days.”
-- If a map service configuration problem occurs: show “Map routing is not configured correctly.”
-- If Google is temporarily unavailable after retries: show “Map service is temporarily unavailable. Please retry in a minute.”
-- If a specific address cannot be geocoded: show the existing address-fix dialog with that client/job.
-
-Also surface a small “technical details” line in development/test mode so we can see `REQUEST_DENIED`, `OVER_QUERY_LIMIT`, or `UNKNOWN_ERROR` without digging through logs.
-
-## 6. Fix stale/ambiguous UI paths
-
-There are multiple route optimisation buttons:
-
-- Jobs page banner
-- Jobs page toolbar
-- Timeline button
-- Scheduling tab button
-
-I will make them all use the same central handler and the same error handling so one path does not show outdated behaviour.
-
-# Files to update
-
-- `supabase/functions/route-optimization/index.ts`
-  - retry/backoff
-  - better error classification
-  - structured diagnostics
-  - coordinate caching
-- `src/pages/ContractorDashboard.tsx`
-  - handle `geocoding_unavailable`, `missing_addresses`, and no-jobs responses consistently
-- `src/components/contractor-crm/JobsTab.tsx`
-  - align route optimisation handling with dashboard-level handler
-- `src/components/contractor-crm/OptimizationPreviewDialog.tsx`
-  - display fallback/diagnostic warnings more clearly if needed
-
-# Expected result
-
-Route optimisation should no longer fail because of a single transient map API hiccup. If it still cannot run, the app will identify whether the issue is:
-
-- no eligible jobs,
-- a specific bad address,
-- temporary map API failure,
-- quota/billing/API configuration,
-- or a real backend error.
-
-That will make future failures actionable instead of the current vague “Map service became unavailable” message.
+### Out of scope (suggested follow-ups)
+- Persisting per-leg travel time onto the job so it can be displayed in the Jobs timeline UI.
+- Honouring a contractor-configurable “minimum buffer between jobs” setting.
