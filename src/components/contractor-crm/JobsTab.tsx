@@ -493,6 +493,7 @@ const JobsTab = ({ contractorId, subscriptionTier, workingHours: contractorWorki
       is_recurring: !!recurrence,
       recurrence_frequency: recurrence?.frequency || "weekly",
       recurrence_count: recurrence?.count?.toString() || "4",
+      route_optimization_locked: !!job.route_optimization_locked,
     };
     setForm(formValues);
     setOriginalFormValues({ ...formValues });
